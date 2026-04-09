@@ -114,7 +114,7 @@ _CACHE_READY: bool = False
 
 
 def _init_cache_db() -> None:
-    """Create the history.db cache table if it doesn't exist. Called once at startup."""
+    """Create the history.db cache tables if they don't exist. Called once at startup."""
     global _CACHE_READY
     if _CACHE_READY:
         return
@@ -129,8 +129,37 @@ def _init_cache_db() -> None:
                 PRIMARY KEY (card_slug, source)
             )
         """)
+        # Permanent cache: pokemontcg card_id → TCGPlayer product_id.
+        # No TTL — product IDs don't change.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS tcgplayer_product_ids (
+                pokemontcg_id   TEXT PRIMARY KEY,
+                product_id      INTEGER NOT NULL
+            )
+        """)
         conn.commit()
     _CACHE_READY = True
+
+
+def _product_id_cache_get(pokemontcg_id: str) -> int | None:
+    """Return a cached TCGPlayer product ID, or None if not stored."""
+    with sqlite3.connect(_CACHE_DB) as conn:
+        row = conn.execute(
+            "SELECT product_id FROM tcgplayer_product_ids WHERE pokemontcg_id = ?",
+            (pokemontcg_id,),
+        ).fetchone()
+    return int(row[0]) if row else None
+
+
+def _product_id_cache_put(pokemontcg_id: str, product_id: int) -> None:
+    """Permanently store a pokemontcg card_id → TCGPlayer product_id mapping."""
+    with sqlite3.connect(_CACHE_DB) as conn:
+        conn.execute(
+            "INSERT OR REPLACE INTO tcgplayer_product_ids (pokemontcg_id, product_id) VALUES (?, ?)",
+            (pokemontcg_id, product_id),
+        )
+        conn.commit()
+    logger.debug("Cached TCGPlayer product ID %d for '%s'.", product_id, pokemontcg_id)
 
 
 def _cache_get(card_slug: str, source: str) -> list[dict] | None:
@@ -216,6 +245,37 @@ def _card_name_to_slug(name: str) -> str:
     return slug
 
 
+def _strip_card_number(name: str) -> str:
+    """Remove trailing card number suffixes like '079/073' or '074/073'.
+
+    Examples:
+      "Charizard V 079/073" → "Charizard V"
+      "Umbreon VMAX"        → "Umbreon VMAX"
+    """
+    return re.sub(r"\s+\d{3}/\d{3,4}$", "", name.strip())
+
+
+def _best_card_match(cards: list[dict], card_name: str) -> dict | None:
+    """Return the card from API results that best matches the human name.
+
+    Prefers exact name match; falls back to highest word-overlap score.
+    """
+    if not cards:
+        return None
+    clean = _strip_card_number(card_name).lower()
+    best: dict | None = None
+    best_score = -1
+    for card in cards:
+        api_name = card.get("name", "").lower()
+        if api_name == clean:
+            return card  # Exact match — stop immediately.
+        score = len(set(clean.split()) & set(api_name.split()))
+        if score > best_score:
+            best_score = score
+            best = card
+    return best
+
+
 # ---------------------------------------------------------------------------
 # Graded listing filter
 # ---------------------------------------------------------------------------
@@ -270,6 +330,46 @@ def _build_pricecharting_url(card_name: str, set_name: str | None = None) -> str
     return f"{_PC_BASE}/search-products?q={card_slug.replace('-', '+')}&type=prices"
 
 
+def _resolve_pricecharting_card_url(soup: BeautifulSoup, card_name: str) -> str | None:
+    """From a PriceCharting search results page, find the best-matching card URL.
+
+    PriceCharting search results use full absolute URLs in their product table.
+    Scans anchor tags whose href contains /game/pokemon-, ranks by word overlap
+    (and card number if present), and returns the best match or None.
+    """
+    clean = _strip_card_number(card_name).lower()
+    name_words = set(clean.split())
+
+    # Extract card number (e.g. "079" from "079/073") with leading zeros stripped.
+    number_match = re.search(r"(\d{3})/\d{3}", card_name)
+    card_number = str(int(number_match.group(1))) if number_match else None
+
+    best_url: str | None = None
+    best_score = -1
+
+    for a in soup.find_all("a", href=True):
+        href: str = a["href"]
+        # Accept both absolute and relative product URLs.
+        if "/game/pokemon-" not in href:
+            continue
+        link_text = a.get_text(strip=True).lower()
+        combined = f"{link_text} {href.lower()}"
+        tokens = set(re.split(r"[\s/\-#%]+", combined))
+        score = len(name_words & tokens)
+        # Bonus point if the card number appears in the slug.
+        if card_number and card_number in tokens:
+            score += 2
+        if score > best_score:
+            best_score = score
+            # Normalise to absolute URL.
+            if href.startswith("http"):
+                best_url = href
+            else:
+                best_url = f"{_PC_BASE}{href}"
+
+    return best_url
+
+
 def _scrape_pricecharting(
     card_name: str,
     set_name: str | None = None,
@@ -307,8 +407,23 @@ def _scrape_pricecharting(
 
     # PriceCharting renders completed sales in a table with id="completed_auctions"
     table = soup.find("table", {"id": "completed_auctions"})
+
+    # If we landed on a search results page (no auction table), try to follow
+    # the best-matching product link to the actual card page.
     if not table:
-        logger.warning("No completed_auctions table found at %s", url)
+        logger.info("No completed_auctions table at %s — scanning for product links.", url)
+        card_url = _resolve_pricecharting_card_url(soup, card_name)
+        if card_url:
+            logger.info("Following product link: %s", card_url)
+            try:
+                resp = _get(card_url)
+                soup = BeautifulSoup(resp.text, "html.parser")
+                table = soup.find("table", {"id": "completed_auctions"})
+            except requests.RequestException as exc:
+                logger.error("Failed to follow product link %s: %s", card_url, exc)
+
+    if not table:
+        logger.warning("No completed_auctions table found for '%s'.", card_name)
         return []
 
     cutoff_date = datetime.utcnow().date() - timedelta(days=days)
@@ -388,6 +503,7 @@ def _scrape_pricecharting(
                 "date": sale_date.isoformat(),
                 "condition": condition,
                 "source": "pricecharting",
+                "source_url": url,
                 "quantity": 1,
             }
         )
@@ -428,12 +544,14 @@ def _fetch_tcgapi(card_name: str, days: int = 30) -> list[dict[str, Any]]:
         Up to 3 synthetic sale records, or empty list on failure.
     """
     url = "https://api.pokemontcg.io/v2/cards"
-    params = {"q": f'name:"{card_name}"', "select": "id,name,tcgplayer,cardmarket"}
+    # Strip number suffix (e.g. "079/073") — the API searches by name only.
+    search_name = _strip_card_number(card_name)
+    params = {"q": f'name:"{search_name}"', "select": "id,name,tcgplayer,cardmarket"}
 
-    logger.info("Falling back to pokemontcg.io for '%s'.", card_name)
+    logger.info("Falling back to pokemontcg.io for '%s' (search: '%s').", card_name, search_name)
 
     try:
-        resp = _get(url)
+        resp = _get(f"{url}?q=name%3A%22{requests.utils.quote(search_name)}%22&select=id,name,tcgplayer,cardmarket")
         data = resp.json()
     except (requests.RequestException, json.JSONDecodeError) as exc:
         logger.error("pokemontcg.io request failed: %s", exc)
@@ -443,8 +561,8 @@ def _fetch_tcgapi(card_name: str, days: int = 30) -> list[dict[str, Any]]:
     if not cards:
         return []
 
-    # Use the first matching card.
-    card = cards[0]
+    # Pick the card whose name best matches — not blindly cards[0].
+    card = _best_card_match(cards, card_name) or cards[0]
     sales: list[dict[str, Any]] = []
 
     today = datetime.utcnow().date()
@@ -476,6 +594,351 @@ def _fetch_tcgapi(card_name: str, days: int = 30) -> list[dict[str, Any]]:
                 )
 
     logger.info("pokemontcg.io: synthesized %d price point(s) for '%s'.", len(sales), card_name)
+    return sales
+
+
+# ---------------------------------------------------------------------------
+# PriceCharting price_data extractor (current market price from card page)
+# ---------------------------------------------------------------------------
+
+
+def _extract_pricecharting_price_data(
+    soup: BeautifulSoup, card_name: str
+) -> list[dict[str, Any]]:
+    """Extract current NM price from the #price_data table on a card page.
+
+    Used as a last resort when completed_auctions is JS-rendered. Returns a
+    single synthetic record tagged 'pricecharting_static' so the analyzer can
+    distinguish it from real sale history.
+    """
+    table = soup.find("table", {"id": "price_data"})
+    if not table:
+        return []
+
+    # #used_price holds the ungraded (NM) market price.
+    cell = table.find("td", {"id": "used_price"})
+    if not cell:
+        return []
+
+    price_span = cell.find("span", class_="js-price")
+    if not price_span:
+        return []
+
+    try:
+        price = float(price_span.get_text(strip=True).replace("$", "").replace(",", ""))
+    except ValueError:
+        return []
+
+    if price <= 0:
+        return []
+
+    today = datetime.utcnow().date()
+    sale_id = "pc_static_" + hashlib.md5(f"{card_name}_{price}".encode()).hexdigest()[:8]
+
+    logger.info("Extracted PriceCharting static price $%.2f for '%s'.", price, card_name)
+    return [
+        {
+            "sale_id": sale_id,
+            "price": round(price, 2),
+            "date": today.isoformat(),
+            "condition": "NM",
+            "source": "pricecharting_static",
+            "source_url": _PC_BASE,  # caller overwrites this with the resolved card URL
+            "quantity": 1,
+        }
+    ]
+
+
+# ---------------------------------------------------------------------------
+# TCGPlayer price history via infinite-api + pokemontcg.io product ID lookup
+# ---------------------------------------------------------------------------
+
+_TCGPLAYER_INFINITE = "https://infinite-api.tcgplayer.com"
+_POKEMONTCG_PRICES  = "https://prices.pokemontcg.io/tcgplayer"
+_POKEMONTCG_API     = "https://api.pokemontcg.io/v2/cards"
+
+
+def _lookup_tcgplayer_product_id(card_name: str) -> int | None:
+    """Resolve a card name to a TCGPlayer product ID via pokemontcg.io.
+
+    Flow:
+      1. Query pokemontcg.io for the card (using name + optional number).
+      2. Follow prices.pokemontcg.io redirect → tcgplayer.com/product/{id}.
+      3. Extract the numeric product ID from the redirect Location header.
+
+    Returns the product ID as int, or None on any failure.
+    """
+    search_name = _strip_card_number(card_name)
+
+    # Build query: name + card number if present.
+    query = f'name:"{search_name}"'
+    number_match = re.search(r"(\d{3})/\d{3}", card_name)
+    if number_match:
+        query += f' number:{int(number_match.group(1))}'
+
+    params = {"q": query, "select": "id,name,number,set,tcgplayer"}
+    logger.info("Querying pokemontcg.io for product ID: %s", query)
+
+    try:
+        resp = _get(f"{_POKEMONTCG_API}?q={requests.utils.quote(query)}&select=id,name,number,set,tcgplayer")
+        cards = resp.json().get("data", [])
+    except (requests.RequestException, json.JSONDecodeError) as exc:
+        logger.error("pokemontcg.io lookup failed: %s", exc)
+        return None
+
+    card = _best_card_match(cards, card_name)
+    if not card:
+        logger.warning("No pokemontcg.io card found for '%s'.", card_name)
+        return None
+
+    card_id = card.get("id", "")
+
+    # Check the permanent SQLite cache before hitting the slow redirect service.
+    cached_pid = _product_id_cache_get(card_id)
+    if cached_pid:
+        logger.info("Product ID cache HIT: %s → %d", card_id, cached_pid)
+        return cached_pid
+
+    tcg_url = card.get("tcgplayer", {}).get("url", "")
+    if not tcg_url:
+        return None
+
+    # prices.pokemontcg.io/tcgplayer/{card-id} → 302 → tcgplayer.com/product/{id}
+    redirect_url = f"{_POKEMONTCG_PRICES}/{card_id}"
+    logger.info("Following TCGPlayer redirect: %s", redirect_url)
+
+    for attempt in range(2):  # one retry on timeout
+        try:
+            r = requests.get(
+                redirect_url,
+                headers={"User-Agent": random.choice(_USER_AGENTS)},
+                timeout=(5, 12),
+                allow_redirects=False,
+            )
+            location = r.headers.get("location", "")
+            break
+        except requests.RequestException as exc:
+            logger.warning("TCGPlayer redirect attempt %d failed: %s", attempt + 1, exc)
+            location = ""
+
+    # Extract numeric product ID from "...product/223078" or "...u=https://tcgplayer.com/product/223078"
+    match = re.search(r"/product/(\d+)", location)
+    if not match:
+        logger.warning("Could not extract product ID from redirect: %s", location)
+        return None
+
+    product_id = int(match.group(1))
+    logger.info("Resolved TCGPlayer product ID: %d", product_id)
+    _product_id_cache_put(card_id, product_id)   # cache permanently
+    return product_id
+
+
+def _fetch_tcgplayer_history(
+    product_id: int, days: int = 30
+) -> list[dict[str, Any]]:
+    """Fetch daily price history from TCGPlayer's infinite-api.
+
+    Returns one sale record per day that had actual transactions (quantity > 0),
+    using averageSalesPrice as the price. Skips days with zero sales.
+
+    Parameters
+    ----------
+    product_id : int
+        TCGPlayer product ID.
+    days : int
+        Number of days of history to request (maps to range=month/year).
+
+    Returns
+    -------
+    list[dict]
+        Sale records, or empty list on failure.
+    """
+    range_param = "year" if days > 31 else "month"
+    url = f"{_TCGPLAYER_INFINITE}/price/history/{product_id}?range={range_param}"
+    logger.info("Fetching TCGPlayer history: %s", url)
+
+    headers = {
+        "User-Agent": random.choice(_USER_AGENTS),
+        "Accept": "application/json",
+        "Referer": "https://www.tcgplayer.com/",
+    }
+
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+    except (requests.RequestException, json.JSONDecodeError) as exc:
+        logger.error("TCGPlayer history request failed: %s", exc)
+        return []
+
+    cutoff = datetime.utcnow().date() - timedelta(days=days)
+    sales: list[dict[str, Any]] = []
+    counter = 0
+
+    for entry in data.get("result", []):
+        try:
+            sale_date = datetime.strptime(entry["date"], "%Y-%m-%d").date()
+        except (ValueError, KeyError):
+            continue
+
+        if sale_date < cutoff:
+            continue
+
+        for variant in entry.get("variants", []):
+            qty = int(variant.get("quantity", 0))
+            if qty == 0:
+                continue
+            try:
+                price = float(variant.get("averageSalesPrice", 0))
+            except (ValueError, TypeError):
+                continue
+            if price <= 0:
+                continue
+
+            counter += 1
+            sale_id = "tcp_" + hashlib.md5(
+                f"{product_id}_{sale_date}_{variant.get('variant','')}_{counter}".encode()
+            ).hexdigest()[:8]
+
+            sales.append({
+                "sale_id": sale_id,
+                "price": round(price, 2),
+                "date": sale_date.isoformat(),
+                "condition": "NM",  # TCGPlayer averages mix conditions; tag as NM
+                "source": "tcgplayer",
+                "source_url": f"https://www.tcgplayer.com/product/{product_id}",
+                "quantity": qty,
+            })
+
+    logger.info("TCGPlayer: %d sale-day records accepted for product %d.", len(sales), product_id)
+    return sales
+
+
+# ---------------------------------------------------------------------------
+# eBay completed sales scraper
+# ---------------------------------------------------------------------------
+
+_EBAY_DATE_FORMATS = ["%b %d, %Y", "%d %b %Y", "%Y-%m-%d"]
+
+
+def _scrape_ebay(card_name: str, days: int = 30) -> list[dict[str, Any]]:
+    """Scrape eBay completed/sold listings for a Pokémon card.
+
+    Uses the public eBay search with LH_Complete=1&LH_Sold=1 to get real
+    individual sale records with prices and dates.
+
+    Parameters
+    ----------
+    card_name : str
+        Card name to search (set numbers like "079/073" are kept to improve
+        precision).
+    days : int
+        Only include sales within this many calendar days.
+
+    Returns
+    -------
+    list[dict]
+        Sale records, or empty list on failure.
+    """
+    # Build a tight search query: card name + "pokemon" to avoid non-TCG hits.
+    query = f"{card_name} pokemon"
+    encoded = requests.utils.quote(query)
+    url = (
+        f"https://www.ebay.com/sch/i.html"
+        f"?_nkw={encoded}&LH_Complete=1&LH_Sold=1&_sop=13"
+    )
+
+    logger.info("Scraping eBay completed sales: %s", url)
+
+    try:
+        resp = _get(url)
+    except requests.RequestException as exc:
+        logger.error("eBay request failed: %s", exc)
+        return []
+
+    soup = BeautifulSoup(resp.text, "html.parser")
+    cutoff_date = datetime.utcnow().date() - timedelta(days=days)
+    sales: list[dict[str, Any]] = []
+    graded_dropped = 0
+    counter = 0
+
+    for item in soup.find_all("li", class_="s-card"):
+        # Title comes from the listing image alt text or anchor text.
+        img = item.find("img")
+        title = img["alt"].strip() if img and img.get("alt") else ""
+
+        # Skip ads (eBay injects "Shop on eBay" promoted items).
+        if not title or title.lower().startswith("shop on ebay"):
+            continue
+
+        # Drop graded cards.
+        if _is_graded(title):
+            graded_dropped += 1
+            continue
+
+        # --- Price ---
+        price_text = ""
+        for span in item.find_all("span"):
+            text = span.get_text(strip=True)
+            if re.match(r"^\$[\d,]+\.\d{2}$", text):
+                price_text = text
+                break
+
+        if not price_text:
+            continue
+
+        try:
+            price = float(price_text.replace("$", "").replace(",", ""))
+        except ValueError:
+            continue
+
+        if price < 0.10 or price > 50_000:
+            continue
+
+        # --- Sold date ---
+        sold_span = item.find("span", class_="su-styled-text")
+        date_text = sold_span.get_text(strip=True) if sold_span else ""
+        # Format: "Sold  Apr 8, 2026" → strip prefix.
+        date_text = re.sub(r"^[Ss]old\s+", "", date_text).strip()
+
+        sale_date: date
+        parsed = False
+        for fmt in _EBAY_DATE_FORMATS:
+            try:
+                sale_date = datetime.strptime(date_text, fmt).date()
+                parsed = True
+                break
+            except ValueError:
+                continue
+        if not parsed:
+            sale_date = datetime.utcnow().date()
+
+        if sale_date < cutoff_date:
+            continue
+
+        counter += 1
+        condition = _parse_condition(title)
+        sale_id_src = f"ebay_{card_name}_{sale_date}_{price}_{counter}"
+        sale_id = "eb_" + hashlib.md5(sale_id_src.encode()).hexdigest()[:8]
+
+        sales.append(
+            {
+                "sale_id": sale_id,
+                "price": round(price, 2),
+                "date": sale_date.isoformat(),
+                "condition": condition,
+                "source": "ebay",
+                "source_url": url,
+                "quantity": 1,
+            }
+        )
+
+    logger.info(
+        "eBay: %d items scanned → %d graded dropped → %d accepted.",
+        counter + graded_dropped,
+        graded_dropped,
+        len(sales),
+    )
     return sales
 
 
@@ -525,10 +988,48 @@ def fetch_sales(
     if source == "tcgapi":
         sales = _fetch_tcgapi(card_name, days=days)
     else:
+        # 1. Try PriceCharting completed auctions (best: real historical sales).
         sales = _scrape_pricecharting(card_name, set_name=set_name, days=days)
-        # If PriceCharting returned nothing, try the API fallback.
+
         if not sales:
-            logger.info("PriceCharting returned 0 results — trying pokemontcg.io fallback.")
+            # 2. Try TCGPlayer + eBay simultaneously and combine both.
+            #    Both are real sold-listing sources; more data = better signal.
+            logger.info("PriceCharting returned 0 results — trying TCGPlayer + eBay.")
+            product_id = _lookup_tcgplayer_product_id(card_name)
+            tcgplayer_sales = _fetch_tcgplayer_history(product_id, days=days) if product_id else []
+            ebay_sales = _scrape_ebay(card_name, days=days)
+            sales = tcgplayer_sales + ebay_sales
+            if sales:
+                logger.info(
+                    "Multi-source: %d TCGPlayer + %d eBay = %d total records.",
+                    len(tcgplayer_sales), len(ebay_sales), len(sales),
+                )
+
+        # 3. Try PriceCharting static price_data (single current-price snapshot).
+        if not sales:
+            logger.info("All live sources failed — trying PriceCharting static price.")
+            pc_url = _build_pricecharting_url(card_name, set_name)
+            resolved_card_url = pc_url
+            try:
+                resp = _get(pc_url)
+                static_soup = BeautifulSoup(resp.text, "html.parser")
+                if not static_soup.find("table", {"id": "price_data"}):
+                    card_url = _resolve_pricecharting_card_url(static_soup, card_name)
+                    if card_url:
+                        resolved_card_url = card_url
+                        resp = _get(card_url)
+                        static_soup = BeautifulSoup(resp.text, "html.parser")
+                static_records = _extract_pricecharting_price_data(static_soup, card_name)
+                # Patch source_url to the resolved card page.
+                for r in static_records:
+                    r["source_url"] = resolved_card_url
+                sales = static_records
+            except requests.RequestException:
+                pass
+
+        # 4. Last resort: pokemontcg.io synthetic price points.
+        if not sales:
+            logger.info("All primary sources failed — falling back to pokemontcg.io.")
             sales = _fetch_tcgapi(card_name, days=days)
 
     # --- Handle empty result ---

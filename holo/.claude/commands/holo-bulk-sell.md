@@ -29,7 +29,7 @@ If RESULT_JSON contains `"error"`: tell the user what went wrong in plain Englis
 
 **Step 3 — Display the result**
 
-Use: net, gross, shipping, cards, weight_lbs, liquidate, threshold, deficit.
+Use: net, gross, shipping, cards, weight_lbs, liquidate, threshold, deficit, breakdown.
 
 Output:
 ```
@@ -40,7 +40,9 @@ Output:
   Gross payout:  $[gross]
   Shipping:     -$[shipping]  ([weight_lbs] lbs · USPS Media Mail)
   Net profit:    $[net]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  Breakdown by type:
+  [for each entry in breakdown: "  · [type]: [count] cards × $[rate] = $[subtotal]"]
 ```
 
 **If liquidate = true:**
@@ -56,3 +58,14 @@ Then add: recommend a specific bulk buyer (e.g. Card Market, eBay bulk listing, 
   You're $[deficit] short of the $[threshold] threshold.
 ```
 Then tell them: "To close the gap, you'd need approximately X more commons" (calculate: deficit / 0.01 payout rate per common). Give a concrete next milestone.
+
+Always add at the end:
+```
+  How we got here:
+  · Gross = count × buylist rate per tier (see breakdown above)
+  · Buylist rates: Common $0.01 · Uncommon $0.02 · Rev Holo $0.05 · Holo Rare $0.10 · Ultra Rare $0.50
+  · Shipping = ([weight_lbs] lbs × $0.50/lb) + $2.00 packaging = $[shipping] (USPS Media Mail estimate)
+  · Threshold = $[threshold] net profit minimum — below this, the effort isn't worth it
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Sources: Buylist rates based on TCGPlayer/CFB bulk averages · Shipping: USPS Media Mail calculator
+```

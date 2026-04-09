@@ -184,6 +184,38 @@ def _error_out(message: str, **extras) -> None:
     sys.exit(1)
 
 
+def _extract_sources(records: list[dict]) -> list[dict]:
+    """Summarise which data sources contributed to a sales dataset.
+
+    Returns a list of {name, label, url, count} dicts, one per unique source,
+    ordered by descending count.  Used to build hyperlinked source footers in
+    Claude's rendered output.
+    """
+    _SOURCE_LABELS = {
+        "tcgplayer":         "TCGPlayer",
+        "ebay":              "eBay",
+        "pricecharting":     "PriceCharting",
+        "pricecharting_static": "PriceCharting",
+        "pokemontcg.io":     "pokemontcg.io",
+    }
+    seen: dict[str, dict] = {}
+    for r in records:
+        src = r.get("source", "unknown")
+        url = r.get("source_url", "")
+        if src not in seen:
+            seen[src] = {
+                "name": src,
+                "label": _SOURCE_LABELS.get(src, src),
+                "url": url,
+                "count": 0,
+            }
+        # Keep the first non-empty URL we encounter for this source.
+        if not seen[src]["url"] and url:
+            seen[src]["url"] = url
+        seen[src]["count"] += 1
+    return sorted(seen.values(), key=lambda s: s["count"], reverse=True)
+
+
 # ---------------------------------------------------------------------------
 # Subcommand: signal
 # ---------------------------------------------------------------------------
@@ -240,6 +272,7 @@ def cmd_signal(args: argparse.Namespace) -> None:
             "vol_surge_pct": result.volume_surge_pct,
             "sales_count": len(raw),
             "as_of": str(result.as_of_date.date()),
+            "sources": _extract_sources(raw),
         })
 
     except Exception as exc:
@@ -315,6 +348,15 @@ def cmd_ev(args: argparse.Namespace) -> None:
             "top_card": top_card_name,
             "top_card_value": round(top_card_value, 2),
             "tiers_analyzed": len(result.tier_breakdown),
+            "cards_sampled": len(cards),
+            "sources": [
+                {
+                    "label": "pokemontcg.io",
+                    "url": f'https://api.pokemontcg.io/v2/cards?q=set.name:"{set_name}"',
+                    "count": len(cards),
+                    "note": "card data + TCGPlayer market prices",
+                }
+            ],
         })
 
     except Exception as exc:
@@ -355,6 +397,27 @@ def cmd_bulk(args: argparse.Namespace) -> None:
             "deficit": round(
                 max(0.0, result.liquidate_threshold - result.net_profit), 2
             ),
+            "breakdown": [
+                {
+                    "type": card_type,
+                    "count": info["count"],
+                    "rate": info["rate"],
+                    "subtotal": round(info["subtotal"], 2),
+                }
+                for card_type, info in result.per_type_breakdown.items()
+            ],
+            "rates_source": "TCGPlayer / CFB bulk buylist averages (config.py)",
+            "sources": [
+                {
+                    "label": "Holo bulk rates",
+                    "url": "https://github.com/",
+                    "note": (
+                        "Buylist rates: Common $0.01 · Uncommon $0.02 · "
+                        "Rev Holo $0.05 · Holo Rare $0.10 · Ultra Rare $0.50 · "
+                        "Shipping: USPS Media Mail ~$0.50/lb + $2 packaging"
+                    ),
+                }
+            ],
         })
 
     except Exception as exc:
@@ -414,6 +477,7 @@ def cmd_comp(args: argparse.Namespace) -> None:
             "sales_used": result.sales_used,
             "newest": str(result.newest_sale_date.date()),
             "oldest": str(result.oldest_sale_date.date()),
+            "sources": _extract_sources(raw),
         })
 
     except Exception as exc:

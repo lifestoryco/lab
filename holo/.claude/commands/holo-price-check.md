@@ -26,7 +26,7 @@ If RESULT_JSON contains `"error"` or `"cmc": null`:
 
 **Step 3 — Display the result**
 
-Use: cmc, mean, delta_pct, trend, confidence, volatility, stddev, sales_used, newest, oldest.
+Use: cmc, mean, delta_pct, trend, confidence, volatility, stddev, sales_used, newest, oldest, sources.
 
 Volatility display:
 - "LOW"    → "🟢 LOW (price is stable)"
@@ -48,12 +48,20 @@ Output:
   Trend:            [trend]
   Volatility:       [volatility display]
   Confidence:       [confidence display]
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  [newest] to [oldest] · [sales_used] raw sales
-```
 
-Then add 1-2 sentences:
-- If HIGH volatility: warn that the price is unstable and they should list toward the lower end of the range to move it
-- If trend is Rising: note that recent buyers paid more — they can list above the simple average
-- If trend is Softening: note that recent prices are softer — list at the comp price (not the simple average) to be competitive
-- If LOW volatility + HOLD signal: "This is a liquid, stable card. The comp is reliable."
+  [1-2 sentences of context:
+   - HIGH volatility: warn price is unstable, list toward lower end to move it
+   - Rising trend: recent buyers paid more — can list above simple average
+   - Softening trend: recent prices softer — list at comp price, not simple average
+   - LOW volatility + stable: "This is a liquid, stable card. The comp is reliable."]
+
+  How we got here:
+  · Comp = exponential decay-weighted average — sales from today count ~3× more than
+    sales from 7 days ago (decay λ=0.3), so the comp tracks recent market movement
+  · Simple avg = unweighted mean of all [sales_used] sales ([newest] → [oldest])
+  · Trend = comp vs. simple avg: positive means recent buyers paid more ([delta_pct]%)
+  · Volatility = std dev $[stddev] / mean — reflects how much prices bounce around
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  [newest] to [oldest] · [sales_used] sales
+  Sources: [for each entry in RESULT_JSON.sources, render as "[label] ([count])" hyperlinked to the url if url is non-empty, separated by " · "]
+```

@@ -26,23 +26,23 @@ Pull the specific card name or set name from their question. If you can't tell, 
 Run: `.venv/bin/python pokequant/scraper.py --card '[CARD NAME]' --days 30`
 Then: `.venv/bin/python pokequant/analyze.py signal --data '[SALES JSON]' --card-name '[CARD NAME]'`
 (Single-quote card names. Escape embedded `'` as `'\''`.)
-Display using the holo-buy-sell format.
+Display using the holo-buy-sell format (includes sources + "How we got here" methodology).
 
 **For Box Value (EV):**
 If no price in their question, ask: "What are you paying for the box?"
 Run: `.venv/bin/python pokequant/analyze.py ev --set "[SET NAME]" --retail [PRICE]`
-Display using the holo-box-value format.
+Display using the holo-box-value format (includes sources + "How we got here" methodology).
 
 **For Price Check:**
 Run: `.venv/bin/python pokequant/scraper.py --card '[CARD NAME]' --days 14`
 Then: `.venv/bin/python pokequant/analyze.py comp --data '[SALES JSON]' --card-name '[CARD NAME]'`
 (Single-quote card names. Escape embedded `'` as `'\''`.)
-Display using the holo-price-check format.
+Display using the holo-price-check format (includes sources + "How we got here" methodology).
 
 **For Bulk:**
 Ask for their inventory counts if not provided.
 Run: `.venv/bin/python pokequant/analyze.py bulk --commons N ...`
-Display using the holo-bulk-sell format.
+Display using the holo-bulk-sell format (includes per-type breakdown + "How we got here" methodology).
 
 **For Help:**
 Show this:

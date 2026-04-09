@@ -32,7 +32,7 @@ If RESULT_JSON contains `"error"`:
 
 **Step 3 — Display the result**
 
-Use: set, ev, retail, delta, delta_pct, rec, top_card, top_card_value, tiers_analyzed.
+Use: set, ev, retail, delta, delta_pct, rec, top_card, top_card_value, tiers_analyzed, cards_sampled, sources.
 
 Choose the recommendation color language:
 - "Positive EV: Rip for Singles" → use enthusiastic language ("this box pays for itself")
@@ -50,12 +50,17 @@ Output:
 
   ► [rec]
 
-  Best pull:  [top_card] @ ~$[top_card_value] avg
-  Analysis:   Top [tiers_analyzed] rarity tiers · live prices via pokemontcg.io
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-```
+  [2-3 sentences:
+   - For "Rip": which pull(s) make it worth it and roughly how often you'd hit them
+   - For "Borderline": what would need to change to make it EV-positive
+   - For "Hold": how much the market would need to move before it's worth ripping]
 
-Then add 2-3 sentences of plain-English context:
-- For "Rip": which pull(s) make it worth it and roughly how often you'd hit them
-- For "Borderline": what would need to change (price drop or card spike) to make it worth ripping  
-- For "Hold": how much the market would need to move before it becomes EV-positive
+  How we got here:
+  · EV = Σ (pull_rate × avg_card_value) × packs_per_box, across top [tiers_analyzed] rarity tiers
+  · Pull rates from official set data: SIR=1/36 packs · IR=1/18 · UR=1/6 · Double Rare=1/4
+  · Card values = live TCGPlayer market prices pulled from [cards_sampled] cards in the set
+  · Best pull: [top_card] averaging $[top_card_value] — this tier drives the EV number
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Top [tiers_analyzed] rarity tiers · [cards_sampled] cards sampled
+  Sources: [for each entry in RESULT_JSON.sources, render as "[label] ([count] cards)" hyperlinked to the url, separated by " · "]
+```
