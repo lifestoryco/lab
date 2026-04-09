@@ -1,0 +1,49 @@
+[
+  {
+    "card_id": "swsh1-025",
+    "name": "Charizard V",
+    "set": "Sword & Shield Base",
+    "language": "EN",
+    "sales": [
+      {"sale_id": "s001", "price": 45.99,    "date": "2024-02-01", "condition": "NM", "source": "ebay",      "quantity": 1},
+      {"sale_id": "s002", "price": 44.00,    "date": "2024-02-02", "condition": "NM", "source": "tcgplayer", "quantity": 1},
+      {"sale_id": "s003", "price": 47.50,    "date": "2024-02-03", "condition": "LP", "source": "ebay",      "quantity": 1},
+      {"sale_id": "s004", "price": 99999.00, "date": "2024-02-03", "condition": "NM", "source": "ebay",      "quantity": 1},
+      {"sale_id": "s005", "price": 46.25,    "date": "2024-02-04", "condition": "NM", "source": "tcgplayer", "quantity": 1},
+      {"sale_id": "s006", "price": 43.00,    "date": "2024-02-05", "condition": "LP", "source": "ebay",      "quantity": 1},
+      {"sale_id": "s007", "price": 48.75,    "date": "2024-02-06", "condition": "NM", "source": "tcgplayer", "quantity": 1},
+      {"sale_id": "s008", "price": 44.99,    "date": "2024-02-07", "condition": "NM", "source": "ebay",      "quantity": 1},
+      {"sale_id": "s009", "price": 0.01,     "date": "2024-02-07", "condition": "NM", "source": "ebay",      "quantity": 1},
+      {"sale_id": "s010", "price": 46.00,    "date": "2024-02-08", "condition": "NM", "source": "tcgplayer", "quantity": 1},
+      {"sale_id": "s011", "price": 45.00,    "date": "2024-02-09", "condition": "NM", "source": "ebay",      "quantity": 1},
+      {"sale_id": "s012", "price": 36.00,    "date": "2024-02-10", "condition": "NM", "source": "tcgplayer", "quantity": 2},
+      {"sale_id": "s013", "price": 37.50,    "date": "2024-02-11", "condition": "NM", "source": "ebay",      "quantity": 1},
+      {"sale_id": "s014", "price": 36.80,    "date": "2024-02-12", "condition": "NM", "source": "tcgplayer", "quantity": 1},
+      {"sale_id": "s015", "price": 37.00,    "date": "2024-02-13", "condition": "LP", "source": "ebay",      "quantity": 3},
+      {"sale_id": "s016", "price": 35.50,    "date": "2024-02-14", "condition": "NM", "source": "tcgplayer", "quantity": 2},
+      {"sale_id": "s017", "price": 36.25,    "date": "2024-02-15", "condition": "NM", "source": "ebay",      "quantity": 1},
+      {"sale_id": "s018", "price": 38.00,    "date": "2024-02-16", "condition": "NM", "source": "tcgplayer", "quantity": 4},
+      {"sale_id": "s019", "price": 37.75,    "date": "2024-02-17", "condition": "LP", "source": "ebay",      "quantity": 2},
+      {"sale_id": "s020", "price": 36.50,    "date": "2024-02-18", "condition": "NM", "source": "tcgplayer", "quantity": 3}
+    ]
+  },
+  {
+    "card_id": "swsh35-200",
+    "name": "Umbreon VMAX (Alt Art)",
+    "set": "Evolving Skies",
+    "language": "EN",
+    "sales": [
+      {"sale_id": "u001", "price": 110.00, "date": "2024-02-01", "condition": "NM", "source": "ebay",      "quantity": 1},
+      {"sale_id": "u002", "price": 108.50, "date": "2024-02-03", "condition": "NM", "source": "tcgplayer", "quantity": 1},
+      {"sale_id": "u003", "price": 112.00, "date": "2024-02-05", "condition": "LP", "source": "ebay",      "quantity": 1},
+      {"sale_id": "u004", "price": 109.75, "date": "2024-02-08", "condition": "NM", "source": "tcgplayer", "quantity": 1},
+      {"sale_id": "u005", "price": 111.00, "date": "2024-02-10", "condition": "NM", "source": "ebay",      "quantity": 1},
+      {"sale_id": "u006", "price": 107.00, "date": "2024-02-12", "condition": "LP", "source": "tcgplayer", "quantity": 1},
+      {"sale_id": "u007", "price": 90.00,  "date": "2024-02-14", "condition": "NM", "source": "ebay",      "quantity": 2},
+      {"sale_id": "u008", "price": 91.50,  "date": "2024-02-15", "condition": "NM", "source": "tcgplayer", "quantity": 2},
+      {"sale_id": "u009", "price": 89.00,  "date": "2024-02-16", "condition": "NM", "source": "ebay",      "quantity": 3},
+      {"sale_id": "u010", "price": 92.00,  "date": "2024-02-17", "condition": "LP", "source": "tcgplayer", "quantity": 4},
+      {"sale_id": "u011", "price": 90.50,  "date": "2024-02-18", "condition": "NM", "source": "ebay",      "quantity": 3}
+    ]
+  }
+]
