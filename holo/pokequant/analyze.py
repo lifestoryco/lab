@@ -389,6 +389,140 @@ def cmd_comp(args: argparse.Namespace) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Subcommand: flip
+# ---------------------------------------------------------------------------
+
+# Platform fee rate applied to the gross sale price (eBay / TCGPlayer combined).
+_PLATFORM_FEE_RATE: float = 0.13          # 13%
+
+# Shipping cost tiers based on card market value.
+_SHIPPING_BMWT: float = 4.00              # Bubble Mailer with Tracking (≥ $20)
+_SHIPPING_PWE: float = 1.00               # Plain White Envelope (< $20)
+_SHIPPING_THRESHOLD: float = 20.00        # Price cutoff between the two tiers
+
+# Profit margin below which we flag "HOLD" even when technically profitable.
+_THIN_MARGIN_THRESHOLD_PCT: float = 20.0  # < 20% margin → not worth the hassle
+
+
+def cmd_flip(args: argparse.Namespace) -> None:
+    """Fetch live comp, apply platform fees + shipping, output personalized profit.
+
+    Full pipeline in one call so the command file only needs to invoke
+    analyze.py once — no separate scraper step for the user.
+    """
+    card_name: str = args.card
+    cost_basis: float = args.cost
+    method: str = args.method.lower()  # single | pack | box
+
+    # Validate method.
+    valid_methods = {"single", "pack", "box"}
+    if method not in valid_methods:
+        _out({"error": f"method must be one of: {', '.join(valid_methods)}. Got '{method}'."})
+        return
+
+    # --- Step 1: Fetch live sales (reuses scraper module directly) ---
+    try:
+        from pokequant.scraper import fetch_sales
+        sales_result = fetch_sales(card_name=card_name, days=14, use_cache=True)
+    except Exception as exc:
+        _out({"error": f"Data fetch failed: {exc}", "card": card_name})
+        return
+
+    # Handle scraper error or empty result.
+    if isinstance(sales_result, dict) and "error" in sales_result:
+        _out({
+            "error": f"No market data found for '{card_name}'. "
+                     "Check the spelling — use the exact card name as it appears on PriceCharting.",
+            "card": card_name,
+        })
+        return
+
+    if not isinstance(sales_result, list) or len(sales_result) == 0:
+        _out({"error": "No liquid market found for this card.", "card": card_name})
+        return
+
+    # --- Step 2: Generate decay-weighted comp ---
+    try:
+        from pokequant.comps.generator import generate_comp_from_list
+        comp = generate_comp_from_list(
+            sales=sales_result,
+            card_id="flip_card",
+            card_name=card_name,
+            n_sales=10,
+            decay_lambda=0.3,
+        )
+        market_value: float = comp.cmc
+    except Exception as exc:
+        _out({"error": f"Comp generation failed: {exc}", "card": card_name})
+        return
+
+    # --- Step 3: Flip math ---
+    platform_fee: float = round(market_value * _PLATFORM_FEE_RATE, 2)
+
+    # Shipping tier based on market value, not cost basis.
+    if market_value >= _SHIPPING_THRESHOLD:
+        shipping_cost = _SHIPPING_BMWT
+        shipping_type = "BMWT"     # Bubble Mailer with Tracking
+    else:
+        shipping_cost = _SHIPPING_PWE
+        shipping_type = "PWE"      # Plain White Envelope
+
+    net_revenue: float = round(market_value - platform_fee - shipping_cost, 2)
+    profit: float = round(net_revenue - cost_basis, 2)
+
+    # Margin relative to the gross sale price (industry-standard for resellers).
+    margin_pct: float = round((profit / market_value) * 100, 1) if market_value > 0 else 0.0
+
+    # --- Step 4: Verdict ---
+    if profit <= 0:
+        verdict = "DO NOT SELL (Taking a loss)"
+        verdict_emoji = "🔴"
+    elif margin_pct < _THIN_MARGIN_THRESHOLD_PCT:
+        verdict = "HOLD (Margins too thin)"
+        verdict_emoji = "🟡"
+    else:
+        verdict = "FLIP IT"
+        verdict_emoji = "🟢"
+
+    # --- Step 5: Method-specific narrative note ---
+    method_notes: dict[str, str] = {
+        "single": "",  # Straight profit — no caveats needed.
+        "pack": (
+            "Based on pack cost. "
+            "(Assumes other cards in the pack cover their own bulk value.)"
+        ),
+        "box": (
+            "⚠️  Based on full box cost. "
+            "You must sell the remaining hits in the box to realize this exact profit margin."
+        ),
+    }
+    method_note = method_notes.get(method, "")
+
+    # Acquisition label for display.
+    method_labels = {"single": "Single", "pack": "Pack Pull", "box": "Box Pull"}
+
+    _out({
+        "card": card_name,
+        "method": method,
+        "method_label": method_labels.get(method, method.title()),
+        "method_note": method_note,
+        "cmc": market_value,
+        "cost_basis": cost_basis,
+        "platform_fee": platform_fee,
+        "platform_fee_pct": _PLATFORM_FEE_RATE * 100,
+        "shipping_cost": shipping_cost,
+        "shipping_type": shipping_type,
+        "net_revenue": net_revenue,
+        "profit": profit,
+        "margin_pct": margin_pct,
+        "verdict": verdict,
+        "verdict_emoji": verdict_emoji,
+        "comp_confidence": comp.confidence,
+        "comp_sales_used": comp.sales_used,
+    })
+
+
+# ---------------------------------------------------------------------------
 # Argument parser
 # ---------------------------------------------------------------------------
 
@@ -437,6 +571,17 @@ def build_parser() -> argparse.ArgumentParser:
     p_comp.add_argument("--n-sales", dest="n_sales", type=int, default=10)
     p_comp.add_argument("--decay", type=float, default=0.3)
     p_comp.set_defaults(func=cmd_comp)
+
+    # flip
+    p_flip = subs.add_parser("flip", help="Personalized profit calculator")
+    p_flip.add_argument("--card", required=True,
+                        help='Card name, e.g. "Charizard V"')
+    p_flip.add_argument("--cost", type=float, required=True,
+                        help="Your cost basis in USD (what you paid for the card)")
+    p_flip.add_argument("--method", choices=["single", "pack", "box"],
+                        required=True,
+                        help="How you acquired the card")
+    p_flip.set_defaults(func=cmd_flip)
 
     return parser
 
