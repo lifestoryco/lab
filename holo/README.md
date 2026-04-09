@@ -40,35 +40,37 @@ Ask it anything: *"Should I buy Charizard V right now?"* — it fetches real mar
 
 ---
 
-## Give This to Claude Code (Setup Instructions)
+## Hey KSqueezePoUp — This One's For You 👋
 
-**Kasey — open Claude Code and paste this entire message:**
+This whole thing was built with you in mind. You don't need to know how any of it works under the hood. Just follow the four steps below and you'll have a live Pokémon card trading terminal running inside Claude Code in under five minutes.
+
+**Open Claude Code and paste this entire message — word for word:**
 
 ---
 
-> I want to set up a Pokémon TCG trading assistant called Holo. Please follow these steps exactly:
+> Hey Claude! My friend built me a Pokémon TCG trading assistant called Holo and I want to get it set up. Please follow these steps exactly:
 >
 > **Step 1 — Clone the repo**
 > Run: `git clone https://github.com/lifestoryco/lab.git ~/Documents/lab`
 >
-> **Step 2 — Open the project**
+> **Step 2 — Move into the project folder**
 > Run: `cd ~/Documents/lab/holo`
 >
-> **Step 3 — Run setup**
-> Run the slash command: `/holo-setup`
+> **Step 3 — Run the setup command**
+> Run: `/holo-setup`
 >
-> This will check your Python version, install dependencies, and confirm everything is working.
+> This will automatically check your Python version, install everything needed, and confirm the live data connection is working. Tell me what it says when it's done.
 >
-> **Step 4 — Try your first command**
-> `/holo-buy-sell Charizard V`
+> **Step 4 — Run your first trade check**
+> Once setup is confirmed, run: `/holo-buy-sell Charizard V`
 >
-> That's it. Let me know when `/holo-setup` is complete and I'll run the first test for you.
+> That's it — you're in. From here you can check any card, any set, anytime.
 
 ---
 
 > **Note for Claude Code:** After cloning, open the `~/Documents/lab/holo/` directory in Claude Code.
-> The slash commands (`/holo-*`) will appear automatically — they live in `.claude/commands/`.
-> Read `CLAUDE.md` in this directory for full system context.
+> The slash commands (`/holo-*`) appear automatically — they live in `.claude/commands/`.
+> The file `CLAUDE.md` in this directory gives Claude full context on the system before you type anything.
 
 ---
 
