@@ -1,3 +1,5 @@
+> **Important:** Run these commands with Claude Code opened from the `holo/` project directory (the folder containing `CLAUDE.md`). All paths are relative to that root.
+
 Run the Holo first-time setup. Check everything is working, install dependencies, and confirm the system is ready.
 
 Follow these steps exactly, in order. Show a checklist as you go:
@@ -9,7 +11,7 @@ Run: `python3 --version`
 - If not found: tell the user to install Python 3 from python.org and stop.
 
 **Step 2 — Create virtual environment**
-Run: `cd /Users/tealizard/Documents/lab/holo && python3 -m venv .venv`
+Run: `python3 -m venv .venv`
 - If it already exists, skip silently: ✅ (already exists)
 - If it fails: explain the error in plain English and stop.
 
@@ -19,11 +21,11 @@ Run: `.venv/bin/pip install pandas numpy requests beautifulsoup4 python-dateutil
 - If it fails: show the error and tell the user to check their internet connection.
 
 **Step 4 — Create data directories**
-Run: `mkdir -p /Users/tealizard/Documents/lab/holo/data/db`
+Run: `mkdir -p data/db`
 - Show: ✅ Data directories ready
 
 **Step 5 — Smoke test (live data fetch)**
-Run: `cd /Users/tealizard/Documents/lab/holo && .venv/bin/python pokequant/scraper.py --card "Charizard V" --days 5`
+Run: `.venv/bin/python pokequant/scraper.py --card "Charizard V" --days 5`
 - If the output is a JSON array with at least 1 result: ✅ Live data connection working
 - If the output contains `"error"`: ⚠️ Data fetch failed (network or site issue) — tell the user this is non-critical and they can still use the tool with a retry later
 - If Python crashes with an import error: tell the user to run Step 3 again

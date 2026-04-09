@@ -1,9 +1,12 @@
+> **Important:** Run these commands with Claude Code opened from the `holo/` project directory (the folder containing `CLAUDE.md`). All paths are relative to that root.
+
 Get a Buy / Sell / Hold trading signal for a Pokémon card.
 
 The card name is: $ARGUMENTS
 
 **Step 1 — Fetch sales data**
-Run: `cd /Users/tealizard/Documents/lab/holo && .venv/bin/python pokequant/scraper.py --card "$ARGUMENTS" --days 30`
+Run: `.venv/bin/python pokequant/scraper.py --card '$ARGUMENTS' --days 30`
+(Single-quote the card name. If $ARGUMENTS contains a literal `'`, escape it as `'\''`.)
 
 Capture the full stdout as `SALES_JSON`.
 
@@ -12,7 +15,8 @@ If `SALES_JSON` contains `"error"` or is an empty array:
 - Stop here.
 
 **Step 2 — Run signal analysis**
-Run: `cd /Users/tealizard/Documents/lab/holo && .venv/bin/python pokequant/analyze.py signal --data 'SALES_JSON' --card-name "$ARGUMENTS"`
+Run: `.venv/bin/python pokequant/analyze.py signal --data 'SALES_JSON' --card-name '$ARGUMENTS'`
+(Single-quote the card name. If $ARGUMENTS contains a literal `'`, escape it as `'\''`.)
 
 Capture stdout as `RESULT_JSON`. Parse it.
 
@@ -58,5 +62,5 @@ Output:
      or a suggested exit range for SELL signals.
      Be direct — no hedging, no "it depends".]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Source: PriceCharting · [count] sales · 30 days · [as_of]
+  Source: PriceCharting · [sales_count] sales · 30 days · [as_of]
 ```

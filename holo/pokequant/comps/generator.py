@@ -150,34 +150,25 @@ def _assign_decay_weights(
     sale_points: list[SalePoint],
     lam: float,
 ) -> list[SalePoint]:
-    """Assign exponential decay weights to a list of SalePoints.
+    """Return a new list of SalePoints with decay weights assigned.
 
-    The list must be ordered NEWEST FIRST (index 0 = most recent).
-
-    Parameters
-    ----------
-    sale_points : list[SalePoint]
-        Sales sorted newest-first.
-    lam : float
-        Decay constant λ. Must be ≥ 0.
-
-    Returns
-    -------
-    list[SalePoint]
-        The same list with ``.weight`` populated on each item.
-
-    Raises
-    ------
-    ValueError
-        If lam is negative.
+    Does NOT mutate the input list. The list must be ordered NEWEST FIRST
+    (index 0 = most recent sale).
     """
     if lam < 0:
         raise ValueError(f"Decay lambda must be ≥ 0, got {lam}.")
 
-    for i, sale in enumerate(sale_points):
-        sale.weight = math.exp(-lam * i)
-
-    return sale_points
+    return [
+        SalePoint(
+            sale_id=sp.sale_id,
+            price=sp.price,
+            date=sp.date,
+            condition=sp.condition,
+            source=sp.source,
+            weight=math.exp(-lam * i),
+        )
+        for i, sp in enumerate(sale_points)
+    ]
 
 
 def _compute_weighted_average(sale_points: list[SalePoint]) -> float:
@@ -213,7 +204,7 @@ def _assess_confidence(sales_used: int, date_spread_days: int) -> str:
 
     Rules:
       - HIGH:   ≥ 7 sales AND date spread ≤ 14 days (fresh, dense data)
-      - MEDIUM: ≥ 4 sales OR date spread ≤ 30 days
+      - MEDIUM: ≥ 4 sales AND date spread ≤ 30 days (adequate volume, not stale)
       - LOW:    Anything else (sparse or stale)
 
     Parameters
@@ -230,7 +221,7 @@ def _assess_confidence(sales_used: int, date_spread_days: int) -> str:
     """
     if sales_used >= 7 and date_spread_days <= 14:
         return "HIGH"
-    if sales_used >= 4 or date_spread_days <= 30:
+    if sales_used >= 4 and date_spread_days <= 30:
         return "MEDIUM"
     return "LOW"
 
@@ -348,7 +339,7 @@ def generate_comp(
             condition=str(row["condition"]),
             source=str(row["source"]),
         )
-        for _, row in df_sorted.iterrows()
+        for row in df_sorted.to_dict(orient="records")
     ]
 
     # Assign decay weights (index 0 = newest = highest weight).
@@ -469,35 +460,6 @@ def generate_comp_from_list(
     return generate_comp(df, card_id=card_id, n_sales=n_sales, decay_lambda=decay_lambda)
 
 
-def bulk_comps(
-    card_data: dict[str, "pd.DataFrame"],
-    n_sales: int = COMP_SALES_LIMIT,
-    decay_lambda: float = DECAY_LAMBDA,
-) -> dict[str, CompResult]:
-    """Generate comps for an entire ingested card collection.
-
-    Parameters
-    ----------
-    card_data : dict[str, pd.DataFrame]
-        Output of `pokequant.ingestion.normalizer.ingest_all`.
-
-    Returns
-    -------
-    dict[str, CompResult]
-        Keys are card_id strings. Failures are logged and omitted.
-    """
-    results: dict[str, CompResult] = {}
-
-    for card_id, df in card_data.items():
-        try:
-            comp = generate_comp(df, card_id=card_id, n_sales=n_sales, decay_lambda=decay_lambda)
-            results[card_id] = comp
-        except ValueError as exc:
-            logger.error("Comp generation failed for '%s': %s", card_id, exc)
-
-    return results
-
-
 # ---------------------------------------------------------------------------
 # Smoke-test
 # ---------------------------------------------------------------------------
@@ -517,7 +479,6 @@ if __name__ == "__main__":
     sample_path = Path(__file__).parents[2] / "data" / "raw" / "sample_sales.json"
     card_data = ingest_all(sample_path)
 
-    all_comps = bulk_comps(card_data)
-
-    for card_id, comp in all_comps.items():
+    for card_id, df in card_data.items():
+        comp = generate_comp(df, card_id=card_id)
         print(comp)

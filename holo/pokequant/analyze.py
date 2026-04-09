@@ -24,12 +24,15 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import re
 import sys
 from pathlib import Path
 from typing import Any
 
 # Make the project root importable regardless of cwd.
 sys.path.insert(0, str(Path(__file__).parents[1]))
+
+from config import SHIPPING_VALUE_THRESHOLD
 
 import numpy as np
 import pandas as pd
@@ -133,6 +136,14 @@ def _build_top3_tier_data(cards: list[dict], packs_per_box: int) -> dict:
         if val and val > 0.25:  # Ignore bulk commons (< $0.25 market value)
             tier_values[rarity].append(val)
 
+    # Log any rarities that have no pull rate — silently excluded from EV.
+    unknown_rarities = [r for r in tier_values if r not in _PULL_RATES]
+    if unknown_rarities:
+        logger.warning(
+            "Rarities with no pull rate data (excluded from EV): %s",
+            unknown_rarities,
+        )
+
     if not tier_values:
         return {}
 
@@ -196,6 +207,15 @@ def cmd_signal(args: argparse.Namespace) -> None:
         _out({"error": "No liquid market found", "signal": "UNKNOWN"})
         return
 
+    # Warn if all data comes from the synthetic API fallback (not real sold listings).
+    if isinstance(raw, list) and raw and all(r.get("source") == "pokemontcg.io" for r in raw):
+        _out({
+            "error": "Only synthetic price data available (no real PriceCharting sales). "
+                     "Signal analysis would be unreliable — try again when real sales exist.",
+            "signal": "UNKNOWN",
+        })
+        return
+
     try:
         from pokequant.ingestion.normalizer import ingest_card
         from pokequant.signals.dip_detector import latest_signal
@@ -218,6 +238,7 @@ def cmd_signal(args: argparse.Namespace) -> None:
             "dip_pct": result.price_vs_sma30_pct,
             "vol_3d": result.volume_3d,
             "vol_surge_pct": result.volume_surge_pct,
+            "sales_count": len(raw),
             "as_of": str(result.as_of_date.date()),
         })
 
@@ -239,8 +260,20 @@ def cmd_ev(args: argparse.Namespace) -> None:
         set_name = args.set_name
         packs_per_box = args.packs or _PACKS_PER_BOX_DEFAULT
 
-        # Fetch live card data from pokemontcg.io.
-        cards = _fetch_set_cards(set_name)
+        # Slugify the set name for use as a cache key.
+        import re as _re
+        set_slug = "ev_" + _re.sub(r"[^a-z0-9]+", "-", set_name.lower().strip())
+
+        # Try cache first — pokemontcg.io data for a set doesn't change hourly.
+        from pokequant.scraper import cache_get, cache_put
+        cached_cards = cache_get(set_slug, "tcgapi_set")
+        if cached_cards is not None:
+            logger.info("EV cache HIT for set '%s'.", set_name)
+            cards = cached_cards
+        else:
+            cards = _fetch_set_cards(set_name)
+            if cards:
+                cache_put(set_slug, "tcgapi_set", cards)
 
         if not cards:
             _error_out(
@@ -393,15 +426,15 @@ def cmd_comp(args: argparse.Namespace) -> None:
 # ---------------------------------------------------------------------------
 
 # Platform fee rate applied to the gross sale price (eBay / TCGPlayer combined).
-_PLATFORM_FEE_RATE: float = 0.13          # 13%
+_PLATFORM_FEE_RATE: float = 0.13          # 13% combined eBay + TCGPlayer fee
 
 # Shipping cost tiers based on card market value.
-_SHIPPING_BMWT: float = 4.00              # Bubble Mailer with Tracking (≥ $20)
-_SHIPPING_PWE: float = 1.00               # Plain White Envelope (< $20)
-_SHIPPING_THRESHOLD: float = 20.00        # Price cutoff between the two tiers
+_SHIPPING_BMWT: float = 4.00              # Bubble Mailer with Tracking (≥ threshold)
+_SHIPPING_PWE: float = 1.00               # Plain White Envelope (< threshold)
 
 # Profit margin below which we flag "HOLD" even when technically profitable.
-_THIN_MARGIN_THRESHOLD_PCT: float = 20.0  # < 20% margin → not worth the hassle
+_THIN_MARGIN_THRESHOLD_PCT: float = 20.0  # < 20% margin on sale price → HOLD
+# Note: _SHIPPING_THRESHOLD is imported from config as SHIPPING_VALUE_THRESHOLD
 
 
 def cmd_flip(args: argparse.Namespace) -> None:
@@ -460,7 +493,7 @@ def cmd_flip(args: argparse.Namespace) -> None:
     platform_fee: float = round(market_value * _PLATFORM_FEE_RATE, 2)
 
     # Shipping tier based on market value, not cost basis.
-    if market_value >= _SHIPPING_THRESHOLD:
+    if market_value >= SHIPPING_VALUE_THRESHOLD:
         shipping_cost = _SHIPPING_BMWT
         shipping_type = "BMWT"     # Bubble Mailer with Tracking
     else:

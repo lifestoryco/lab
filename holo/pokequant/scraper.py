@@ -105,6 +105,8 @@ _SET_SLUGS: dict[str, str] = {
 
 logger = logging.getLogger(__name__)
 
+_CACHE_READY: bool = False
+
 
 # ---------------------------------------------------------------------------
 # Cache layer
@@ -112,7 +114,10 @@ logger = logging.getLogger(__name__)
 
 
 def _init_cache_db() -> None:
-    """Create the history.db cache table if it doesn't exist."""
+    """Create the history.db cache table if it doesn't exist. Called once at startup."""
+    global _CACHE_READY
+    if _CACHE_READY:
+        return
     _CACHE_DB.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(_CACHE_DB) as conn:
         conn.execute("""
@@ -124,16 +129,12 @@ def _init_cache_db() -> None:
                 PRIMARY KEY (card_slug, source)
             )
         """)
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_cache_slug_source "
-            "ON scrape_cache(card_slug, source)"
-        )
         conn.commit()
+    _CACHE_READY = True
 
 
 def _cache_get(card_slug: str, source: str) -> list[dict] | None:
     """Return cached payload if it is < 24 hours old, else None."""
-    _init_cache_db()
     with sqlite3.connect(_CACHE_DB) as conn:
         row = conn.execute(
             """
@@ -152,7 +153,6 @@ def _cache_get(card_slug: str, source: str) -> list[dict] | None:
 
 def _cache_put(card_slug: str, source: str, payload: list[dict]) -> None:
     """Write or replace a cache entry."""
-    _init_cache_db()
     with sqlite3.connect(_CACHE_DB) as conn:
         conn.execute(
             """
@@ -164,6 +164,10 @@ def _cache_put(card_slug: str, source: str, payload: list[dict]) -> None:
         )
         conn.commit()
     logger.debug("Cached %d records for '%s' (%s).", len(payload), card_slug, source)
+
+
+# Initialise the cache database once at import time.
+_init_cache_db()
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +314,7 @@ def _scrape_pricecharting(
     cutoff_date = datetime.utcnow().date() - timedelta(days=days)
     sales: list[dict[str, Any]] = []
     counter = 0
+    graded_dropped: int = 0
 
     for row in table.find_all("tr")[1:]:  # Skip header row.
         cols = row.find_all("td")
@@ -323,6 +328,7 @@ def _scrape_pricecharting(
         # Drop graded cards immediately.
         if _is_graded(title):
             logger.debug("Dropping graded listing: %s", title[:60])
+            graded_dropped += 1
             continue
 
         # --- Extract price ---
@@ -387,8 +393,9 @@ def _scrape_pricecharting(
         )
 
     logger.info(
-        "PriceCharting: found %d raw sales → %d after graded filter.",
-        counter + sum(1 for _ in table.find_all("tr")[1:]) - counter,
+        "PriceCharting: %d raw rows scanned → %d graded dropped → %d accepted.",
+        counter + graded_dropped,
+        graded_dropped,
         len(sales),
     )
     return sales
@@ -536,6 +543,16 @@ def fetch_sales(
     _cache_put(card_slug, source, sales)
 
     return sales
+
+
+def cache_get(card_slug: str, source: str) -> list[dict] | None:
+    """Public interface to the SQLite cache. Returns payload or None on miss."""
+    return _cache_get(card_slug, source)
+
+
+def cache_put(card_slug: str, source: str, payload: list[dict]) -> None:
+    """Public interface to write to the SQLite cache."""
+    _cache_put(card_slug, source, payload)
 
 
 # ---------------------------------------------------------------------------

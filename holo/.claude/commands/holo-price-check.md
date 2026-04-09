@@ -1,9 +1,12 @@
+> **Important:** Run these commands with Claude Code opened from the `holo/` project directory (the folder containing `CLAUDE.md`). All paths are relative to that root.
+
 Get the current market price for a Pokémon card using exponential decay weighting (recent sales count more).
 
 The card name is: $ARGUMENTS
 
 **Step 1 — Fetch sales data**
-Run: `cd /Users/tealizard/Documents/lab/holo && .venv/bin/python pokequant/scraper.py --card "$ARGUMENTS" --days 14`
+Run: `.venv/bin/python pokequant/scraper.py --card '$ARGUMENTS' --days 14`
+(Single-quote the card name. If $ARGUMENTS contains a literal `'`, escape it as `'\''`.)
 
 Capture stdout as `SALES_JSON`.
 
@@ -12,7 +15,8 @@ If `SALES_JSON` contains `"error"` or is empty:
 - Stop here.
 
 **Step 2 — Run comp analysis**
-Run: `cd /Users/tealizard/Documents/lab/holo && .venv/bin/python pokequant/analyze.py comp --data 'SALES_JSON' --card-name "$ARGUMENTS"`
+Run: `.venv/bin/python pokequant/analyze.py comp --data 'SALES_JSON' --card-name '$ARGUMENTS'`
+(Single-quote the card name. If $ARGUMENTS contains a literal `'`, escape it as `'\''`.)
 
 Capture stdout as `RESULT_JSON`.
 

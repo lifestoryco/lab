@@ -1,3 +1,5 @@
+> **Important:** Run these commands with Claude Code opened from the `holo/` project directory (the folder containing `CLAUDE.md`). All paths are relative to that root.
+
 Calculate the Expected Value (EV) of a sealed Pokémon booster box.
 
 Usage: /holo-box-value [Set Name] [retail price]
@@ -18,7 +20,8 @@ If no price is found in $ARGUMENTS, ask: "What did you pay for the box?"
 Wait for their answer before continuing.
 
 **Step 2 — Run EV analysis**
-Run: `cd /Users/tealizard/Documents/lab/holo && .venv/bin/python pokequant/analyze.py ev --set "[SET NAME]" --retail [RETAIL]`
+Run: `.venv/bin/python pokequant/analyze.py ev --set '[SET NAME]' --retail [RETAIL]`
+(Single-quote the set name. If it contains a literal `'`, escape it as `'\''`.)
 
 Capture stdout as `RESULT_JSON`.
 

@@ -1,3 +1,5 @@
+> **Important:** Run these commands with Claude Code opened from the `holo/` project directory (the folder containing `CLAUDE.md`). All paths are relative to that root.
+
 Calculate your exact profit if you sell a card right now, after platform fees and shipping.
 
 Arguments: $ARGUMENTS
@@ -20,7 +22,8 @@ If any argument is missing, ask the user:
 Wait for their response, then parse all three values before continuing.
 
 **Step 2 — Run the flip analysis**
-Run: `cd /Users/tealizard/Documents/lab/holo && .venv/bin/python pokequant/analyze.py flip --card "[CARD NAME]" --cost [COST] --method [METHOD]`
+Run: `.venv/bin/python pokequant/analyze.py flip --card '[CARD NAME]' --cost [COST] --method [METHOD]`
+(Single-quote the card name. If it contains a literal `'`, escape it as `'\''`.)
 
 Capture stdout as `RESULT_JSON`.
 

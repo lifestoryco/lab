@@ -53,9 +53,12 @@ DEFAULT_BULK_RATES: dict = {
     "Holo Rare": 0.10,
     "Ultra Rare": 0.50,
 }
-BULK_WEIGHT_LBS_PER_CARD: float = 0.006   # ~6 grams per sleeved card
+BULK_WEIGHT_LBS_PER_CARD: float = 0.013   # ~6g card + ~6g penny sleeve ≈ 12g per sleeved card (0.026 lbs double-sleeved, 0.013 lbs single-sleeved)
 SHIPPING_RATE_PER_LB: float = 0.50        # USPS Media Mail estimate
 BULK_LIQUIDATE_THRESHOLD: float = 50.00   # Net profit floor to recommend sale
+
+# Shipping tier cutoff: cards below this value go PWE, above go BMWT
+SHIPPING_VALUE_THRESHOLD: float = 20.00   # eBay/TCGPlayer best practice for claim protection
 
 # ---------------------------------------------------------------------------
 # Module 5 — Comp Generator

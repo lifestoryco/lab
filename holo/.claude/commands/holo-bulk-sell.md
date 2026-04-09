@@ -1,3 +1,5 @@
+> **Important:** Run these commands with Claude Code opened from the `holo/` project directory (the folder containing `CLAUDE.md`). All paths are relative to that root.
+
 Analyze your bulk card inventory and tell you whether it's worth shipping to a bulk buyer yet.
 
 Arguments: $ARGUMENTS
@@ -19,7 +21,7 @@ Wait for their reply and parse the numbers from their response. Be flexible — 
 **Step 2 — Run bulk analysis**
 Build the command with the counts you collected. Only include flags for card types that have a count > 0.
 
-Run: `cd /Users/tealizard/Documents/lab/holo && .venv/bin/python pokequant/analyze.py bulk --commons [N] --uncommons [N] --rev-holos [N] --holo-rares [N] --ultra-rares [N]`
+Run: `.venv/bin/python pokequant/analyze.py bulk --commons [N] --uncommons [N] --rev-holos [N] --holo-rares [N] --ultra-rares [N]`
 
 Capture stdout as `RESULT_JSON`.
 

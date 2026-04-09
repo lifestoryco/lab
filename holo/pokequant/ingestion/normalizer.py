@@ -359,7 +359,7 @@ def normalize(df: pd.DataFrame) -> pd.DataFrame:
 
     # Drop duplicate sale IDs (can occur if raw feeds overlap).
     n_before = len(df_sorted)
-    df_sorted.drop_duplicates(subset=["sale_id"], keep="first", inplace=True)
+    df_sorted = df_sorted.drop_duplicates(subset=["sale_id"], keep="first")
     n_dupes = n_before - len(df_sorted)
     if n_dupes > 0:
         logger.info("Dropped %d duplicate sale_id row(s).", n_dupes)

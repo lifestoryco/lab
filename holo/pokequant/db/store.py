@@ -72,6 +72,8 @@ CREATE TABLE IF NOT EXISTS comps (
     sales_used      INTEGER,
     decay_lambda    REAL,
     confidence      TEXT,
+    volatility_score TEXT,
+    price_stddev     REAL,
     newest_sale_date TEXT,
     oldest_sale_date TEXT,
     created_at      TEXT DEFAULT (datetime('now'))
@@ -115,6 +117,12 @@ def initialize_db(db_path: str = DB_PATH) -> None:
     """Create tables if they don't already exist."""
     with _get_conn(db_path) as conn:
         conn.executescript(_DDL)
+        # Migrate existing databases that predate volatility columns.
+        for col, col_type in [("volatility_score", "TEXT"), ("price_stddev", "REAL")]:
+            try:
+                conn.execute(f"ALTER TABLE comps ADD COLUMN {col} {col_type}")
+            except sqlite3.OperationalError:
+                pass  # Column already exists — safe to ignore.
     logger.info("Database initialized at %s.", db_path)
 
 
@@ -234,9 +242,9 @@ def save_comp(comp_result: "CompResult", db_path: str = DB_PATH) -> None:  # noq
     sql = """
         INSERT INTO comps
             (card_id, card_name, cmc, simple_mean, cmc_vs_mean_pct,
-             sales_used, decay_lambda, confidence,
-             newest_sale_date, oldest_sale_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+             sales_used, decay_lambda, confidence, volatility_score,
+             price_stddev, newest_sale_date, oldest_sale_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """
     with _get_conn(db_path) as conn:
         conn.execute(
@@ -250,6 +258,8 @@ def save_comp(comp_result: "CompResult", db_path: str = DB_PATH) -> None:  # noq
                 comp_result.sales_used,
                 comp_result.decay_lambda,
                 comp_result.confidence,
+                comp_result.volatility_score,
+                comp_result.price_stddev,
                 comp_result.newest_sale_date.isoformat()
                 if comp_result.newest_sale_date
                 else None,
