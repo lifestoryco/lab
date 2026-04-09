@@ -40,9 +40,9 @@ Ask it anything: *"Should I buy Charizard V right now?"* — it fetches real mar
 
 ---
 
-## Hey KSqueezePoUp — This One's For You 👋
+## Hey KSqueeze — Like and Subscribe Smash that notification bell skrt skrt
 
-This whole thing was built with you in mind. You don't need to know how any of it works under the hood. Just follow the four steps below and you'll have a live Pokémon card trading terminal running inside Claude Code in under five minutes.
+Just follow the four steps below and you'll have a live Pokémon card trading terminal running inside Claude Code in under five minutes.
 
 **Open Claude Code and paste this entire message — word for word:**
 
