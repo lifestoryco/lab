@@ -115,6 +115,7 @@ class CompResult:
     confidence: str = "UNKNOWN"
     volatility_score: str = "UNKNOWN"
     price_stddev: float = 0.0
+    insufficient_data_warning: str = ""  # Non-empty when sales_used < 3
 
     def __str__(self) -> str:  # pragma: no cover
         lines = [
@@ -366,6 +367,18 @@ def generate_comp(
     raw_prices = [sp.price for sp in sale_points]
     volatility_score, price_stddev = _assess_volatility(raw_prices)
 
+    # Insufficient data warning for edge cases.
+    insufficient_data_warning = ""
+    if len(sale_points) == 1:
+        insufficient_data_warning = (
+            "Only 1 sale found — this comp is a single data point, not a market average. "
+            "Treat with caution."
+        )
+    elif len(sale_points) == 2:
+        insufficient_data_warning = (
+            "Only 2 sales found — comp is directionally useful but not statistically reliable."
+        )
+
     logger.info(
         "Comp for '%s': CMC=$%.2f (simple mean=$%.2f, Δ%+.1f%%), "
         "%d sales, λ=%.2f, confidence=%s, volatility=%s",
@@ -393,6 +406,7 @@ def generate_comp(
         confidence=confidence,
         volatility_score=volatility_score,
         price_stddev=price_stddev,
+        insufficient_data_warning=insufficient_data_warning,
     )
 
 

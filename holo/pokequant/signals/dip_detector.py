@@ -47,6 +47,7 @@ from config import (
     DIP_THRESHOLD,
     SMA_LONG_WINDOW,
     SMA_SHORT_WINDOW,
+    STRONG_SELL_THRESHOLD,
     VOLUME_LOOKBACK_DAYS,
     VOLUME_SURGE_FACTOR,
 )
@@ -65,7 +66,7 @@ SIGNAL_INSUFFICIENT_DATA = "INSUFFICIENT DATA"
 
 # Threshold above SMA-30 for a SELL signal (mirror of DIP_THRESHOLD).
 _SELL_THRESHOLD = DIP_THRESHOLD       # 15% above SMA-30 → SELL
-_STRONG_SELL_THRESHOLD = 0.30         # 30% above SMA-30 → STRONG SELL
+# STRONG_SELL_THRESHOLD imported from config.py
 
 
 # ---------------------------------------------------------------------------
@@ -111,6 +112,7 @@ class SignalResult:
     volume_3d: float
     volume_baseline: float | None
     volume_surge_pct: float | None
+    rsi: float | None
     as_of_date: pd.Timestamp
     metadata: dict = field(default_factory=dict)
 
@@ -177,7 +179,7 @@ def _aggregate_daily(df: pd.DataFrame) -> pd.DataFrame:
     # Reindex to a complete date range so rolling windows account for
     # calendar gaps (weekends, no-sale days).
     full_range = pd.date_range(
-        start=daily.index.min(), end=daily.index.max(), freq="D"
+        start=daily.index.min(), end=daily.index.max(), freq="D", tz="UTC"
     )
     daily = daily.reindex(full_range)
     daily.index.name = "date"
@@ -287,6 +289,47 @@ def _compute_volume_signals(daily: pd.DataFrame) -> pd.DataFrame:
     return daily
 
 
+# RSI period constant
+_RSI_PERIOD = 14
+
+
+def _compute_rsi(daily: pd.DataFrame, period: int = _RSI_PERIOD) -> pd.DataFrame:
+    """Append RSI (Relative Strength Index) column to the daily DataFrame.
+
+    Uses Wilder's smoothing method (exponential moving average with alpha=1/period).
+    RSI = 100 - (100 / (1 + RS)), where RS = avg_gain / avg_loss over `period` days.
+
+    Adds column:
+      - ``rsi`` : float in [0, 100], or NaN where insufficient data.
+        RSI < 30 = oversold (potential buy); RSI > 70 = overbought (potential sell).
+
+    Parameters
+    ----------
+    daily : pd.DataFrame
+        Date-indexed DataFrame with a ``price_mean`` column.
+    period : int
+        Lookback period for RSI calculation (default: 14).
+
+    Returns
+    -------
+    pd.DataFrame
+        The same DataFrame with the ``rsi`` column appended.
+    """
+    delta = daily["price_mean"].diff()
+
+    gain = delta.clip(lower=0)
+    loss = (-delta).clip(lower=0)
+
+    # Wilder's smoothing: EMA with alpha = 1/period
+    avg_gain = gain.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+    avg_loss = loss.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+
+    rs = avg_gain / avg_loss.replace(0, np.nan)
+    daily["rsi"] = 100 - (100 / (1 + rs))
+
+    return daily
+
+
 def _classify_row(row: pd.Series) -> str:
     """Apply the signal logic to a single daily-aggregated row.
 
@@ -296,7 +339,7 @@ def _classify_row(row: pd.Series) -> str:
                              3d volume is VOLUME_SURGE_FACTOR above baseline.
       3. BUY               — price is DIP_THRESHOLD below SMA-30 (but no
                              volume confirmation).
-      4. STRONG SELL       — price is _STRONG_SELL_THRESHOLD above SMA-30.
+      4. STRONG SELL       — price is STRONG_SELL_THRESHOLD above SMA-30.
       5. SELL              — price is _SELL_THRESHOLD above SMA-30.
       6. HOLD              — everything else.
 
@@ -336,16 +379,22 @@ def _classify_row(row: pd.Series) -> str:
 
     # --- Overbought check ---
     price_is_elevated = pct >= (_SELL_THRESHOLD * 100)      # e.g., +15.0
-    price_is_very_elevated = pct >= (_STRONG_SELL_THRESHOLD * 100)  # +30.0
+    price_is_very_elevated = pct >= (STRONG_SELL_THRESHOLD * 100)  # +30.0
+
+    # --- RSI confirmation (when available) ---
+    rsi = row.get("rsi")
+    rsi_oversold = (not pd.isna(rsi)) and rsi < 30
+    rsi_overbought = (not pd.isna(rsi)) and rsi > 70
 
     # --- Signal hierarchy ---
-    if price_is_dipped and volume_is_surging:
+    # RSI can upgrade a BUY to STRONG BUY, or a SELL to STRONG SELL.
+    if price_is_dipped and (volume_is_surging or rsi_oversold):
         return SIGNAL_STRONG_BUY
 
     if price_is_dipped:
         return SIGNAL_BUY
 
-    if price_is_very_elevated:
+    if price_is_very_elevated or (price_is_elevated and rsi_overbought):
         return SIGNAL_STRONG_SELL
 
     if price_is_elevated:
@@ -392,6 +441,7 @@ def generate_signals(df: pd.DataFrame) -> pd.DataFrame:
     daily = _aggregate_daily(df)
     daily = _compute_smas(daily)
     daily = _compute_volume_signals(daily)
+    daily = _compute_rsi(daily)
     daily["signal"] = daily.apply(_classify_row, axis=1)
 
     n_buy = (daily["signal"] == SIGNAL_STRONG_BUY).sum()
@@ -460,6 +510,11 @@ def latest_signal(df: pd.DataFrame, card_id: str = "unknown") -> SignalResult:
         volume_surge_pct=(
             float(last["volume_surge_pct"])
             if not pd.isna(last["volume_surge_pct"])
+            else None
+        ),
+        rsi=(
+            round(float(last["rsi"]), 1)
+            if not pd.isna(last.get("rsi"))
             else None
         ),
         as_of_date=last.name,  # The DatetimeIndex label is the date.

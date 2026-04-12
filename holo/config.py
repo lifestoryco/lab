@@ -34,6 +34,7 @@ DIP_THRESHOLD: float = 0.15          # 15% below SMA-30
 # Volume over the last N days must be this much higher than its rolling mean
 VOLUME_LOOKBACK_DAYS: int = 3
 VOLUME_SURGE_FACTOR: float = 1.20    # 20% above rolling-average volume
+STRONG_SELL_THRESHOLD: float = 0.30  # 30% above SMA-30 → STRONG SELL
 
 # ---------------------------------------------------------------------------
 # Module 3 — Sealed Product EV
@@ -56,6 +57,7 @@ DEFAULT_BULK_RATES: dict = {
 BULK_WEIGHT_LBS_PER_CARD: float = 0.013   # ~6g card + ~6g penny sleeve ≈ 12g per sleeved card (0.026 lbs double-sleeved, 0.013 lbs single-sleeved)
 SHIPPING_RATE_PER_LB: float = 0.50        # USPS Media Mail estimate
 BULK_LIQUIDATE_THRESHOLD: float = 50.00   # Net profit floor to recommend sale
+BULK_PACKAGING_OVERHEAD_USD: float = 2.00  # Fixed packaging cost (envelope + label)
 
 # Shipping tier cutoff: cards below this value go PWE, above go BMWT
 SHIPPING_VALUE_THRESHOLD: float = 20.00   # eBay/TCGPlayer best practice for claim protection
@@ -65,3 +67,11 @@ SHIPPING_VALUE_THRESHOLD: float = 20.00   # eBay/TCGPlayer best practice for cla
 # ---------------------------------------------------------------------------
 COMP_SALES_LIMIT: int = 10           # How many recent sales to fetch
 DECAY_LAMBDA: float = 0.3            # Exponential decay rate (higher = recency-biased)
+
+# ---------------------------------------------------------------------------
+# Module 6 — Flip Calculator (analyze.py cmd_flip)
+# ---------------------------------------------------------------------------
+PLATFORM_FEE_RATE: float = 0.13           # Combined eBay + TCGPlayer seller fee
+SHIPPING_COST_BMWT: float = 4.00          # Bubble Mailer with Tracking (≥ $20 cards)
+SHIPPING_COST_PWE: float = 1.00           # Plain White Envelope (< $20 cards)
+FLIP_THIN_MARGIN_THRESHOLD_PCT: float = 20.0  # Below this margin % → "HOLD" verdict
