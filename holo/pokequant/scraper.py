@@ -469,16 +469,19 @@ def _scrape_pricecharting(
     def _find_sales_table(s: BeautifulSoup, grade: str):
         """Locate the completed-auctions table for a specific grade tab.
 
-        PriceCharting 2026 card page structure:
-          <div class="completed-auctions-{variant}"><table class="hoverable-rows sortable">
-        where variant maps to grade tabs (used=Ungraded, graded=Grade 9, etc.).
+        PriceCharting 2026 card page has TWO divs with class="completed-auctions-used":
+          1. The tab header button (class includes 'tab') — empty
+          2. The data container (class is just 'completed-auctions-used') — has the table
+        We must pick the one that actually contains a hoverable-rows table.
 
-        Returns None for search-result pages (no completed-auctions-* container),
+        Returns None for search-result pages (no matching container),
         so the caller can follow a product link instead of misparsing search rows.
         """
         container_class = _PC_GRADE_CONTAINERS.get(grade, _PC_GRADE_CONTAINERS["raw"])
-        container = s.find("div", class_=container_class)
-        if container:
+        for container in s.find_all("div", class_=container_class):
+            # Skip tab-header divs that don't actually hold sales data.
+            if "tab" in (container.get("class") or []):
+                continue
             t = container.find("table", class_="hoverable-rows")
             if t:
                 return t
