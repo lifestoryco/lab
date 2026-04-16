@@ -67,13 +67,14 @@ def _extract_sources(records: list[dict]) -> list[dict]:
 def _handle_price(params: dict) -> dict:
     """Price check — decay-weighted market comp."""
     card = params.get("card", [""])[0]
+    grade = params.get("grade", ["raw"])[0]
     if not card:
         return {"error": "Missing 'card' parameter"}
 
     from pokequant.scraper import fetch_sales
     from pokequant.comps.generator import generate_comp_from_list
 
-    sales = fetch_sales(card_name=card, days=14, use_cache=True)
+    sales = fetch_sales(card_name=card, days=14, use_cache=True, grade=grade)
     if isinstance(sales, dict) and "error" in sales:
         return {"error": f"No market data found for '{card}'", "detail": sales.get("error")}
     if not isinstance(sales, list) or len(sales) == 0:
@@ -93,12 +94,14 @@ def _handle_price(params: dict) -> dict:
         "oldest": str(result.oldest_sale_date.date()),
         "insufficient_data_warning": result.insufficient_data_warning,
         "sources": _extract_sources(sales),
+        "grade": grade,
     }
 
 
 def _handle_signal(params: dict) -> dict:
     """Buy/Sell/Hold signal analysis."""
     card = params.get("card", [""])[0]
+    grade = params.get("grade", ["raw"])[0]
     if not card:
         return {"error": "Missing 'card' parameter"}
 
@@ -106,7 +109,7 @@ def _handle_signal(params: dict) -> dict:
     from pokequant.ingestion.normalizer import ingest_card
     from pokequant.signals.dip_detector import latest_signal
 
-    sales = fetch_sales(card_name=card, days=30, use_cache=True)
+    sales = fetch_sales(card_name=card, days=30, use_cache=True, grade=grade)
     if isinstance(sales, dict) and "error" in sales:
         return {"error": f"No market data found for '{card}'", "signal": "UNKNOWN"}
     if not isinstance(sales, list) or len(sales) == 0:
@@ -129,6 +132,7 @@ def _handle_signal(params: dict) -> dict:
         "vol_3d": result.volume_3d,
         "vol_surge_pct": result.volume_surge_pct,
         "sources": _extract_sources(sales),
+        "grade": grade,
     }
 
 
@@ -137,6 +141,7 @@ def _handle_flip(params: dict) -> dict:
     card = params.get("card", [""])[0]
     cost = params.get("cost", [""])[0]
     method = params.get("method", ["single"])[0]
+    grade = params.get("grade", ["raw"])[0]
 
     if not card or not cost:
         return {"error": "Missing 'card' and/or 'cost' parameter"}
@@ -150,7 +155,7 @@ def _handle_flip(params: dict) -> dict:
     from pokequant.comps.generator import generate_comp_from_list
     from config import PLATFORM_FEE_RATE, SHIPPING_COST_BMWT, SHIPPING_COST_PWE, SHIPPING_VALUE_THRESHOLD, FLIP_THIN_MARGIN_THRESHOLD_PCT
 
-    sales = fetch_sales(card_name=card, days=14, use_cache=True)
+    sales = fetch_sales(card_name=card, days=14, use_cache=True, grade=grade)
     if isinstance(sales, dict) and "error" in sales:
         return {"error": f"No market data found for '{card}'"}
     if not isinstance(sales, list) or len(sales) == 0:
@@ -198,6 +203,7 @@ def _handle_flip(params: dict) -> dict:
         "sales_used": comp.sales_used,
         "synthetic_only": synthetic_only,
         "sources": _extract_sources(sales),
+        "grade": grade,
     }
 
 

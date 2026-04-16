@@ -419,10 +419,22 @@ def _resolve_pricecharting_card_url(soup: BeautifulSoup, card_name: str) -> str 
     return best_url
 
 
+# PriceCharting 2026 HTML structure: completed sales live in
+# <div class="completed-auctions-{variant}"><table class="hoverable-rows sortable">
+# where variant maps to grade tabs. We default to "used" (Ungraded / raw).
+_PC_GRADE_CONTAINERS: dict[str, str] = {
+    "raw":     "completed-auctions-used",       # Ungraded — what 90% of traders want
+    "psa9":    "completed-auctions-graded",
+    "psa10":   "completed-auctions-manual-only",
+    "graded":  "completed-auctions-new",         # Grade 8 mixed-grade tab
+}
+
+
 def _scrape_pricecharting(
     card_name: str,
     set_name: str | None = None,
     days: int = 30,
+    grade: str = "raw",
 ) -> list[dict[str, Any]]:
     """Scrape completed sales from PriceCharting.com.
 
@@ -454,25 +466,42 @@ def _scrape_pricecharting(
 
     soup = BeautifulSoup(resp.text, "html.parser")
 
-    # PriceCharting renders completed sales in a table with id="completed_auctions"
-    table = soup.find("table", {"id": "completed_auctions"})
+    def _find_sales_table(s: BeautifulSoup, grade: str):
+        """Locate the completed-auctions table for a specific grade tab.
 
-    # If we landed on a search results page (no auction table), try to follow
-    # the best-matching product link to the actual card page.
+        PriceCharting 2026 card page structure:
+          <div class="completed-auctions-{variant}"><table class="hoverable-rows sortable">
+        where variant maps to grade tabs (used=Ungraded, graded=Grade 9, etc.).
+
+        Returns None for search-result pages (no completed-auctions-* container),
+        so the caller can follow a product link instead of misparsing search rows.
+        """
+        container_class = _PC_GRADE_CONTAINERS.get(grade, _PC_GRADE_CONTAINERS["raw"])
+        container = s.find("div", class_=container_class)
+        if container:
+            t = container.find("table", class_="hoverable-rows")
+            if t:
+                return t
+        # Legacy structure (pre-2026)
+        return s.find("table", {"id": "completed_auctions"})
+
+    table = _find_sales_table(soup, grade)
+
+    # If we landed on a search results page (no sales table), follow the best-matching product link.
     if not table:
-        logger.info("No completed_auctions table at %s — scanning for product links.", url)
+        logger.info("No sales table at %s — scanning for product links.", url)
         card_url = _resolve_pricecharting_card_url(soup, card_name)
         if card_url:
             logger.info("Following product link: %s", card_url)
             try:
                 resp = _get(card_url)
                 soup = BeautifulSoup(resp.text, "html.parser")
-                table = soup.find("table", {"id": "completed_auctions"})
+                table = _find_sales_table(soup, grade)
             except (requests.RequestException, ValueError) as exc:
                 logger.error("Failed to follow product link %s: %s", card_url, exc)
 
     if not table:
-        logger.warning("No completed_auctions table found for '%s'.", card_name)
+        logger.warning("No sales table found for '%s' (grade=%s).", card_name, grade)
         return []
 
     cutoff_date = datetime.utcnow().date() - timedelta(days=days)
@@ -489,8 +518,9 @@ def _scrape_pricecharting(
         title_tag = row.find("a") or row.find("td", class_="title")
         title = title_tag.get_text(strip=True) if title_tag else ""
 
-        # Drop graded cards immediately.
-        if _is_graded(title):
+        # For raw/ungraded tab, drop any graded listings that slipped through
+        # (PriceCharting's tabs are authoritative but titles can still mention PSA etc.)
+        if grade == "raw" and _is_graded(title):
             logger.debug("Dropping graded listing: %s", title[:60])
             graded_dropped += 1
             continue
@@ -1002,6 +1032,7 @@ def fetch_sales(
     days: int = 30,
     source: str = "pricecharting",
     use_cache: bool = True,
+    grade: str = "raw",
 ) -> list[dict[str, Any]] | dict[str, Any]:
     """Fetch sold listings for a card, with SQLite caching.
 
@@ -1026,10 +1057,11 @@ def fetch_sales(
         Error object: {"error": "...", "card": "...", "count": 0}
     """
     card_slug = _card_name_to_slug(card_name)
+    cache_key_source = source if grade == "raw" else f"{source}_{grade}"
 
     # --- Cache check ---
     if use_cache:
-        cached = _cache_get(card_slug, source)
+        cached = _cache_get(card_slug, cache_key_source)
         if cached is not None:
             return cached
 
@@ -1038,7 +1070,7 @@ def fetch_sales(
         sales = _fetch_tcgapi(card_name, days=days)
     else:
         # 1. Try PriceCharting completed auctions (best: real historical sales).
-        sales = _scrape_pricecharting(card_name, set_name=set_name, days=days)
+        sales = _scrape_pricecharting(card_name, set_name=set_name, days=days, grade=grade)
 
         if not sales:
             # 2. Try TCGPlayer + eBay simultaneously and combine both.
@@ -1090,7 +1122,7 @@ def fetch_sales(
         }
 
     # --- Save to cache ---
-    _cache_put(card_slug, source, sales)
+    _cache_put(card_slug, cache_key_source, sales)
 
     return sales
 
