@@ -74,13 +74,15 @@ def _handle_price(params: dict) -> dict:
     from pokequant.scraper import fetch_sales
     from pokequant.comps.generator import generate_comp_from_list
 
-    sales = fetch_sales(card_name=card, days=14, use_cache=True, grade=grade)
+    sales = fetch_sales(card_name=card, days=30, use_cache=True, grade=grade)
     if isinstance(sales, dict) and "error" in sales:
         return {"error": f"No market data found for '{card}'", "detail": sales.get("error")}
     if not isinstance(sales, list) or len(sales) == 0:
         return {"error": f"No sales found for '{card}'"}
 
-    result = generate_comp_from_list(sales=sales, card_id="web", card_name=card)
+    # 30-day window: take up to 25 most recent sales for the comp. Decay-weighting
+    # still biases toward recent; older sales just expand the displayed window.
+    result = generate_comp_from_list(sales=sales, card_id="web", card_name=card, n_sales=25)
     return {
         "card": card,
         "cmc": result.cmc,
@@ -155,7 +157,7 @@ def _handle_flip(params: dict) -> dict:
     from pokequant.comps.generator import generate_comp_from_list
     from config import PLATFORM_FEE_RATE, SHIPPING_COST_BMWT, SHIPPING_COST_PWE, SHIPPING_VALUE_THRESHOLD, FLIP_THIN_MARGIN_THRESHOLD_PCT
 
-    sales = fetch_sales(card_name=card, days=14, use_cache=True, grade=grade)
+    sales = fetch_sales(card_name=card, days=30, use_cache=True, grade=grade)
     if isinstance(sales, dict) and "error" in sales:
         return {"error": f"No market data found for '{card}'"}
     if not isinstance(sales, list) or len(sales) == 0:
@@ -164,7 +166,7 @@ def _handle_flip(params: dict) -> dict:
     # Warn if all data came from the synthetic API fallback.
     synthetic_only = all(r.get("source") == "pokemontcg.io" for r in sales)
 
-    comp = generate_comp_from_list(sales=sales, card_id="flip", card_name=card)
+    comp = generate_comp_from_list(sales=sales, card_id="flip", card_name=card, n_sales=25)
     market_value = comp.cmc
 
     platform_fee = round(market_value * PLATFORM_FEE_RATE, 2)
