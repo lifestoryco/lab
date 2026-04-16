@@ -287,12 +287,180 @@ def _handle_bulk(params: dict) -> dict:
     }
 
 
+def _handle_history(params: dict) -> dict:
+    """Historical daily price series for the sparkline chart.
+
+    Returns a list of {date, price, count} points bucketed by day,
+    using the median daily price (robust to outliers).
+    """
+    card = params.get("card", [""])[0]
+    grade = params.get("grade", ["raw"])[0]
+    days_str = params.get("days", ["90"])[0]
+    try:
+        days = max(7, min(365, int(days_str)))
+    except ValueError:
+        days = 90
+
+    if not card:
+        return {"error": "Missing 'card' parameter"}
+
+    from pokequant.scraper import fetch_sales
+    import statistics
+    from collections import defaultdict
+    from datetime import date, timedelta
+
+    sales = fetch_sales(card_name=card, days=days, use_cache=True, grade=grade)
+    if isinstance(sales, dict) and "error" in sales:
+        return {"error": f"No market data found for '{card}'"}
+    if not isinstance(sales, list) or len(sales) == 0:
+        return {"error": f"No sales found for '{card}'"}
+
+    # Bucket by day, median price per day
+    buckets: dict[str, list[float]] = defaultdict(list)
+    for s in sales:
+        try:
+            d = str(s["date"])[:10]
+            p = float(s["price"])
+            if p > 0:
+                buckets[d].append(p)
+        except (KeyError, ValueError, TypeError):
+            continue
+
+    # Forward-fill missing days with previous value so the chart has no gaps
+    if not buckets:
+        return {"error": "No valid price data"}
+
+    sorted_dates = sorted(buckets.keys())
+    earliest = date.fromisoformat(sorted_dates[0])
+    today = date.today()
+    points = []
+    last_price = None
+    d = earliest
+    while d <= today:
+        key = d.isoformat()
+        if key in buckets:
+            last_price = statistics.median(buckets[key])
+            count = len(buckets[key])
+        else:
+            count = 0
+        if last_price is not None:
+            points.append({"date": key, "price": round(last_price, 2), "count": count})
+        d += timedelta(days=1)
+
+    if not points:
+        return {"error": "No chart data"}
+
+    first_price = points[0]["price"]
+    last = points[-1]["price"]
+    high = max(p["price"] for p in points)
+    low = min(p["price"] for p in points)
+    change = round(last - first_price, 2)
+    change_pct = round((last / first_price - 1) * 100, 2) if first_price > 0 else 0.0
+
+    return {
+        "card": card,
+        "grade": grade,
+        "days": days,
+        "points": points,
+        "summary": {
+            "current": last,
+            "first": first_price,
+            "high": high,
+            "low": low,
+            "change": change,
+            "change_pct": change_pct,
+            "sales_count": len(sales),
+        },
+        "sources": _extract_sources(sales),
+    }
+
+
+def _handle_sales(params: dict) -> dict:
+    """Recent sold listings feed — 130point style."""
+    card = params.get("card", [""])[0]
+    grade = params.get("grade", ["raw"])[0]
+    limit_str = params.get("limit", ["25"])[0]
+    try:
+        limit = max(5, min(100, int(limit_str)))
+    except ValueError:
+        limit = 25
+
+    if not card:
+        return {"error": "Missing 'card' parameter"}
+
+    from pokequant.scraper import fetch_sales
+
+    sales = fetch_sales(card_name=card, days=30, use_cache=True, grade=grade)
+    if isinstance(sales, dict) and "error" in sales:
+        return {"error": f"No market data found for '{card}'"}
+    if not isinstance(sales, list) or len(sales) == 0:
+        return {"error": f"No sales found for '{card}'"}
+
+    # Sort by date descending, take top N.
+    sorted_sales = sorted(sales, key=lambda s: str(s.get("date", "")), reverse=True)[:limit]
+
+    feed = [
+        {
+            "date": str(s.get("date", ""))[:10],
+            "price": float(s.get("price", 0)),
+            "condition": s.get("condition", "NM"),
+            "source": s.get("source", "unknown"),
+            "source_label": _SOURCE_LABELS.get(s.get("source", ""), s.get("source", "")),
+            "source_url": s.get("source_url", ""),
+        }
+        for s in sorted_sales
+    ]
+
+    return {
+        "card": card,
+        "grade": grade,
+        "count": len(feed),
+        "sales": feed,
+        "total_available": len(sales),
+    }
+
+
+def _handle_grades(params: dict) -> dict:
+    """Side-by-side comparison of Raw / PSA 9 / PSA 10 prices for a single card."""
+    card = params.get("card", [""])[0]
+    if not card:
+        return {"error": "Missing 'card' parameter"}
+
+    from pokequant.scraper import fetch_sales
+    from pokequant.comps.generator import generate_comp_from_list
+
+    out = {"card": card, "grades": {}}
+    for grade in ("raw", "psa9", "psa10"):
+        try:
+            sales = fetch_sales(card_name=card, days=30, use_cache=True, grade=grade)
+            if isinstance(sales, list) and sales:
+                comp = generate_comp_from_list(
+                    sales=sales, card_id=f"grade_{grade}", card_name=card, n_sales=500,
+                )
+                out["grades"][grade] = {
+                    "cmc": comp.cmc,
+                    "mean": comp.simple_mean,
+                    "sales_used": comp.sales_used,
+                    "confidence": comp.confidence,
+                    "oldest": str(comp.oldest_sale_date.date()),
+                    "newest": str(comp.newest_sale_date.date()),
+                }
+            else:
+                out["grades"][grade] = None
+        except Exception as exc:
+            out["grades"][grade] = {"error": str(exc)}
+    return out
+
+
 _HANDLERS = {
     "price": _handle_price,
     "signal": _handle_signal,
     "flip": _handle_flip,
     "ev": _handle_ev,
     "bulk": _handle_bulk,
+    "history": _handle_history,
+    "grades": _handle_grades,
+    "sales": _handle_sales,
 }
 
 
