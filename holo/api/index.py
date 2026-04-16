@@ -36,6 +36,34 @@ def _json_response(handler, data: dict, status: int = 200):
     handler.wfile.write(json.dumps(data, default=str).encode())
 
 
+_SOURCE_LABELS = {
+    "tcgplayer": "TCGPlayer",
+    "ebay": "eBay",
+    "pricecharting": "PriceCharting",
+    "pricecharting_static": "PriceCharting",
+    "pokemontcg.io": "pokemontcg.io",
+}
+
+
+def _extract_sources(records: list[dict]) -> list[dict]:
+    """Build a deduped list of {label, url, count} for source attribution."""
+    seen: dict[str, dict] = {}
+    for r in records:
+        src = r.get("source", "unknown")
+        url = r.get("source_url", "")
+        if src not in seen:
+            seen[src] = {
+                "name": src,
+                "label": _SOURCE_LABELS.get(src, src),
+                "url": url,
+                "count": 0,
+            }
+        if not seen[src]["url"] and url:
+            seen[src]["url"] = url
+        seen[src]["count"] += 1
+    return sorted(seen.values(), key=lambda s: s["count"], reverse=True)
+
+
 def _handle_price(params: dict) -> dict:
     """Price check — decay-weighted market comp."""
     card = params.get("card", [""])[0]
@@ -64,6 +92,7 @@ def _handle_price(params: dict) -> dict:
         "newest": str(result.newest_sale_date.date()),
         "oldest": str(result.oldest_sale_date.date()),
         "insufficient_data_warning": result.insufficient_data_warning,
+        "sources": _extract_sources(sales),
     }
 
 
@@ -99,6 +128,7 @@ def _handle_signal(params: dict) -> dict:
         "rsi": result.rsi,
         "vol_3d": result.volume_3d,
         "vol_surge_pct": result.volume_surge_pct,
+        "sources": _extract_sources(sales),
     }
 
 
@@ -126,6 +156,9 @@ def _handle_flip(params: dict) -> dict:
     if not isinstance(sales, list) or len(sales) == 0:
         return {"error": f"No sales found for '{card}'"}
 
+    # Warn if all data came from the synthetic API fallback.
+    synthetic_only = all(r.get("source") == "pokemontcg.io" for r in sales)
+
     comp = generate_comp_from_list(sales=sales, card_id="flip", card_name=card)
     market_value = comp.cmc
 
@@ -143,6 +176,11 @@ def _handle_flip(params: dict) -> dict:
     else:
         verdict = "FLIP IT"
 
+    # Break-even price: what the card would need to sell for to recoup costs + fees + shipping.
+    # Solve: break_even * (1 - fee_rate) - shipping = cost_basis
+    from config import PLATFORM_FEE_RATE as _FEE
+    break_even = round((cost_basis + shipping_cost) / (1 - _FEE), 2) if (1 - _FEE) > 0 else 0.0
+
     return {
         "card": card,
         "method": method,
@@ -155,8 +193,11 @@ def _handle_flip(params: dict) -> dict:
         "profit": profit,
         "margin_pct": margin_pct,
         "verdict": verdict,
+        "break_even": break_even,
         "confidence": comp.confidence,
         "sales_used": comp.sales_used,
+        "synthetic_only": synthetic_only,
+        "sources": _extract_sources(sales),
     }
 
 
