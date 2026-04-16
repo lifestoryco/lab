@@ -82,7 +82,7 @@ def _handle_price(params: dict) -> dict:
 
     # 30-day window: take up to 25 most recent sales for the comp. Decay-weighting
     # still biases toward recent; older sales just expand the displayed window.
-    result = generate_comp_from_list(sales=sales, card_id="web", card_name=card, n_sales=25)
+    result = generate_comp_from_list(sales=sales, card_id="web", card_name=card, n_sales=500)
     return {
         "card": card,
         "cmc": result.cmc,
@@ -166,7 +166,7 @@ def _handle_flip(params: dict) -> dict:
     # Warn if all data came from the synthetic API fallback.
     synthetic_only = all(r.get("source") == "pokemontcg.io" for r in sales)
 
-    comp = generate_comp_from_list(sales=sales, card_id="flip", card_name=card, n_sales=25)
+    comp = generate_comp_from_list(sales=sales, card_id="flip", card_name=card, n_sales=500)
     market_value = comp.cmc
 
     platform_fee = round(market_value * PLATFORM_FEE_RATE, 2)
