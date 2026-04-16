@@ -489,6 +489,7 @@ def _scrape_pricecharting(
         return s.find("table", {"id": "completed_auctions"})
 
     table = _find_sales_table(soup, grade)
+    resolved_url = url  # The URL that actually held the sales data (for source attribution).
 
     # If we landed on a search results page (no sales table), follow the best-matching product link.
     if not table:
@@ -500,6 +501,8 @@ def _scrape_pricecharting(
                 resp = _get(card_url)
                 soup = BeautifulSoup(resp.text, "html.parser")
                 table = _find_sales_table(soup, grade)
+                if table:
+                    resolved_url = card_url  # Point source attribution to the real card page.
             except (requests.RequestException, ValueError) as exc:
                 logger.error("Failed to follow product link %s: %s", card_url, exc)
 
@@ -585,7 +588,7 @@ def _scrape_pricecharting(
                 "date": sale_date.isoformat(),
                 "condition": condition,
                 "source": "pricecharting",
-                "source_url": url,
+                "source_url": resolved_url,
                 "quantity": 1,
             }
         )
@@ -1072,22 +1075,27 @@ def fetch_sales(
     if source == "tcgapi":
         sales = _fetch_tcgapi(card_name, days=days)
     else:
-        # 1. Try PriceCharting completed auctions (best: real historical sales).
+        # 1. PriceCharting completed auctions — authoritative, grade-filtered.
         sales = _scrape_pricecharting(card_name, set_name=set_name, days=days, grade=grade)
 
+        # 2. Supplement with eBay sold listings (raw grade only — eBay mixes grades
+        #    and the _is_graded filter keyword-drops PSA/CGC/BGS titles, which is only
+        #    correct when the user asked for raw data).
+        if grade == "raw":
+            try:
+                ebay_supplement = _scrape_ebay(card_name, days=days)
+                if ebay_supplement:
+                    logger.info("Supplementing PC with %d eBay sales.", len(ebay_supplement))
+                    sales = sales + ebay_supplement
+            except Exception as exc:
+                logger.warning("eBay supplement failed (continuing with PC-only): %s", exc)
+
         if not sales:
-            # 2. Try TCGPlayer + eBay simultaneously and combine both.
-            #    Both are real sold-listing sources; more data = better signal.
-            logger.info("PriceCharting returned 0 results — trying TCGPlayer + eBay.")
+            # Fallback: try TCGPlayer when PC and eBay both returned nothing.
+            logger.info("No PC/eBay results — trying TCGPlayer.")
             product_id = _lookup_tcgplayer_product_id(card_name)
-            tcgplayer_sales = _fetch_tcgplayer_history(product_id, days=days) if product_id else []
-            ebay_sales = _scrape_ebay(card_name, days=days)
-            sales = tcgplayer_sales + ebay_sales
-            if sales:
-                logger.info(
-                    "Multi-source: %d TCGPlayer + %d eBay = %d total records.",
-                    len(tcgplayer_sales), len(ebay_sales), len(sales),
-                )
+            if product_id:
+                sales = _fetch_tcgplayer_history(product_id, days=days)
 
         # 3. Try PriceCharting static price_data (single current-price snapshot).
         if not sales:
