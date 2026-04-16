@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import json
 import logging
 import random
@@ -42,7 +43,7 @@ from bs4 import BeautifulSoup
 # Paths
 # ---------------------------------------------------------------------------
 _BASE_DIR = Path(__file__).parents[1]
-_CACHE_DB = _BASE_DIR / "data" / "db" / "history.db"
+_CACHE_DB = Path(os.environ.get("HOLO_CACHE_DB", _BASE_DIR / "data" / "db" / "history.db"))
 
 # ---------------------------------------------------------------------------
 # User-Agent rotation pool — 6 real browser fingerprints.
