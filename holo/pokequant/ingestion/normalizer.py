@@ -177,7 +177,7 @@ def extract_raw_dataframe(card_record: dict[str, Any]) -> pd.DataFrame:
             ) from exc
 
         try:
-            date = pd.to_datetime(sale["date"])
+            date = pd.to_datetime(sale["date"], utc=True)
         except Exception as exc:
             raise ValueError(
                 f"Cannot parse date '{sale['date']}' in sale "

@@ -32,7 +32,13 @@ from typing import Any
 # Make the project root importable regardless of cwd.
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from config import SHIPPING_VALUE_THRESHOLD
+from config import (
+    FLIP_THIN_MARGIN_THRESHOLD_PCT,
+    PLATFORM_FEE_RATE,
+    SHIPPING_COST_BMWT,
+    SHIPPING_COST_PWE,
+    SHIPPING_VALUE_THRESHOLD,
+)
 
 import numpy as np
 import pandas as pd
@@ -270,6 +276,7 @@ def cmd_signal(args: argparse.Namespace) -> None:
             "dip_pct": result.price_vs_sma30_pct,
             "vol_3d": result.volume_3d,
             "vol_surge_pct": result.volume_surge_pct,
+            "rsi": result.rsi,
             "sales_count": len(raw),
             "as_of": str(result.as_of_date.date()),
             "sources": _extract_sources(raw),
@@ -410,7 +417,6 @@ def cmd_bulk(args: argparse.Namespace) -> None:
             "sources": [
                 {
                     "label": "Holo bulk rates",
-                    "url": "https://github.com/",
                     "note": (
                         "Buylist rates: Common $0.01 · Uncommon $0.02 · "
                         "Rev Holo $0.05 · Holo Rare $0.10 · Ultra Rare $0.50 · "
@@ -477,6 +483,7 @@ def cmd_comp(args: argparse.Namespace) -> None:
             "sales_used": result.sales_used,
             "newest": str(result.newest_sale_date.date()),
             "oldest": str(result.oldest_sale_date.date()),
+            "insufficient_data_warning": result.insufficient_data_warning,
             "sources": _extract_sources(raw),
         })
 
@@ -489,16 +496,7 @@ def cmd_comp(args: argparse.Namespace) -> None:
 # Subcommand: flip
 # ---------------------------------------------------------------------------
 
-# Platform fee rate applied to the gross sale price (eBay / TCGPlayer combined).
-_PLATFORM_FEE_RATE: float = 0.13          # 13% combined eBay + TCGPlayer fee
-
-# Shipping cost tiers based on card market value.
-_SHIPPING_BMWT: float = 4.00              # Bubble Mailer with Tracking (≥ threshold)
-_SHIPPING_PWE: float = 1.00               # Plain White Envelope (< threshold)
-
-# Profit margin below which we flag "HOLD" even when technically profitable.
-_THIN_MARGIN_THRESHOLD_PCT: float = 20.0  # < 20% margin on sale price → HOLD
-# Note: _SHIPPING_THRESHOLD is imported from config as SHIPPING_VALUE_THRESHOLD
+# All flip constants are imported from config.py — no module-level overrides.
 
 
 def cmd_flip(args: argparse.Namespace) -> None:
@@ -527,6 +525,7 @@ def cmd_flip(args: argparse.Namespace) -> None:
 
     # Handle scraper error or empty result.
     if isinstance(sales_result, dict) and "error" in sales_result:
+        logger.warning("Scraper returned error for '%s': %s", card_name, sales_result.get("error"))
         _out({
             "error": f"No market data found for '{card_name}'. "
                      "Check the spelling — use the exact card name as it appears on PriceCharting.",
@@ -554,14 +553,14 @@ def cmd_flip(args: argparse.Namespace) -> None:
         return
 
     # --- Step 3: Flip math ---
-    platform_fee: float = round(market_value * _PLATFORM_FEE_RATE, 2)
+    platform_fee: float = round(market_value * PLATFORM_FEE_RATE, 2)
 
     # Shipping tier based on market value, not cost basis.
     if market_value >= SHIPPING_VALUE_THRESHOLD:
-        shipping_cost = _SHIPPING_BMWT
+        shipping_cost = SHIPPING_COST_BMWT
         shipping_type = "BMWT"     # Bubble Mailer with Tracking
     else:
-        shipping_cost = _SHIPPING_PWE
+        shipping_cost = SHIPPING_COST_PWE
         shipping_type = "PWE"      # Plain White Envelope
 
     net_revenue: float = round(market_value - platform_fee - shipping_cost, 2)
@@ -574,7 +573,7 @@ def cmd_flip(args: argparse.Namespace) -> None:
     if profit <= 0:
         verdict = "DO NOT SELL (Taking a loss)"
         verdict_emoji = "🔴"
-    elif margin_pct < _THIN_MARGIN_THRESHOLD_PCT:
+    elif margin_pct < FLIP_THIN_MARGIN_THRESHOLD_PCT:
         verdict = "HOLD (Margins too thin)"
         verdict_emoji = "🟡"
     else:
@@ -606,7 +605,7 @@ def cmd_flip(args: argparse.Namespace) -> None:
         "cmc": market_value,
         "cost_basis": cost_basis,
         "platform_fee": platform_fee,
-        "platform_fee_pct": _PLATFORM_FEE_RATE * 100,
+        "platform_fee_pct": PLATFORM_FEE_RATE * 100,
         "shipping_cost": shipping_cost,
         "shipping_type": shipping_type,
         "net_revenue": net_revenue,
@@ -616,6 +615,7 @@ def cmd_flip(args: argparse.Namespace) -> None:
         "verdict_emoji": verdict_emoji,
         "comp_confidence": comp.confidence,
         "comp_sales_used": comp.sales_used,
+        "insufficient_data_warning": comp.insufficient_data_warning,
     })
 
 
@@ -689,6 +689,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 if __name__ == "__main__":
     parser = build_parser()
+    if len(sys.argv) == 1:
+        parser.print_help(sys.stderr)
+        print(json.dumps({"error": "No subcommand provided. Use: signal, ev, bulk, comp, or flip."}))
+        sys.exit(1)
     args = parser.parse_args()
 
     log_level = logging.DEBUG if getattr(args, "verbose", False) else logging.WARNING

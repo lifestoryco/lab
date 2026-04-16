@@ -55,7 +55,7 @@ Claude reads .claude/commands/holo-*.md
 | `config.py` | All tunable thresholds (SMA windows, fee rates, shipping tiers) |
 | `pokequant/scraper.py` | Live data fetcher with SQLite cache + anti-blocking |
 | `pokequant/analyze.py` | Analysis dispatcher — outputs compact JSON |
-| `pokequant/signals/dip_detector.py` | SMA + volume signal engine |
+| `pokequant/signals/dip_detector.py` | SMA + volume + RSI signal engine |
 | `pokequant/ev/calculator.py` | Sealed box EV math |
 | `pokequant/comps/generator.py` | Exponential-decay weighted comp |
 | `pokequant/bulk/optimizer.py` | Bulk liquidation calculator |

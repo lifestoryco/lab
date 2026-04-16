@@ -33,6 +33,7 @@ from typing import Any
 
 from config import (
     BULK_LIQUIDATE_THRESHOLD,
+    BULK_PACKAGING_OVERHEAD_USD,
     BULK_WEIGHT_LBS_PER_CARD,
     DEFAULT_BULK_RATES,
     SHIPPING_RATE_PER_LB,
@@ -40,11 +41,7 @@ from config import (
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Packaging overhead in USD (envelope + box + tape + label).
-# Keep separate from per-lb rate so it scales independently.
-# ---------------------------------------------------------------------------
-_PACKAGING_OVERHEAD_USD: float = 2.00
+# Packaging overhead imported from config.py as BULK_PACKAGING_OVERHEAD_USD.
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +153,7 @@ def _compute_shipping_cost(
     total_cards: int,
     weight_per_card_lbs: float = BULK_WEIGHT_LBS_PER_CARD,
     shipping_rate: float = SHIPPING_RATE_PER_LB,
-    packaging_overhead: float = _PACKAGING_OVERHEAD_USD,
+    packaging_overhead: float = BULK_PACKAGING_OVERHEAD_USD,
 ) -> tuple[float, float]:
     """Estimate total shipping cost and package weight.
 

@@ -118,27 +118,36 @@ def _init_cache_db() -> None:
     global _CACHE_READY
     if _CACHE_READY:
         return
-    _CACHE_DB.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(_CACHE_DB) as conn:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS scrape_cache (
-                card_slug   TEXT NOT NULL,
-                source      TEXT NOT NULL,
-                fetched_at  TEXT NOT NULL,
-                payload     TEXT NOT NULL,
-                PRIMARY KEY (card_slug, source)
-            )
-        """)
-        # Permanent cache: pokemontcg card_id → TCGPlayer product_id.
-        # No TTL — product IDs don't change.
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS tcgplayer_product_ids (
-                pokemontcg_id   TEXT PRIMARY KEY,
-                product_id      INTEGER NOT NULL
-            )
-        """)
-        conn.commit()
-    _CACHE_READY = True
+    try:
+        _CACHE_DB.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(_CACHE_DB) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS scrape_cache (
+                    card_slug   TEXT NOT NULL,
+                    source      TEXT NOT NULL,
+                    fetched_at  TEXT NOT NULL,
+                    payload     TEXT NOT NULL,
+                    PRIMARY KEY (card_slug, source)
+                )
+            """)
+            # Permanent cache: pokemontcg card_id → TCGPlayer product_id.
+            # No TTL — product IDs don't change.
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS tcgplayer_product_ids (
+                    pokemontcg_id   TEXT PRIMARY KEY,
+                    product_id      INTEGER NOT NULL
+                )
+            """)
+            conn.commit()
+        _CACHE_READY = True
+    except Exception as exc:
+        # Log to stderr — stdout must stay clean for JSON protocol.
+        print(
+            json.dumps({"error": f"Cache database init failed: {exc}. "
+                                 f"Try deleting {_CACHE_DB} and re-running."}),
+            file=sys.stdout,  # Intentional — command files read stdout
+        )
+        sys.exit(1)
 
 
 def _product_id_cache_get(pokemontcg_id: str) -> int | None:
@@ -204,25 +213,64 @@ _init_cache_db()
 # ---------------------------------------------------------------------------
 
 
-def _get(url: str, timeout: int = 10) -> requests.Response:
-    """HTTP GET with random User-Agent and polite retry (1 retry on 429)."""
-    headers = {
-        "User-Agent": random.choice(_USER_AGENTS),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-        "Accept-Encoding": "gzip, deflate",
-        "Connection": "keep-alive",
-        "DNT": "1",
-    }
-    resp = requests.get(url, headers=headers, timeout=timeout)
-    if resp.status_code == 429:
-        # Back off once on rate-limit.
-        logger.warning("Rate limited by %s — backing off 5s.", url)
-        time.sleep(5)
-        headers["User-Agent"] = random.choice(_USER_AGENTS)  # Rotate UA on retry.
-        resp = requests.get(url, headers=headers, timeout=timeout)
-    resp.raise_for_status()
-    return resp
+def _get(url: str, timeout: int = 10, retries: int = 3) -> requests.Response:
+    """HTTP GET with UA rotation, exponential backoff, and explicit error classification."""
+    last_exc: Exception | None = None
+    for attempt in range(retries):
+        try:
+            headers = {
+                "User-Agent": random.choice(_USER_AGENTS),
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5",
+                "Accept-Encoding": "gzip, deflate",
+                "Connection": "keep-alive",
+                "DNT": "1",
+            }
+            resp = requests.get(url, headers=headers, timeout=timeout)
+
+            if resp.status_code == 429:
+                wait = 5 * (2 ** attempt)  # 5s, 10s, 20s
+                logger.warning("Rate limited by %s — backing off %ds (attempt %d/%d).",
+                               url, wait, attempt + 1, retries)
+                time.sleep(wait)
+                last_exc = None
+                continue
+
+            if resp.status_code == 403:
+                raise ValueError(
+                    f"Access denied by {url} (HTTP 403). "
+                    "The site may be blocking automated requests. "
+                    "Try again in a few minutes or check your User-Agent."
+                )
+
+            if resp.status_code >= 500:
+                logger.warning("Server error %d from %s — retrying (attempt %d/%d).",
+                               resp.status_code, url, attempt + 1, retries)
+                time.sleep(3 * (attempt + 1))
+                last_exc = ValueError(f"Server error {resp.status_code} from {url}")
+                continue
+
+            resp.raise_for_status()
+            return resp
+
+        except requests.exceptions.Timeout:
+            logger.warning("Timeout after %ds fetching %s (attempt %d/%d).",
+                           timeout, url, attempt + 1, retries)
+            last_exc = ValueError(
+                f"Request to {url} timed out after {timeout}s. "
+                "The site may be slow. Try again shortly."
+            )
+            time.sleep(2 * (attempt + 1))
+
+        except requests.exceptions.ConnectionError as exc:
+            logger.warning("Connection error fetching %s: %s (attempt %d/%d).",
+                           url, exc, attempt + 1, retries)
+            last_exc = ValueError(
+                f"Could not connect to {url}. Check your internet connection."
+            )
+            time.sleep(2 * (attempt + 1))
+
+    raise last_exc or ValueError(f"Failed to fetch {url} after {retries} attempts.")
 
 
 # ---------------------------------------------------------------------------
@@ -399,7 +447,7 @@ def _scrape_pricecharting(
 
     try:
         resp = _get(url)
-    except requests.RequestException as exc:
+    except (requests.RequestException, ValueError) as exc:
         logger.error("PriceCharting request failed: %s", exc)
         return []
 
@@ -419,7 +467,7 @@ def _scrape_pricecharting(
                 resp = _get(card_url)
                 soup = BeautifulSoup(resp.text, "html.parser")
                 table = soup.find("table", {"id": "completed_auctions"})
-            except requests.RequestException as exc:
+            except (requests.RequestException, ValueError) as exc:
                 logger.error("Failed to follow product link %s: %s", card_url, exc)
 
     if not table:
@@ -852,7 +900,7 @@ def _scrape_ebay(card_name: str, days: int = 30) -> list[dict[str, Any]]:
 
     try:
         resp = _get(url)
-    except requests.RequestException as exc:
+    except (requests.RequestException, ValueError) as exc:
         logger.error("eBay request failed: %s", exc)
         return []
 
@@ -1024,7 +1072,7 @@ def fetch_sales(
                 for r in static_records:
                     r["source_url"] = resolved_card_url
                 sales = static_records
-            except requests.RequestException:
+            except (requests.RequestException, ValueError):
                 pass
 
         # 4. Last resort: pokemontcg.io synthetic price points.

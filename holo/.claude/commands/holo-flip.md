@@ -36,7 +36,8 @@ If RESULT_JSON contains `"error"`:
 Use these values from RESULT_JSON:
 card, method_label, cmc, cost_basis, platform_fee, platform_fee_pct,
 shipping_cost, shipping_type, net_revenue, profit, margin_pct,
-verdict, verdict_emoji, method_note, comp_confidence, comp_sales_used
+verdict, verdict_emoji, method_note, comp_confidence, comp_sales_used,
+insufficient_data_warning
 
 Format the profit line:
 - profit > 0 → "+$[profit] (+[margin_pct]% Margin)"
@@ -59,6 +60,7 @@ Output:
   [method_note — only show if non-empty, on its own line]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Comp: [comp_confidence] confidence · [comp_sales_used] sales · PriceCharting
+  [If insufficient_data_warning is non-empty: "⚠  " + insufficient_data_warning]
 ```
 
 **Step 4 — Add a plain-English action item (1-2 sentences)**

@@ -30,6 +30,12 @@ SMA_LONG_WINDOW: int = 30            # Days for the long moving average
 
 # A price this far below the 30-day SMA triggers the buy-side check
 DIP_THRESHOLD: float = 0.15          # 15% below SMA-30
+STRONG_SELL_THRESHOLD: float = 0.30  # 30% above SMA-30 → STRONG SELL
+
+# RSI (Relative Strength Index) — momentum confirmation for buy/sell signals
+RSI_PERIOD: int = 14                 # Standard Wilder RSI lookback period
+RSI_OVERSOLD: float = 30.0          # Below this → oversold (confirms BUY dip)
+RSI_OVERBOUGHT: float = 70.0        # Above this → overbought (confirms SELL)
 
 # Volume over the last N days must be this much higher than its rolling mean
 VOLUME_LOOKBACK_DAYS: int = 3
@@ -61,7 +67,20 @@ BULK_LIQUIDATE_THRESHOLD: float = 50.00   # Net profit floor to recommend sale
 SHIPPING_VALUE_THRESHOLD: float = 20.00   # eBay/TCGPlayer best practice for claim protection
 
 # ---------------------------------------------------------------------------
+# Module 4b — Bulk Optimizer (packaging)
+# ---------------------------------------------------------------------------
+BULK_PACKAGING_OVERHEAD_USD: float = 2.00  # Fixed packaging cost (envelope + label)
+
+# ---------------------------------------------------------------------------
 # Module 5 — Comp Generator
 # ---------------------------------------------------------------------------
 COMP_SALES_LIMIT: int = 10           # How many recent sales to fetch
 DECAY_LAMBDA: float = 0.3            # Exponential decay rate (higher = recency-biased)
+
+# ---------------------------------------------------------------------------
+# Module 6 — Flip Calculator (analyze.py cmd_flip)
+# ---------------------------------------------------------------------------
+PLATFORM_FEE_RATE: float = 0.13           # Combined eBay + TCGPlayer seller fee
+SHIPPING_COST_BMWT: float = 4.00          # Bubble Mailer with Tracking (≥ $20 cards)
+SHIPPING_COST_PWE: float = 1.00           # Plain White Envelope (< $20 cards)
+FLIP_THIN_MARGIN_THRESHOLD_PCT: float = 20.0  # Below this margin % → "HOLD" verdict

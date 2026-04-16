@@ -26,7 +26,13 @@ If RESULT_JSON contains `"error"` or `"cmc": null`:
 
 **Step 3 — Display the result**
 
-Use: cmc, mean, delta_pct, trend, confidence, volatility, stddev, sales_used, newest, oldest, sources.
+Use: cmc, mean, delta_pct, trend, confidence, volatility, stddev, sales_used, newest, oldest, insufficient_data_warning, sources.
+
+If `insufficient_data_warning` is non-empty, display it prominently right below the confidence line:
+```
+  Confidence:       [confidence display]
+  ⚠  [insufficient_data_warning]
+```
 
 Volatility display:
 - "LOW"    → "🟢 LOW (price is stable)"
