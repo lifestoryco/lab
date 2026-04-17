@@ -1126,11 +1126,30 @@ def fetch_sales(
     # Include days in the cache key so different time windows don't collide.
     cache_key_source = f"{source}_{grade}_{days}d"
 
-    # --- Cache check ---
+    # --- L1 Cache (/tmp sqlite, warm-instance only) ---
     if use_cache:
         cached = _cache_get(card_slug, cache_key_source)
         if cached is not None:
             return cached
+
+    # --- L2 Cache (Supabase, persistent cross-instance) ---
+    # Only active when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY are set; the
+    # module is a no-op otherwise. Any failure falls through silently to the
+    # live-scrape path below. We only hit L2 for source="pricecharting"
+    # because the scraper's multi-source merge (PC + eBay + TCGPlayer) is
+    # handled live in this function; L2 stores the merged result.
+    if use_cache and source == "pricecharting":
+        try:
+            from pokequant import supabase_cache as _l2
+            if _l2.is_enabled():
+                l2_sales = _l2.get_recent_sales(card_slug, grade, days)
+                if l2_sales and len(l2_sales) >= 3:
+                    logger.info("L2 Supabase HIT for '%s' — populating L1.", card_slug)
+                    _cache_put(card_slug, cache_key_source, l2_sales)
+                    return l2_sales
+        except Exception as exc:
+            # Supabase being unreachable must never block the request.
+            logger.debug("L2 lookup failed, falling through: %s", exc)
 
     # --- Live fetch ---
     if source == "tcgapi":
@@ -1217,8 +1236,18 @@ def fetch_sales(
             "count": 0,
         }
 
-    # --- Save to cache ---
+    # --- Save to L1 cache (/tmp sqlite) ---
     _cache_put(card_slug, cache_key_source, sales)
+
+    # --- Write-through to L2 (Supabase), fire-and-forget ---
+    # Only for pricecharting source; that's the canonical merged feed.
+    # Supabase module is a no-op when env vars are unset.
+    if source == "pricecharting":
+        try:
+            from pokequant import supabase_cache as _l2
+            _l2.put_sales(card_slug, grade, days, sales)
+        except Exception as exc:
+            logger.debug("L2 write-through skipped: %s", exc)
 
     return sales
 
