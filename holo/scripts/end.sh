@@ -9,11 +9,13 @@ cd "$PROJECT_DIR"
 echo "🔍 Validating clean close..."
 echo ""
 
-# ── uncommitted changes ───────────────────────────────────────────────────────
-DIRTY=$(git status --porcelain)
+# ── uncommitted changes (scoped to holo/ only) ───────────────────────────────
+# Use -- . to check only files under the current project directory,
+# ignoring unrelated changes at the repo root.
+DIRTY=$(git status --porcelain -- . 2>/dev/null)
 if [ -n "$DIRTY" ]; then
-  echo "  ⚠️  Uncommitted changes:"
-  git status --short
+  echo "  ⚠️  Uncommitted changes in holo/:"
+  git status --short -- .
   echo ""
   echo "  Stage and commit before calling end-session."
   exit 1
