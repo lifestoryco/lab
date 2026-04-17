@@ -447,7 +447,12 @@ def _handle_history(params: dict) -> dict:
     if not buckets:
         return {"error": "No valid price data"}
 
-    sorted_dates = sorted(buckets.keys())
+    # Hard-clamp to the requested window so the chart always matches the tab.
+    cutoff = date.today() - timedelta(days=days)
+    sorted_dates = sorted(d for d in buckets.keys() if date.fromisoformat(d) >= cutoff)
+    if not sorted_dates:
+        return {"error": "No valid price data in selected range"}
+
     earliest = date.fromisoformat(sorted_dates[0])
     today = date.today()
     points = []

@@ -1063,7 +1063,8 @@ def fetch_sales(
         Error object: {"error": "...", "card": "...", "count": 0}
     """
     card_slug = _card_name_to_slug(card_name)
-    cache_key_source = source if grade == "raw" else f"{source}_{grade}"
+    # Include days in the cache key so different time windows don't collide.
+    cache_key_source = f"{source}_{grade}_{days}d"
 
     # --- Cache check ---
     if use_cache:
