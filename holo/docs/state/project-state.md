@@ -14,6 +14,28 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
+## What Was Just Done (2026-04-16)
+
+### Card image CSP fix ✅ COMPLETE
+**Modified:** `handoffpack-www/next.config.js` — added `images.pokemontcg.io` to `remotePatterns` + CSP `img-src`; switched `<img>` → `<Image>` in `CardHeader`
+**Commits:** `64a2ccd` — fix(holo): unblock pokemon card images blocked by CSP
+
+### Date range tabs fix ✅ COMPLETE
+**Modified:** `pokequant/scraper.py` — cache key now includes `days` (`{source}_{grade}_{days}d`); `api/index.py` — hard cutoff filter in `_handle_history`
+**Commits:** `24c0542` — fix(holo): chart range tabs now correctly change graph and price delta
+
+### Session workflow commands ✅ COMPLETE
+**New files:** `.claude/commands/sync.md`, `start-session.md`, `run-task.md`, `prompt-builder.md`, `end-session.md` — full development loop  
+**New files:** `.claude/commands/alpha-squad.md` — 7-member advisory board  
+**New files:** `.claude/commands/code-review.md` — 4-agent parallel code review  
+**New files:** `scripts/start.sh`, `scripts/end.sh` — env health check + push validation  
+**New files:** `docs/advisory-board/charter.md`, `meetings/README.md` — board infrastructure  
+**New files:** `docs/state/project-state.md` — this file  
+**Modified:** `CLAUDE.md` — documented all commands + task naming convention  
+**Commits:** `fe5b7a5`, `caef365`, `58d14a1`
+
+---
+
 ## Current Status (as of 2026-04-16)
 
 ### Phase
