@@ -40,6 +40,7 @@ If this is a fresh clone, run `/holo-setup` first. That command will:
 | `/prompt-builder` | `/prompt-builder H-1.2` | Research + generate a self-contained task prompt |
 | `/run-task` | `/run-task H-1.2` | Execute a pending task prompt step-by-step |
 | `/end-session` | `/end-session` | Verify, commit, update state, push |
+| `/docs-update` | `/docs-update H-1.2` | Mark tasks done, move prompts to complete/, update roadmap |
 | `/code-review` | `/code-review [--fix]` | 4-agent parallel code review (Security, Logic, Arch, UX) |
 | `/alpha-squad` | `/alpha-squad [topic]` | Convene the 7-member advisory board for strategic decisions |
 
