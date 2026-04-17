@@ -20,3 +20,6 @@ out/
 
 # Claude Code worktrees (auto-generated)
 .claude/worktrees/
+
+# Vercel CLI (project link — do not commit)
+.vercel
