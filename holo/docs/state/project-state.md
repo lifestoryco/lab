@@ -14,7 +14,25 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
-## What Was Just Done (2026-04-16)
+## What Was Just Done (2026-04-16 — session 3)
+
+### Ultra Ball theme + full-bleed card takeover + draggable movers + mobile bottom nav + flip bug fix ✅ COMPLETE
+
+**Modified:** `api/index.py` — fixed `UnboundLocalError` on `DEFAULT_PACKS_PER_BOX` in `_handle_flip`. The config import happened mid-function, so Python treated the name as a local throughout, crashing the default value expression on line 274 whenever `?packs=` wasn't explicitly passed. This broke the web-UI "Bought Single" flip flow. Moved the import before first use; removed duplicate from later import line.
+**Modified (handoffpack-www):** `components/lab/holo/HoloPage.tsx` — large coordinated redesign (+394/-116):
+  - `Pokeball` component redesigned as Ultra Ball (gold radial gradient top, black H-stripes flaring from button, red pinstripe accent on equator, premium highlight streak, scoped gradient IDs via `React.useId()`)
+  - Brand header: bigger (size 56) ball with `holo-float` animation + `holo-spin-once` on hover, gold wordmark gradient, warmer black radial page background
+  - `useCardTheme` extended with `bgBase` / `bgDeep` for detail-page takeover
+  - Card detail view: full-bleed stacked gradient layers driven by card palette — the ENTIRE page background pulls from the card, not just the top glow. Frosted glass panels upgraded to blur 22–24px + saturate 1.4–1.5 with stronger edge highlights and accent-tinted shadow rings
+  - `TopMovers`: replaced 40s CSS marquee with native `overflow-x-auto` scroller + pointer-drag handlers + gentle rAF auto-scroll that pauses on interaction. New "View all" button opens `MoversModal` (portal, Escape to close, responsive grid of all loaded movers with image/name/price/delta)
+  - Mobile bottom nav: fixed 4-icon tab bar (Overview/Sales/Flip/Grade) with `safe-area-inset-bottom` padding and 56px tap targets; top tabs hidden on mobile (`hidden sm:flex`), replaced by a small current-tab pill
+  - Readability pass: `zinc-500/600` → `zinc-300/400` body text, min-h-44px tap targets, stronger panel borders  
+**Commits:** `a7cc2fc` fix(api): flip DEFAULT_PACKS_PER_BOX unbound-local | `0144481` (handoffpack-www) feat(lab/holo): ultra-ball theme + full-bleed takeover + draggable movers + mobile bottom nav  
+**Decisions:** Native scroll + pointer events for the movers carousel instead of a drag library — less bundle weight, respects browser fling momentum. Ultra Ball chosen over classic red: yellow/black/white palette gives a premium "serious trader" vibe that the classic red pokeball didn't, while the red pinstripe preserves a nod to the original. Full-bleed takeover only on detail page — lookup screen stays on the base dark theme so it feels like a distinct "portal" into the card.
+
+---
+
+## What Was Just Done (2026-04-16 — session 2)
 
 ### Pokéball branding + card-driven palette + Top Movers endpoint ✅ COMPLETE
 
@@ -55,9 +73,10 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 ### What's Live
 - Bloomberg-style 5-tab dashboard (Overview, Sales, Flip, Grade It?)
 - **Card hero UI**: blurred card art background, 140×196px centered card image, click-to-lightbox
-- **Card-driven palette**: `useCardTheme` extracts full `{accent, glow, deep}` from card art (biased toward most-saturated pixel); ambient top-of-viewport glow + tinted card halo + tinted panel borders
-- **Top Movers marquee**: auto-scrolling 40s loop, pause on hover/touch, ▲▼% chips; data from `/api?action=movers`
-- **Inline SVG Pokéball**: reusable component tinted via `currentColor`, used in brand mark + lookup screen decoration
+- **Card-driven palette**: `useCardTheme` extracts `{accent, glow, deep, bgBase, bgDeep}` — the detail page gets a full-bleed stacked-gradient takeover driven by card art (biased toward most-saturated pixel)
+- **Top Movers**: draggable horizontal scroller (pointer + touch) with gentle auto-scroll, pause on interact, "View all" modal showing all loaded movers in a grid
+- **Ultra Ball SVG**: gold radial gradient top with black H-stripes + red pinstripe accent; used in brand mark (size 56 with float + hover-spin animations) and lookup decoration
+- **Mobile bottom nav**: fixed 4-tab bar (Overview/Sales/Flip/Grade) with safe-area-inset on card detail; desktop keeps top tabs
 - **Orbitron + Press Start 2P + Space Grotesk** trio via next/font/google (Press Start 2P reserved for wordmark + small retro labels)
 - **Glassmorphism panels**: backdrop-blur + semi-transparent + glass-edge highlight
 - Card image lightbox: fullscreen overlay, ESC to dismiss
@@ -96,6 +115,7 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 ---
 
 ## Resolved Bugs (recent)
+- ✅ Flip calculator "Bought Single" crashed with `UnboundLocalError: DEFAULT_PACKS_PER_BOX` (2026-04-16) — config import was mid-function, making the default-value lookup on line 274 reference a local bound later; moved import before first use
 - ✅ `$1.49 LOW` on $695 cards (2026-04-16) — `_handle_history` now drops prices below 15% of overall median, killing junk listings (lot sales, proxies, damaged) that polluted the LOW summary stat
 - ✅ "Moonbreon" in trending list (2026-04-16) — it was a collector nickname for Umbreon VMAX Alt Art, not a scrapable card name; replaced the entire hardcoded list with real data from new `/api?action=movers` endpoint
 - ✅ eBay scraper returning 0 results (2026-04-16) — selector changed from `li.s-card` to `li.s-item`; title/price/date selectors updated for 2024+ DOM
