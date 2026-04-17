@@ -43,7 +43,24 @@ from bs4 import BeautifulSoup
 # Paths
 # ---------------------------------------------------------------------------
 _BASE_DIR = Path(__file__).parents[1]
-_CACHE_DB = Path(os.environ.get("HOLO_CACHE_DB", _BASE_DIR / "data" / "db" / "history.db"))
+
+
+def _resolve_cache_db() -> Path:
+    """Pick the sqlite cache path, preferring /tmp on read-only serverless FS.
+
+    Vercel's filesystem is read-only outside /tmp. If HOLO_CACHE_DB isn't set
+    but we detect a Vercel environment, default to /tmp so import never
+    explodes on cold-start.
+    """
+    env_path = os.environ.get("HOLO_CACHE_DB")
+    if env_path:
+        return Path(env_path)
+    if os.environ.get("VERCEL"):
+        return Path("/tmp/holo_cache.db")
+    return _BASE_DIR / "data" / "db" / "history.db"
+
+
+_CACHE_DB = _resolve_cache_db()
 
 # ---------------------------------------------------------------------------
 # User-Agent rotation pool — 6 real browser fingerprints.
@@ -115,40 +132,63 @@ _CACHE_READY: bool = False
 
 
 def _init_cache_db() -> None:
-    """Create the history.db cache tables if they don't exist. Called once at startup."""
-    global _CACHE_READY
+    """Create the history.db cache tables if they don't exist. Called once at startup.
+
+    NEVER prints to stdout and NEVER calls sys.exit — this runs inside the Vercel
+    request handler and stdout must stay clean for the JSON protocol. On failure
+    we silently fall back to /tmp/holo_cache.db once; if that also fails we log
+    a stderr warning and let callers proceed (downstream code already treats
+    cache misses gracefully).
+    """
+    global _CACHE_READY, _CACHE_DB
     if _CACHE_READY:
         return
-    try:
-        _CACHE_DB.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(_CACHE_DB) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS scrape_cache (
-                    card_slug   TEXT NOT NULL,
-                    source      TEXT NOT NULL,
-                    fetched_at  TEXT NOT NULL,
-                    payload     TEXT NOT NULL,
-                    PRIMARY KEY (card_slug, source)
-                )
-            """)
-            # Permanent cache: pokemontcg card_id → TCGPlayer product_id.
-            # No TTL — product IDs don't change.
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS tcgplayer_product_ids (
-                    pokemontcg_id   TEXT PRIMARY KEY,
-                    product_id      INTEGER NOT NULL
-                )
-            """)
-            conn.commit()
+
+    def _try_init(path: Path) -> bool:
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with sqlite3.connect(path) as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS scrape_cache (
+                        card_slug   TEXT NOT NULL,
+                        source      TEXT NOT NULL,
+                        fetched_at  TEXT NOT NULL,
+                        payload     TEXT NOT NULL,
+                        PRIMARY KEY (card_slug, source)
+                    )
+                """)
+                # Permanent cache: pokemontcg card_id → TCGPlayer product_id.
+                # No TTL — product IDs don't change.
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS tcgplayer_product_ids (
+                        pokemontcg_id   TEXT PRIMARY KEY,
+                        product_id      INTEGER NOT NULL
+                    )
+                """)
+                conn.commit()
+            return True
+        except Exception:
+            return False
+
+    if _try_init(_CACHE_DB):
         _CACHE_READY = True
-    except Exception as exc:
-        # Log to stderr — stdout must stay clean for JSON protocol.
+        return
+
+    fallback = Path("/tmp/holo_cache.db")
+    if fallback != _CACHE_DB and _try_init(fallback):
         print(
-            json.dumps({"error": f"Cache database init failed: {exc}. "
-                                 f"Try deleting {_CACHE_DB} and re-running."}),
-            file=sys.stdout,  # Intentional — command files read stdout
+            f"[scraper] cache init failed at {_CACHE_DB}, using fallback {fallback}",
+            file=sys.stderr,
         )
-        sys.exit(1)
+        _CACHE_DB = fallback
+        _CACHE_READY = True
+        return
+
+    print(
+        f"[scraper] cache init failed at {_CACHE_DB} and fallback {fallback}; "
+        f"continuing without cache",
+        file=sys.stderr,
+    )
 
 
 def _product_id_cache_get(pokemontcg_id: str) -> int | None:
