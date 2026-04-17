@@ -91,7 +91,7 @@ def _lookup_card_meta(card_name: str) -> dict:
     try:
         resp = _requests.get(
             "https://api.pokemontcg.io/v2/cards",
-            params={"q": query, "select": "id,name,number,set,rarity,images,tcgplayer", "pageSize": 25},
+            params={"q": query, "pageSize": 25},
             headers={"User-Agent": "Mozilla/5.0 Holo/1.0"},
             timeout=8,
         )
@@ -105,7 +105,7 @@ def _lookup_card_meta(card_name: str) -> dict:
         try:
             resp = _requests.get(
                 "https://api.pokemontcg.io/v2/cards",
-                params={"q": f"name:{query_name.split()[0]}*", "select": "id,name,number,set,rarity,images,tcgplayer", "pageSize": 25},
+                params={"q": f"name:{query_name.split()[0]}*", "pageSize": 25},
                 headers={"User-Agent": "Mozilla/5.0 Holo/1.0"},
                 timeout=8,
             )
@@ -144,6 +144,25 @@ def _lookup_card_meta(card_name: str) -> dict:
         "rarity": best.get("rarity", ""),
         "release_date": set_obj.get("releaseDate", ""),
         "tcgplayer_url": (best.get("tcgplayer") or {}).get("url", ""),
+        # Extended TCG fields for Pokedex overlay.
+        "hp": best.get("hp", ""),
+        "types": best.get("types", []) or [],
+        "subtypes": best.get("subtypes", []) or [],
+        "supertype": best.get("supertype", ""),
+        "evolvesFrom": best.get("evolvesFrom", ""),
+        "evolvesTo": best.get("evolvesTo", []) or [],
+        "abilities": best.get("abilities", []) or [],
+        "attacks": best.get("attacks", []) or [],
+        "weaknesses": best.get("weaknesses", []) or [],
+        "resistances": best.get("resistances", []) or [],
+        "retreatCost": best.get("retreatCost", []) or [],
+        "convertedRetreatCost": best.get("convertedRetreatCost"),
+        "flavorText": best.get("flavorText", ""),
+        "artist": best.get("artist", ""),
+        "nationalPokedexNumbers": best.get("nationalPokedexNumbers", []) or [],
+        "regulationMark": best.get("regulationMark", ""),
+        "set_printed_total": set_obj.get("printedTotal"),
+        "set_total": set_obj.get("total"),
     }
 
     # Only cache non-empty results so transient API failures don't poison the cache.
@@ -159,6 +178,146 @@ def _lookup_card_meta(card_name: str) -> dict:
             pass
 
     return meta
+
+
+def _lookup_pokedex_species(dex_number: int) -> dict:
+    """Fetch species + pokemon data from PokeAPI, merged into one dict.
+
+    Cached in sqlite (pokedex_cache table) with 30-day TTL. Returns {} on any
+    failure so callers can degrade gracefully.
+    """
+    import sqlite3
+    import urllib.request
+    import urllib.error
+
+    if not dex_number or dex_number <= 0:
+        return {}
+
+    cache_db = os.environ.get("HOLO_CACHE_DB", "/tmp/holo_cache.db")
+    try:
+        with sqlite3.connect(cache_db) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS pokedex_cache (
+                    dex_number INTEGER PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    fetched_at TEXT NOT NULL
+                )
+            """)
+            row = conn.execute(
+                "SELECT payload FROM pokedex_cache WHERE dex_number = ? AND fetched_at > datetime('now','-30 days')",
+                (dex_number,),
+            ).fetchone()
+            if row:
+                return json.loads(row[0])
+    except Exception:
+        pass
+
+    def _fetch_json(url: str) -> dict:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 Holo/1.0"})
+        with urllib.request.urlopen(req, timeout=7) as resp:
+            return json.loads(resp.read().decode("utf-8"))
+
+    out: dict = {}
+
+    try:
+        species = _fetch_json(f"https://pokeapi.co/api/v2/pokemon-species/{dex_number}/")
+    except Exception:
+        species = None
+
+    if species:
+        # Latest English flavor text — iterate reversed so we pick most recent version.
+        flavor_text = ""
+        for entry in reversed(species.get("flavor_text_entries", []) or []):
+            if (entry.get("language") or {}).get("name") == "en":
+                flavor_text = (entry.get("flavor_text") or "").replace("\n", " ").replace("\f", " ").strip()
+                if flavor_text:
+                    break
+        # English genus
+        genus = ""
+        for entry in species.get("genera", []) or []:
+            if (entry.get("language") or {}).get("name") == "en":
+                genus = entry.get("genus", "")
+                break
+        out.update({
+            "name": species.get("name", ""),
+            "genus": genus,
+            "flavor_text": flavor_text,
+            "habitat": (species.get("habitat") or {}).get("name") if species.get("habitat") else None,
+            "color": (species.get("color") or {}).get("name") if species.get("color") else None,
+            "generation": (species.get("generation") or {}).get("name") if species.get("generation") else None,
+            "is_legendary": bool(species.get("is_legendary")),
+            "is_mythical": bool(species.get("is_mythical")),
+        })
+
+    try:
+        pkmn = _fetch_json(f"https://pokeapi.co/api/v2/pokemon/{dex_number}/")
+    except Exception:
+        pkmn = None
+
+    if pkmn:
+        stats_map: dict = {}
+        for s in pkmn.get("stats", []) or []:
+            name = (s.get("stat") or {}).get("name", "")
+            val = s.get("base_stat", 0)
+            if name:
+                stats_map[name] = val
+        sprites = pkmn.get("sprites", {}) or {}
+        other = sprites.get("other", {}) or {}
+        official = (other.get("official-artwork") or {}).get("front_default") if isinstance(other.get("official-artwork"), dict) else None
+        sprite = official or sprites.get("front_default")
+        try:
+            height_m = float(pkmn.get("height", 0)) / 10.0
+        except (TypeError, ValueError):
+            height_m = 0.0
+        try:
+            weight_kg = float(pkmn.get("weight", 0)) / 10.0
+        except (TypeError, ValueError):
+            weight_kg = 0.0
+        out.update({
+            "height_m": height_m,
+            "weight_kg": weight_kg,
+            "types": [((t.get("type") or {}).get("name") or "") for t in (pkmn.get("types", []) or [])],
+            "stats": {
+                "hp": stats_map.get("hp", 0),
+                "attack": stats_map.get("attack", 0),
+                "defense": stats_map.get("defense", 0),
+                "sp-atk": stats_map.get("special-attack", 0),
+                "sp-def": stats_map.get("special-defense", 0),
+                "speed": stats_map.get("speed", 0),
+            },
+            "sprite": sprite,
+        })
+
+    if out:
+        try:
+            with sqlite3.connect(cache_db) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO pokedex_cache (dex_number, payload, fetched_at) VALUES (?, ?, datetime('now'))",
+                    (dex_number, json.dumps(out)),
+                )
+                conn.commit()
+        except Exception:
+            pass
+
+    return out
+
+
+def _handle_pokedex(params: dict) -> dict:
+    """Combined TCG metadata + PokeAPI species data for the Pokédex overlay."""
+    card = params.get("card", [""])[0]
+    if not card:
+        return {"error": "Missing 'card' parameter"}
+    meta = _lookup_card_meta(card)
+    if not meta:
+        return {"error": f"No card metadata found for '{card}'", "meta": {}, "species": {}}
+    dex_numbers = meta.get("nationalPokedexNumbers") or []
+    species: dict = {}
+    if dex_numbers:
+        try:
+            species = _lookup_pokedex_species(int(dex_numbers[0]))
+        except Exception:
+            species = {}
+    return {"meta": meta, "species": species}
 
 
 def _extract_sources(records: list[dict]) -> list[dict]:
@@ -884,6 +1043,7 @@ _HANDLERS = {
     "gradeit": _handle_grade_roi,
     "meta": _handle_meta,
     "movers": _handle_movers,
+    "pokedex": _handle_pokedex,
 }
 
 
