@@ -45,6 +45,97 @@ _SOURCE_LABELS = {
 }
 
 
+def _lookup_card_meta(card_name: str) -> dict:
+    """Fetch card metadata (image, set, rarity, release date) from pokemontcg.io.
+
+    Uses the name + optional number from the card query. Returns a dict with
+    at minimum {image_small, image_large, set_name, rarity, number, release_date}
+    or an empty dict if nothing found. Results are cached in /tmp via sqlite3.
+    """
+    import hashlib
+    import re as _re
+    import sqlite3
+    import requests as _requests
+
+    # Simple in-process cache keyed by slugified name.
+    cache_db = os.environ.get("HOLO_CACHE_DB", "/tmp/holo_cache.db")
+    slug = _re.sub(r"[^a-z0-9]+", "-", card_name.lower()).strip("-")
+    try:
+        with sqlite3.connect(cache_db) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS card_meta (
+                    slug TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    fetched_at TEXT NOT NULL
+                )
+            """)
+            row = conn.execute(
+                "SELECT payload FROM card_meta WHERE slug = ? AND fetched_at > datetime('now','-7 days')",
+                (slug,),
+            ).fetchone()
+            if row:
+                return json.loads(row[0])
+    except Exception:
+        pass  # Cache miss is fine.
+
+    # Strip trailing number suffix (e.g. "079/073") but keep single numbers (e.g. "161")
+    stripped = _re.sub(r"\s+\d{3}/\d{3,4}$", "", card_name).strip()
+    number_match = _re.search(r"\b(\d{1,3})\b", stripped)
+    query_name = _re.sub(r"\b\d{1,3}\b", "", stripped).strip()
+
+    query = f'name:"{query_name}"'
+    if number_match:
+        query += f' number:{int(number_match.group(1))}'
+
+    try:
+        resp = _requests.get(
+            "https://api.pokemontcg.io/v2/cards",
+            params={"q": query, "select": "id,name,number,set,rarity,images,tcgplayer", "pageSize": 5},
+            headers={"User-Agent": "Mozilla/5.0 Holo/1.0"},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        cards = resp.json().get("data", [])
+    except Exception:
+        return {}
+
+    if not cards:
+        return {}
+
+    # Pick exact-name match if possible, else first.
+    target = query_name.lower()
+    best = next((c for c in cards if c.get("name", "").lower() == target), cards[0])
+
+    set_obj = best.get("set", {}) or {}
+    images = best.get("images", {}) or {}
+    meta = {
+        "id": best.get("id", ""),
+        "name": best.get("name", ""),
+        "number": best.get("number", ""),
+        "image_small": images.get("small", ""),
+        "image_large": images.get("large", ""),
+        "set_name": set_obj.get("name", ""),
+        "set_series": set_obj.get("series", ""),
+        "set_symbol": set_obj.get("images", {}).get("symbol", "") if isinstance(set_obj.get("images"), dict) else "",
+        "set_logo": set_obj.get("images", {}).get("logo", "") if isinstance(set_obj.get("images"), dict) else "",
+        "rarity": best.get("rarity", ""),
+        "release_date": set_obj.get("releaseDate", ""),
+        "tcgplayer_url": (best.get("tcgplayer") or {}).get("url", ""),
+    }
+
+    try:
+        with sqlite3.connect(cache_db) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO card_meta (slug, payload, fetched_at) VALUES (?, ?, datetime('now'))",
+                (slug, json.dumps(meta)),
+            )
+            conn.commit()
+    except Exception:
+        pass
+
+    return meta
+
+
 def _extract_sources(records: list[dict]) -> list[dict]:
     """Build a deduped list of {label, url, count} for source attribution."""
     seen: dict[str, dict] = {}
@@ -97,6 +188,7 @@ def _handle_price(params: dict) -> dict:
         "insufficient_data_warning": result.insufficient_data_warning,
         "sources": _extract_sources(sales),
         "grade": grade,
+        "meta": _lookup_card_meta(card),
     }
 
 
@@ -372,6 +464,7 @@ def _handle_history(params: dict) -> dict:
             "sales_count": len(sales),
         },
         "sources": _extract_sources(sales),
+        "meta": _lookup_card_meta(card),
     }
 
 
@@ -420,6 +513,148 @@ def _handle_sales(params: dict) -> dict:
     }
 
 
+def _handle_grade_roi(params: dict) -> dict:
+    """Expected-value math for grading a raw card.
+
+    Formula:
+      gross_10 = psa10_price * p10 * (1 - sell_fees)
+      gross_9  = psa9_price  * p9  * (1 - sell_fees)
+      gross_sub = est_raw_price * p_sub * (1 - sell_fees)  # sub/ungradeable returned as raw
+      ev = gross_10 + gross_9 + gross_sub - grading_cost - shipping
+      delta = ev - raw_price  (i.e. keep-and-sell-raw is the baseline)
+
+    Default probabilities reflect "lightly played to near-mint raw card, pulled from
+    pack and sleeved promptly". User can override via ?p10=0.40&p9=0.40&p_sub=0.20 etc.
+
+    Grading services default to PSA Value (~$25/card) unless ?service= specified.
+    """
+    card = params.get("card", [""])[0]
+    if not card:
+        return {"error": "Missing 'card' parameter"}
+
+    # User overrides
+    def _fl(name: str, default: float) -> float:
+        try:
+            return float(params.get(name, [str(default)])[0])
+        except (ValueError, TypeError):
+            return default
+
+    service = params.get("service", ["psa_value"])[0]
+
+    # Service cost + typical turnaround (per-card, USD) — approximate, 2026 rates
+    services = {
+        "psa_value":    {"label": "PSA Value",     "cost": 25.0, "turnaround": "45 days"},
+        "psa_regular":  {"label": "PSA Regular",   "cost": 75.0, "turnaround": "10 days"},
+        "psa_express":  {"label": "PSA Express",  "cost": 150.0, "turnaround": "5 days"},
+        "cgc_standard": {"label": "CGC Standard",  "cost": 18.0, "turnaround": "30 days"},
+        "cgc_express":  {"label": "CGC Express",   "cost": 35.0, "turnaround": "7 days"},
+        "tag_grading":  {"label": "TAG Grading",   "cost": 20.0, "turnaround": "20 days"},
+    }
+    svc = services.get(service, services["psa_value"])
+
+    p10 = _fl("p10", 0.35)   # modern-era NM raw → PSA 10 rate is typically 30-40%
+    p9  = _fl("p9",  0.45)   # 40-50% land at PSA 9
+    p_sub = _fl("p_sub", 1.0 - p10 - p9)  # remainder come back sub-grade
+    if p_sub < 0:
+        p_sub = 0.0
+
+    grading_cost = _fl("cost", svc["cost"])
+    shipping = _fl("shipping", 5.0)  # round-trip shipping per card
+    sell_fees = _fl("fees", 0.13)  # combined seller platform fees
+
+    # Fetch all three grades for the card
+    from pokequant.scraper import fetch_sales
+    from pokequant.comps.generator import generate_comp_from_list
+
+    prices = {}
+    for g in ("raw", "psa9", "psa10"):
+        try:
+            s = fetch_sales(card_name=card, days=30, use_cache=True, grade=g)
+            if isinstance(s, list) and s:
+                comp = generate_comp_from_list(sales=s, card_id=f"roi_{g}", card_name=card, n_sales=500)
+                prices[g] = {"cmc": comp.cmc, "sales_used": comp.sales_used, "confidence": comp.confidence}
+        except Exception:
+            prices[g] = None
+
+    raw_price = (prices.get("raw") or {}).get("cmc") or 0.0
+    psa9_price = (prices.get("psa9") or {}).get("cmc") or 0.0
+    psa10_price = (prices.get("psa10") or {}).get("cmc") or 0.0
+
+    if raw_price <= 0:
+        return {"error": "Could not determine raw price — grading EV requires a raw comp."}
+    if psa10_price <= 0:
+        return {"error": "Could not determine PSA 10 price — no graded comps found."}
+
+    # Expected gross revenue from grading
+    gross_10 = psa10_price * p10 * (1 - sell_fees)
+    gross_9 = psa9_price * p9 * (1 - sell_fees) if psa9_price > 0 else 0.0
+    gross_sub = raw_price * p_sub * (1 - sell_fees)
+
+    expected_revenue = round(gross_10 + gross_9 + gross_sub, 2)
+    total_cost = round(grading_cost + shipping, 2)
+    net_ev = round(expected_revenue - total_cost, 2)
+    raw_baseline = round(raw_price * (1 - sell_fees), 2)  # selling raw also has fees
+    delta = round(net_ev - raw_baseline, 2)
+    delta_pct = round((delta / raw_baseline) * 100, 1) if raw_baseline > 0 else 0.0
+
+    # Verdict: delta >= $10 AND delta_pct >= 20% → GRADE IT
+    if delta >= 10 and delta_pct >= 20:
+        verdict = "GRADE IT"
+        verdict_tone = "buy"
+        rationale = (
+            f"Grading adds ~{money_fmt(delta)} ({delta_pct:+.0f}%) over selling raw. "
+            f"Expected grade premium justifies the ${grading_cost:.0f} fee + {svc['turnaround']} wait."
+        )
+    elif delta >= -5:
+        verdict = "BORDERLINE"
+        verdict_tone = "neutral"
+        rationale = (
+            f"Net EV is only {money_fmt(delta)} over raw. "
+            f"Grade if you expect PSA 10 rate > {p10 * 100:.0f}% (centering/edges look exceptional)."
+        )
+    else:
+        verdict = "SELL RAW"
+        verdict_tone = "sell"
+        rationale = (
+            f"Grading loses ~{money_fmt(abs(delta))} in expected value. "
+            f"Raw comp is strong relative to graded — move it as-is."
+        )
+
+    return {
+        "card": card,
+        "service": svc["label"],
+        "service_cost": grading_cost,
+        "turnaround": svc["turnaround"],
+        "prices": prices,
+        "assumptions": {
+            "p10": p10,
+            "p9": p9,
+            "p_sub": p_sub,
+            "sell_fees": sell_fees,
+            "shipping": shipping,
+        },
+        "breakdown": {
+            "expected_psa10_value": round(gross_10, 2),
+            "expected_psa9_value": round(gross_9, 2),
+            "expected_sub_value": round(gross_sub, 2),
+            "expected_revenue": expected_revenue,
+            "total_cost": total_cost,
+            "net_ev": net_ev,
+            "raw_baseline": raw_baseline,
+            "delta": delta,
+            "delta_pct": delta_pct,
+        },
+        "verdict": verdict,
+        "verdict_tone": verdict_tone,
+        "rationale": rationale,
+    }
+
+
+def money_fmt(n: float) -> str:
+    sign = "+" if n >= 0 else "-"
+    return f"{sign}${abs(n):.2f}"
+
+
 def _handle_grades(params: dict) -> dict:
     """Side-by-side comparison of Raw / PSA 9 / PSA 10 prices for a single card."""
     card = params.get("card", [""])[0]
@@ -461,6 +696,7 @@ _HANDLERS = {
     "history": _handle_history,
     "grades": _handle_grades,
     "sales": _handle_sales,
+    "gradeit": _handle_grade_roi,
 }
 
 
