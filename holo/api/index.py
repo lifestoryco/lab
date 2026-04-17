@@ -1031,6 +1031,165 @@ def _handle_movers(params: dict) -> dict:
     }
 
 
+def _handle_search(params: dict) -> dict:
+    """Type-ahead card search backed by pokemontcg.io.
+
+    GET /api?action=search&q=<query>&limit=12
+
+    Returns a lightweight list of card match objects so the frontend can show
+    a disambiguation dropdown. Cached in sqlite (`search_cache`) for 6 hours
+    keyed by (normalized query, limit).
+    """
+    import hashlib
+    import re as _re
+    import sqlite3
+    import requests as _requests
+
+    raw_q = params.get("q", [""])[0] or ""
+    q = raw_q.strip()
+    try:
+        limit = max(1, min(24, int(params.get("limit", ["12"])[0])))
+    except ValueError:
+        limit = 12
+
+    if len(q) < 2:
+        return {"results": []}
+
+    cache_db = os.environ.get("HOLO_CACHE_DB", "/tmp/holo_cache.db")
+    key = hashlib.sha1(f"{q.lower()}|{limit}".encode()).hexdigest()
+
+    # Cache read.
+    try:
+        with sqlite3.connect(cache_db) as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS search_cache (
+                    key TEXT PRIMARY KEY,
+                    payload TEXT NOT NULL,
+                    fetched_at TEXT NOT NULL
+                )
+            """)
+            row = conn.execute(
+                "SELECT payload FROM search_cache WHERE key = ? AND fetched_at > datetime('now','-6 hours')",
+                (key,),
+            ).fetchone()
+            if row:
+                return json.loads(row[0])
+    except Exception:
+        pass
+
+    # Split into name + optional trailing number token.
+    m = _re.match(r"^(.*?)[\s]+(\d{1,4})$", q)
+    if m:
+        name_part = m.group(1).strip()
+        number_part = m.group(2)
+    else:
+        name_part = q
+        number_part = None
+
+    if not name_part:
+        return {"results": []}
+
+    # pokemontcg.io Lucene-ish query: prefix wildcard on name.
+    # Escape quotes defensively.
+    safe_name = name_part.replace('"', '').replace('\\', '')
+    query_str = f'name:"{safe_name}*"'
+
+    try:
+        resp = _requests.get(
+            "https://api.pokemontcg.io/v2/cards",
+            params={"q": query_str, "pageSize": min(50, max(limit * 3, 24))},
+            headers={"User-Agent": "Mozilla/5.0 Holo/1.0"},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        cards = resp.json().get("data", []) or []
+    except Exception:
+        return {"results": [], "error": "search_unavailable"}
+
+    lc_name = name_part.lower()
+
+    def _rank(c: dict) -> tuple:
+        cname = (c.get("name") or "").lower()
+        cnum = str(c.get("number") or "")
+        release = ((c.get("set") or {}).get("releaseDate") or "") or ""
+        # Primary: exact-number match floats to top when user typed a number.
+        num_score = 2 if (number_part and cnum == number_part) else 0
+        # Name-match tiers.
+        if cname == lc_name:
+            name_score = 3
+        elif cname.startswith(lc_name):
+            name_score = 2
+        elif lc_name in cname:
+            name_score = 1
+        else:
+            name_score = 0
+        # Sort descending: higher score first; newer release_date first.
+        return (-num_score, -name_score, _negate_date(release))
+
+    def _negate_date(d: str) -> str:
+        # Lexicographic trick: invert so newer dates sort first.
+        # pokemontcg.io uses YYYY/MM/DD format.
+        if not d:
+            return "0000/00/00"
+        # Build a reverse-sortable key by subtracting from 9999.
+        try:
+            parts = d.split("/")
+            y = 9999 - int(parts[0])
+            mo = 99 - int(parts[1]) if len(parts) > 1 else 0
+            da = 99 - int(parts[2]) if len(parts) > 2 else 0
+            return f"{y:04d}/{mo:02d}/{da:02d}"
+        except Exception:
+            return "9999/99/99"
+
+    cards.sort(key=_rank)
+
+    seen: set = set()
+    results: list[dict] = []
+    for c in cards:
+        nm = c.get("name", "") or ""
+        num = str(c.get("number", "") or "")
+        set_obj = c.get("set", {}) or {}
+        set_name = set_obj.get("name", "") or ""
+        triple = (nm.lower(), num, set_name.lower())
+        if triple in seen:
+            continue
+        seen.add(triple)
+        images = c.get("images", {}) or {}
+        release_date = set_obj.get("releaseDate", "") or ""
+        release_year = 0
+        try:
+            release_year = int(release_date.split("/")[0]) if release_date else 0
+        except Exception:
+            release_year = 0
+        results.append({
+            "id": c.get("id", "") or "",
+            "name": nm,
+            "number": num,
+            "set_name": set_name,
+            "set_series": set_obj.get("series", "") or "",
+            "release_date": release_date,
+            "release_year": release_year,
+            "image_small": images.get("small", "") or "",
+            "rarity": c.get("rarity", "") or "",
+            "supertype": c.get("supertype", "") or "",
+        })
+        if len(results) >= limit:
+            break
+
+    payload = {"results": results}
+    try:
+        with sqlite3.connect(cache_db) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO search_cache (key, payload, fetched_at) VALUES (?, ?, datetime('now'))",
+                (key, json.dumps(payload)),
+            )
+            conn.commit()
+    except Exception:
+        pass
+
+    return payload
+
+
 _HANDLERS = {
     "price": _handle_price,
     "signal": _handle_signal,
@@ -1044,6 +1203,7 @@ _HANDLERS = {
     "meta": _handle_meta,
     "movers": _handle_movers,
     "pokedex": _handle_pokedex,
+    "search": _handle_search,
 }
 
 
