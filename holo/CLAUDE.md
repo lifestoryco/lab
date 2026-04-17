@@ -19,7 +19,7 @@ If this is a fresh clone, run `/holo-setup` first. That command will:
 4. Verify live data is reachable
 5. Confirm everything is ready
 
-## The Six Commands
+## Analysis Commands
 
 | Command | Usage | What it does |
 |---------|-------|--------------|
@@ -30,6 +30,28 @@ If this is a fresh clone, run `/holo-setup` first. That command will:
 | `/holo-bulk-sell` | `/holo-bulk-sell` | Should you ship your bulk cards yet? |
 | `/holo-flip` | `/holo-flip "Charizard V" 4.50 pack` | Exact profit after fees and shipping |
 | `/holo` | `/holo should I buy Charizard V?` | Ask anything in plain English |
+
+## Session Workflow Commands
+
+| Command | Usage | What it does |
+|---------|-------|--------------|
+| `/start-session` | `/start-session` | Health check + brief on last session and what's next |
+| `/sync` | `/sync` | Rebase onto origin/main before starting work |
+| `/prompt-builder` | `/prompt-builder H-1.2` | Research + generate a self-contained task prompt |
+| `/run-task` | `/run-task H-1.2` | Execute a pending task prompt step-by-step |
+| `/end-session` | `/end-session` | Verify, commit, update state, push |
+| `/code-review` | `/code-review [--fix]` | 4-agent parallel code review (Security, Logic, Arch, UX) |
+| `/alpha-squad` | `/alpha-squad [topic]` | Convene the 7-member advisory board for strategic decisions |
+
+## Task Naming Convention
+
+Tasks follow the `H-X.Y` format:
+- `H-1.x` — Phase 1: Core hardening and signal quality
+- `H-2.x` — Phase 2: Auth, personalization, monetization
+- `H-3.x` — Phase 3: B2B and integrations
+
+Prompt files: `docs/tasks/prompts/pending/H-X-Y_{MM-DD}_{slug}.md`
+Completed:    `docs/tasks/prompts/complete/H-X-Y_{MM-DD}_{slug}.md`
 
 ## How the System Works
 
