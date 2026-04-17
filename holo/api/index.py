@@ -270,6 +270,8 @@ def _handle_flip(params: dict) -> dict:
     except ValueError:
         return {"error": f"Invalid cost: '{cost}'"}
 
+    from config import DEFAULT_PACKS_PER_BOX
+
     # Parse packs (only meaningful for box method).
     packs_str = params.get("packs", [str(DEFAULT_PACKS_PER_BOX)])[0]
     try:
@@ -289,7 +291,7 @@ def _handle_flip(params: dict) -> dict:
 
     from pokequant.scraper import fetch_sales
     from pokequant.comps.generator import generate_comp_from_list
-    from config import PLATFORM_FEE_RATE, SHIPPING_COST_BMWT, SHIPPING_COST_PWE, SHIPPING_VALUE_THRESHOLD, FLIP_THIN_MARGIN_THRESHOLD_PCT, DEFAULT_PACKS_PER_BOX
+    from config import PLATFORM_FEE_RATE, SHIPPING_COST_BMWT, SHIPPING_COST_PWE, SHIPPING_VALUE_THRESHOLD, FLIP_THIN_MARGIN_THRESHOLD_PCT
 
     sales = fetch_sales(card_name=card, days=30, use_cache=True, grade=grade)
     if isinstance(sales, dict) and "error" in sales:
