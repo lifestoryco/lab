@@ -266,9 +266,26 @@ def _handle_flip(params: dict) -> dict:
         return {"error": "Missing 'card' and/or 'cost' parameter"}
 
     try:
-        cost_basis = float(cost)
+        raw_cost = float(cost)
     except ValueError:
         return {"error": f"Invalid cost: '{cost}'"}
+
+    # Parse packs (only meaningful for box method).
+    packs_str = params.get("packs", ["36"])[0]
+    try:
+        packs = max(1, int(packs_str))
+    except ValueError:
+        packs = 36
+
+    # Compute per-card cost basis based on acquisition method.
+    # box:  user entered the total box price → divide by # of packs so each
+    #       pull is evaluated at its proportional cost per pack.
+    # pack: user entered the pack price → that is the full cost basis for the pull.
+    # single: user entered the card price directly.
+    if method == "box":
+        cost_basis = round(raw_cost / packs, 4)
+    else:
+        cost_basis = raw_cost
 
     from pokequant.scraper import fetch_sales
     from pokequant.comps.generator import generate_comp_from_list
@@ -308,8 +325,10 @@ def _handle_flip(params: dict) -> dict:
     return {
         "card": card,
         "method": method,
+        "raw_cost": raw_cost,
+        "packs": packs if method == "box" else None,
         "cmc": market_value,
-        "cost_basis": cost_basis,
+        "cost_basis": round(cost_basis, 2),
         "platform_fee": platform_fee,
         "shipping_cost": shipping_cost,
         "shipping_type": shipping_type,
@@ -717,6 +736,22 @@ def _handle_grades(params: dict) -> dict:
     return out
 
 
+def _handle_meta(params: dict) -> dict:
+    """Lightweight card metadata lookup — name, image, set info.
+
+    Used by the frontend carousel to fetch card thumbnails without
+    pulling a full price history. Results share the pokemontcg.io
+    SQLite cache (7-day TTL) with the history endpoint.
+    """
+    card = params.get("card", [""])[0]
+    if not card:
+        return {"error": "Missing 'card' parameter"}
+    meta = _lookup_card_meta(card)
+    if not meta:
+        return {"error": f"No card metadata found for '{card}'"}
+    return {"card": card, "meta": meta}
+
+
 _HANDLERS = {
     "price": _handle_price,
     "signal": _handle_signal,
@@ -727,6 +762,7 @@ _HANDLERS = {
     "grades": _handle_grades,
     "sales": _handle_sales,
     "gradeit": _handle_grade_roi,
+    "meta": _handle_meta,
 }
 
 

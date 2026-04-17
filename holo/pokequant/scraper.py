@@ -947,10 +947,20 @@ def _scrape_ebay(card_name: str, days: int = 30) -> list[dict[str, Any]]:
     graded_dropped = 0
     counter = 0
 
-    for item in soup.find_all("li", class_="s-card"):
-        # Title comes from the listing image alt text or anchor text.
-        img = item.find("img")
-        title = img["alt"].strip() if img and img.get("alt") else ""
+    # eBay has used multiple container class names across DOM versions.
+    # Try each in order so we degrade gracefully if they change again.
+    items = (
+        soup.find_all("li", class_="s-item")
+        or soup.find_all("li", class_="s-card")
+    )
+    for item in items:
+        # Title: prefer the dedicated title div (2024+), fall back to img alt.
+        title_el = item.find("div", class_="s-item__title") or item.find("h3")
+        if title_el:
+            title = title_el.get_text(strip=True)
+        else:
+            img = item.find("img")
+            title = img.get("alt", "").strip() if img else ""
 
         # Skip ads (eBay injects "Shop on eBay" promoted items).
         if not title or title.lower().startswith("shop on ebay"):
@@ -962,12 +972,18 @@ def _scrape_ebay(card_name: str, days: int = 30) -> list[dict[str, Any]]:
             continue
 
         # --- Price ---
-        price_text = ""
-        for span in item.find_all("span"):
-            text = span.get_text(strip=True)
-            if re.match(r"^\$[\d,]+\.\d{2}$", text):
-                price_text = text
-                break
+        # Try the semantic price element first (most reliable), then scan spans.
+        price_el = item.find("span", class_="s-item__price")
+        if price_el:
+            # Handle "to" ranges like "$4.00 to $6.00" — take the lower bound.
+            price_text = price_el.get_text(strip=True).split(" to ")[0].strip()
+        else:
+            price_text = ""
+            for span in item.find_all("span"):
+                text = span.get_text(strip=True)
+                if re.match(r"^\$[\d,]+\.\d{2}$", text.replace(",", "")):
+                    price_text = text
+                    break
 
         if not price_text:
             continue
@@ -981,7 +997,11 @@ def _scrape_ebay(card_name: str, days: int = 30) -> list[dict[str, Any]]:
             continue
 
         # --- Sold date ---
-        sold_span = item.find("span", class_="su-styled-text")
+        sold_span = (
+            item.find("span", class_="s-item__ended-date")
+            or item.find("span", class_="s-item__time-end")
+            or item.find("span", class_="su-styled-text")
+        )
         date_text = sold_span.get_text(strip=True) if sold_span else ""
         # Format: "Sold  Apr 8, 2026" → strip prefix.
         date_text = re.sub(r"^[Ss]old\s+", "", date_text).strip()
@@ -1090,6 +1110,28 @@ def fetch_sales(
                     sales = sales + ebay_supplement
             except Exception as exc:
                 logger.warning("eBay supplement failed (continuing with PC-only): %s", exc)
+
+        # 2b. For long time windows with sparse data, supplement with TCGPlayer
+        #     even when PC/eBay returned some results — PriceCharting's visible
+        #     table only covers ~30-50 recent sales regardless of the days param.
+        if days >= 90 and len(sales) < 15:
+            logger.info(
+                "Sparse data (%d sales) for %d-day window — supplementing with TCGPlayer.",
+                len(sales), days,
+            )
+            try:
+                product_id = _lookup_tcgplayer_product_id(card_name)
+                if product_id:
+                    tcg_sales = _fetch_tcgplayer_history(product_id, days=days)
+                    if tcg_sales:
+                        existing_dates = {s["date"] for s in sales}
+                        new_tcg = [s for s in tcg_sales if s["date"] not in existing_dates]
+                        sales = sales + new_tcg
+                        logger.info(
+                            "Added %d TCGPlayer records for sparse supplement.", len(new_tcg)
+                        )
+            except Exception as exc:
+                logger.warning("TCGPlayer sparse supplement failed: %s", exc)
 
         if not sales:
             # Fallback: try TCGPlayer when PC and eBay both returned nothing.
