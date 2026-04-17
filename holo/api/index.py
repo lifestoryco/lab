@@ -14,6 +14,8 @@ from __future__ import annotations
 import json
 import os
 import sys
+import time
+import threading
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlparse
@@ -27,13 +29,114 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 
-def _json_response(handler, data: dict, status: int = 200):
+# ---- Module-level requests.Session for HTTP keep-alive -----------------------
+# Reused across invocations on warm Vercel instances. Saves TCP+TLS handshake
+# (~100–300ms) per outbound call to pokemontcg.io / PokeAPI etc.
+_HTTP_SESSION = None
+_HTTP_SESSION_LOCK = threading.Lock()
+
+
+def _http_session():
+    global _HTTP_SESSION
+    if _HTTP_SESSION is None:
+        with _HTTP_SESSION_LOCK:
+            if _HTTP_SESSION is None:
+                import requests as _requests
+                from requests.adapters import HTTPAdapter
+                s = _requests.Session()
+                adapter = HTTPAdapter(pool_connections=16, pool_maxsize=32, max_retries=0)
+                s.mount("https://", adapter)
+                s.mount("http://", adapter)
+                _HTTP_SESSION = s
+    return _HTTP_SESSION
+
+
+# ---- Tiny in-process memo for movers (survives warm invocations) -------------
+_MEMO: dict[str, tuple[float, dict]] = {}
+_MEMO_LOCK = threading.Lock()
+
+
+def _memo_get(key: str, ttl: float):
+    rec = _MEMO.get(key)
+    if rec and (time.time() - rec[0]) < ttl:
+        return rec[1]
+    return None
+
+
+def _memo_put(key: str, value: dict):
+    with _MEMO_LOCK:
+        _MEMO[key] = (time.time(), value)
+
+
+# Cache-Control presets per action — tuned for staleness tolerance.
+_CACHE_HEADERS = {
+    "movers":  "public, max-age=300, s-maxage=600, stale-while-revalidate=1800",
+    "meta":    "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+    "pokedex": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800",
+    "search":  "public, max-age=600, s-maxage=3600, stale-while-revalidate=21600",
+    "history": "public, max-age=300, s-maxage=600, stale-while-revalidate=3600",
+    "grades":  "public, max-age=300, s-maxage=600, stale-while-revalidate=3600",
+    "sales":   "public, max-age=180, s-maxage=600, stale-while-revalidate=3600",
+    "signal":  "public, max-age=180, s-maxage=600, stale-while-revalidate=1800",
+    "price":   "public, max-age=180, s-maxage=600, stale-while-revalidate=1800",
+}
+_DEFAULT_CACHE = "s-maxage=300, stale-while-revalidate=600"
+
+
+def _json_response(handler, data: dict, status: int = 200, cache: str | None = None):
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
     handler.send_header("Access-Control-Allow-Origin", "*")
-    handler.send_header("Cache-Control", "s-maxage=300, stale-while-revalidate=600")
+    handler.send_header("Cache-Control", cache or _DEFAULT_CACHE)
     handler.end_headers()
     handler.wfile.write(json.dumps(data, default=str).encode())
+
+
+# pokemontcg.io select= fieldsets. Rich for detail / pokedex, slim for search/list.
+_META_FIELDS_FULL = (
+    "id,name,number,images,set,rarity,tcgplayer,hp,types,subtypes,supertype,"
+    "evolvesFrom,evolvesTo,abilities,attacks,weaknesses,resistances,"
+    "retreatCost,convertedRetreatCost,flavorText,artist,"
+    "nationalPokedexNumbers,regulationMark"
+)
+_META_FIELDS_SLIM = "id,name,number,images,set,rarity,tcgplayer"
+_SEARCH_FIELDS = "id,name,number,images,set,rarity,supertype"
+
+
+# Initialize the per-request sqlite cache schema + pragmas once per warm
+# process. WAL + synchronous=NORMAL is the standard fast-read/fast-write combo
+# for ephemeral caches on local disk (/tmp on Vercel).
+_CACHE_INIT_DONE = False
+_CACHE_INIT_LOCK = threading.Lock()
+
+
+def _ensure_cache_schema():
+    global _CACHE_INIT_DONE
+    if _CACHE_INIT_DONE:
+        return
+    with _CACHE_INIT_LOCK:
+        if _CACHE_INIT_DONE:
+            return
+        import sqlite3
+        cache_db = os.environ.get("HOLO_CACHE_DB", "/tmp/holo_cache.db")
+        try:
+            with sqlite3.connect(cache_db) as conn:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA synchronous=NORMAL")
+                conn.execute("PRAGMA temp_store=MEMORY")
+                conn.execute("""CREATE TABLE IF NOT EXISTS card_meta (
+                    slug TEXT PRIMARY KEY, payload TEXT NOT NULL, fetched_at TEXT NOT NULL)""")
+                conn.execute("""CREATE TABLE IF NOT EXISTS pokedex_cache (
+                    dex_number INTEGER PRIMARY KEY, payload TEXT NOT NULL, fetched_at TEXT NOT NULL)""")
+                conn.execute("""CREATE TABLE IF NOT EXISTS search_cache (
+                    key TEXT PRIMARY KEY, payload TEXT NOT NULL, fetched_at TEXT NOT NULL)""")
+                conn.commit()
+        except Exception:
+            pass
+        _CACHE_INIT_DONE = True
+
+
+_ensure_cache_schema()
 
 
 _SOURCE_LABELS = {
@@ -45,21 +148,26 @@ _SOURCE_LABELS = {
 }
 
 
-def _lookup_card_meta(card_name: str) -> dict:
+def _lookup_card_meta(card_name: str, rich: bool = False) -> dict:
     """Fetch card metadata (image, set, rarity, release date) from pokemontcg.io.
 
     Uses the name + optional number from the card query. Returns a dict with
     at minimum {image_small, image_large, set_name, rarity, number, release_date}
     or an empty dict if nothing found. Results are cached in /tmp via sqlite3.
+
+    `rich=True` pulls extended TCG fields (attacks, abilities, pokedex numbers)
+    used by /pokedex and /history detail views. Default is the slim payload used
+    by list/card-grid callers — ~5x smaller JSON off pokemontcg.io.
     """
-    import hashlib
     import re as _re
     import sqlite3
-    import requests as _requests
 
     # Simple in-process cache keyed by slugified name.
     cache_db = os.environ.get("HOLO_CACHE_DB", "/tmp/holo_cache.db")
     slug = _re.sub(r"[^a-z0-9]+", "-", card_name.lower()).strip("-")
+    # Separate cache rows for slim vs rich payloads so we never serve slim data
+    # to a rich caller.
+    cache_slug = slug if rich else f"{slug}::slim"
     try:
         with sqlite3.connect(cache_db) as conn:
             conn.execute("""
@@ -71,10 +179,15 @@ def _lookup_card_meta(card_name: str) -> dict:
             """)
             row = conn.execute(
                 "SELECT payload FROM card_meta WHERE slug = ? AND fetched_at > datetime('now','-7 days')",
-                (slug,),
+                (cache_slug,),
             ).fetchone()
             if row:
                 return json.loads(row[0])
+            # Rich callers can fall back to an existing slim cache hit for the
+            # common fields while the rich fetch is in flight — but we still
+            # need the rich fields, so only use this for slim callers.
+            if not rich:
+                pass
     except Exception:
         pass  # Cache miss is fine.
 
@@ -87,12 +200,18 @@ def _lookup_card_meta(card_name: str) -> dict:
     # pokemontcg.io number: is exact match but print numbers vary by variant.
     # Soft-match by name only, then rank results by name+number similarity.
     query = f'name:"{query_name}"'
+    select = _META_FIELDS_FULL if rich else _META_FIELDS_SLIM
+    sess = _http_session()
+    headers = {"User-Agent": "Mozilla/5.0 Holo/1.0"}
+    # Slim callers only need a handful of candidates to rank; pageSize=10 is
+    # plenty and cuts pokemontcg.io response payloads roughly in half.
+    page_size = 20 if rich else 10
 
     try:
-        resp = _requests.get(
+        resp = sess.get(
             "https://api.pokemontcg.io/v2/cards",
-            params={"q": query, "pageSize": 25},
-            headers={"User-Agent": "Mozilla/5.0 Holo/1.0"},
+            params={"q": query, "pageSize": page_size, "select": select},
+            headers=headers,
             timeout=8,
         )
         resp.raise_for_status()
@@ -103,10 +222,10 @@ def _lookup_card_meta(card_name: str) -> dict:
     if not cards:
         # Fallback: try without exact-match quotes (pokemontcg.io fuzzy search)
         try:
-            resp = _requests.get(
+            resp = sess.get(
                 "https://api.pokemontcg.io/v2/cards",
-                params={"q": f"name:{query_name.split()[0]}*", "pageSize": 25},
-                headers={"User-Agent": "Mozilla/5.0 Holo/1.0"},
+                params={"q": f"name:{query_name.split()[0]}*", "pageSize": page_size, "select": select},
+                headers=headers,
                 timeout=8,
             )
             resp.raise_for_status()
@@ -144,26 +263,28 @@ def _lookup_card_meta(card_name: str) -> dict:
         "rarity": best.get("rarity", ""),
         "release_date": set_obj.get("releaseDate", ""),
         "tcgplayer_url": (best.get("tcgplayer") or {}).get("url", ""),
-        # Extended TCG fields for Pokedex overlay.
-        "hp": best.get("hp", ""),
-        "types": best.get("types", []) or [],
-        "subtypes": best.get("subtypes", []) or [],
-        "supertype": best.get("supertype", ""),
-        "evolvesFrom": best.get("evolvesFrom", ""),
-        "evolvesTo": best.get("evolvesTo", []) or [],
-        "abilities": best.get("abilities", []) or [],
-        "attacks": best.get("attacks", []) or [],
-        "weaknesses": best.get("weaknesses", []) or [],
-        "resistances": best.get("resistances", []) or [],
-        "retreatCost": best.get("retreatCost", []) or [],
-        "convertedRetreatCost": best.get("convertedRetreatCost"),
-        "flavorText": best.get("flavorText", ""),
-        "artist": best.get("artist", ""),
-        "nationalPokedexNumbers": best.get("nationalPokedexNumbers", []) or [],
-        "regulationMark": best.get("regulationMark", ""),
         "set_printed_total": set_obj.get("printedTotal"),
         "set_total": set_obj.get("total"),
     }
+    if rich:
+        meta.update({
+            "hp": best.get("hp", ""),
+            "types": best.get("types", []) or [],
+            "subtypes": best.get("subtypes", []) or [],
+            "supertype": best.get("supertype", ""),
+            "evolvesFrom": best.get("evolvesFrom", ""),
+            "evolvesTo": best.get("evolvesTo", []) or [],
+            "abilities": best.get("abilities", []) or [],
+            "attacks": best.get("attacks", []) or [],
+            "weaknesses": best.get("weaknesses", []) or [],
+            "resistances": best.get("resistances", []) or [],
+            "retreatCost": best.get("retreatCost", []) or [],
+            "convertedRetreatCost": best.get("convertedRetreatCost"),
+            "flavorText": best.get("flavorText", ""),
+            "artist": best.get("artist", ""),
+            "nationalPokedexNumbers": best.get("nationalPokedexNumbers", []) or [],
+            "regulationMark": best.get("regulationMark", ""),
+        })
 
     # Only cache non-empty results so transient API failures don't poison the cache.
     if meta.get("id"):
@@ -171,7 +292,7 @@ def _lookup_card_meta(card_name: str) -> dict:
             with sqlite3.connect(cache_db) as conn:
                 conn.execute(
                     "INSERT OR REPLACE INTO card_meta (slug, payload, fetched_at) VALUES (?, ?, datetime('now'))",
-                    (slug, json.dumps(meta)),
+                    (cache_slug, json.dumps(meta)),
                 )
                 conn.commit()
         except Exception:
@@ -307,7 +428,7 @@ def _handle_pokedex(params: dict) -> dict:
     card = params.get("card", [""])[0]
     if not card:
         return {"error": "Missing 'card' parameter"}
-    meta = _lookup_card_meta(card)
+    meta = _lookup_card_meta(card, rich=True)
     if not meta:
         return {"error": f"No card metadata found for '{card}'", "meta": {}, "species": {}}
     dex_numbers = meta.get("nationalPokedexNumbers") or []
@@ -469,7 +590,9 @@ def _handle_flip(params: dict) -> dict:
     shipping_type = "BMWT" if market_value >= SHIPPING_VALUE_THRESHOLD else "PWE"
     net_revenue = round(market_value - platform_fee - shipping_cost, 2)
     profit = round(net_revenue - cost_basis, 2)
-    margin_pct = round((profit / market_value) * 100, 1) if market_value > 0 else 0.0
+    # Return on cost basis (ROI), not gross margin on revenue — a flipper cares
+    # about what they make per dollar they put in. Field name kept for API compat.
+    margin_pct = round((profit / cost_basis) * 100, 1) if cost_basis > 0 else 0.0
 
     if profit <= 0:
         verdict = "DO NOT SELL"
@@ -482,6 +605,13 @@ def _handle_flip(params: dict) -> dict:
     # Solve: break_even * (1 - fee_rate) - shipping = cost_basis
     from config import PLATFORM_FEE_RATE as _FEE
     break_even = round((cost_basis + shipping_cost) / (1 - _FEE), 2) if (1 - _FEE) > 0 else 0.0
+    # If break-even falls below the shipping tier threshold while we priced
+    # with BMWT, the real sale at that price would ship PWE ($1), not BMWT
+    # ($4). Recompute once with PWE so break-even isn't overstated. Can't
+    # ping-pong because PWE ≤ BMWT.
+    if break_even < SHIPPING_VALUE_THRESHOLD and shipping_cost == SHIPPING_COST_BMWT:
+        shipping_cost = SHIPPING_COST_PWE
+        break_even = round((cost_basis + shipping_cost) / (1 - _FEE), 2) if (1 - _FEE) > 0 else 0.0
 
     return {
         "card": card,
@@ -962,7 +1092,7 @@ def _handle_movers(params: dict) -> dict:
     """
     import statistics
     from collections import defaultdict
-    from datetime import date as _date, timedelta as _td
+    from concurrent.futures import ThreadPoolExecutor
     from pokequant.scraper import fetch_sales
 
     try:
@@ -974,18 +1104,23 @@ def _handle_movers(params: dict) -> dict:
     except ValueError:
         window = 7
 
-    movers: list[dict] = []
-    for name in _MOVERS_UNIVERSE:
+    # Server-side memoization — movers is the home-page marquee and repeats
+    # across every visitor. 10-min TTL on the full payload.
+    memo_key = f"movers::{window}::{limit}"
+    cached = _memo_get(memo_key, ttl=600)
+    if cached is not None:
+        return cached
+
+    def _one(name: str) -> dict | None:
         try:
             sales = fetch_sales(card_name=name, days=window, use_cache=True, grade="raw")
             if not isinstance(sales, list) or len(sales) < 2:
-                continue
+                return None
 
-            # Outlier-filter the same way history does.
             raw_prices = [float(s["price"]) for s in sales
                           if float(s.get("price", 0)) > 0]
             if len(raw_prices) < 2:
-                continue
+                return None
             floor = statistics.median(raw_prices) * 0.15
 
             buckets: dict[str, list[float]] = defaultdict(list)
@@ -998,18 +1133,18 @@ def _handle_movers(params: dict) -> dict:
                     continue
 
             if len(buckets) < 2:
-                continue
+                return None
 
             sorted_dates = sorted(buckets.keys())
             first_price = statistics.median(buckets[sorted_dates[0]])
             last_price = statistics.median(buckets[sorted_dates[-1]])
             if first_price <= 0:
-                continue
+                return None
 
             change_pct = round((last_price / first_price - 1) * 100, 2)
             meta = _lookup_card_meta(name)
 
-            movers.append({
+            return {
                 "card": name,
                 "current": round(last_price, 2),
                 "change_pct": change_pct,
@@ -1018,17 +1153,26 @@ def _handle_movers(params: dict) -> dict:
                 "image_small": meta.get("image_small", "") if meta else "",
                 "name": meta.get("name", name) if meta else name,
                 "number": meta.get("number", "") if meta else "",
-            })
+            }
         except Exception:
-            continue  # One card failing shouldn't tank the whole list.
+            return None  # One card failing shouldn't tank the whole list.
+
+    # Parallel fan-out: each card hits fetch_sales independently. The sqlite
+    # cache layer uses short-lived per-call connections, so concurrent reads
+    # are safe; writes are rare (24h TTL) and serialized by sqlite itself.
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(_one, _MOVERS_UNIVERSE))
+    movers: list[dict] = [m for m in results if m is not None]
 
     # Sort by absolute % change descending — biggest movers first.
     movers.sort(key=lambda m: abs(m["change_pct"]), reverse=True)
-    return {
+    payload = {
         "window_days": window,
         "count": min(len(movers), limit),
         "movers": movers[:limit],
     }
+    _memo_put(memo_key, payload)
+    return payload
 
 
 def _handle_search(params: dict) -> dict:
@@ -1043,7 +1187,6 @@ def _handle_search(params: dict) -> dict:
     import hashlib
     import re as _re
     import sqlite3
-    import requests as _requests
 
     raw_q = params.get("q", [""])[0] or ""
     q = raw_q.strip()
@@ -1095,9 +1238,13 @@ def _handle_search(params: dict) -> dict:
     query_str = f'name:"{safe_name}*"'
 
     try:
-        resp = _requests.get(
+        resp = _http_session().get(
             "https://api.pokemontcg.io/v2/cards",
-            params={"q": query_str, "pageSize": min(50, max(limit * 3, 24))},
+            params={
+                "q": query_str,
+                "pageSize": min(25, max(limit * 2, 16)),
+                "select": _SEARCH_FIELDS,
+            },
             headers={"User-Agent": "Mozilla/5.0 Holo/1.0"},
             timeout=8,
         )
@@ -1177,15 +1324,19 @@ def _handle_search(params: dict) -> dict:
             break
 
     payload = {"results": results}
-    try:
-        with sqlite3.connect(cache_db) as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO search_cache (key, payload, fetched_at) VALUES (?, ?, datetime('now'))",
-                (key, json.dumps(payload)),
-            )
-            conn.commit()
-    except Exception:
-        pass
+    # Only cache successful payloads — if the upstream search errored we must
+    # not poison the 6-hour cache (otherwise a transient pokemontcg.io blip
+    # gives every user empty typeahead for hours).
+    if "error" not in payload:
+        try:
+            with sqlite3.connect(cache_db) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO search_cache (key, payload, fetched_at) VALUES (?, ?, datetime('now'))",
+                    (key, json.dumps(payload)),
+                )
+                conn.commit()
+        except Exception:
+            pass
 
     return payload
 
@@ -1223,6 +1374,17 @@ class handler(BaseHTTPRequestHandler):
         try:
             result = _HANDLERS[action](params)
             status = 200 if "error" not in result else 422
-            _json_response(self, result, status)
-        except Exception as exc:
-            _json_response(self, {"error": str(exc)}, 500)
+            _json_response(self, result, status, cache=_CACHE_HEADERS.get(action))
+        except Exception:
+            import traceback as _tb
+            import secrets as _secrets
+            trace_id = _secrets.token_hex(4)
+            print(
+                f"[api:{action}] trace_id={trace_id}\n{_tb.format_exc()}",
+                file=sys.stderr,
+            )
+            _json_response(
+                self,
+                {"error": "Internal error", "trace_id": trace_id},
+                500,
+            )
