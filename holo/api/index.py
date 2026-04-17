@@ -450,18 +450,37 @@ def _handle_history(params: dict) -> dict:
     if not isinstance(sales, list) or len(sales) == 0:
         return {"error": f"No sales found for '{card}'"}
 
+    # Collect raw prices so we can compute a robust outlier floor before bucketing.
+    # Low-value junk listings (lot sales, proxies, damaged cards) can drop the low
+    # to pennies on a $500 card, which makes the HIGH/LOW band useless. Drop any
+    # price that's less than 15% of the overall median — this is conservative
+    # enough to keep legitimate dips but cuts out obvious garbage.
+    raw_prices: list[float] = []
+    for s in sales:
+        try:
+            p = float(s["price"])
+            if p > 0:
+                raw_prices.append(p)
+        except (ValueError, TypeError):
+            continue
+
+    if not raw_prices:
+        return {"error": "No valid price data"}
+
+    overall_median = statistics.median(raw_prices)
+    outlier_floor = overall_median * 0.15
+
     # Bucket by day, median price per day
     buckets: dict[str, list[float]] = defaultdict(list)
     for s in sales:
         try:
             d = str(s["date"])[:10]
             p = float(s["price"])
-            if p > 0:
+            if p >= outlier_floor:
                 buckets[d].append(p)
         except (KeyError, ValueError, TypeError):
             continue
 
-    # Forward-fill missing days with previous value so the chart has no gaps
     if not buckets:
         return {"error": "No valid price data"}
 
@@ -751,6 +770,106 @@ def _handle_meta(params: dict) -> dict:
     return {"card": card, "meta": meta}
 
 
+# Universe of cards to evaluate when computing top movers. Kept small so the
+# handler stays under the 60s Vercel maxDuration even on a cold cache.
+_MOVERS_UNIVERSE: list[str] = [
+    "Umbreon ex 161",
+    "Pikachu ex 232",
+    "Gardevoir ex 245",
+    "Charizard ex 199",
+    "Iono 237",
+    "Miraidon ex 243",
+    "Lugia V 138",
+    "Latias ex 239",
+    "Charizard V 154",
+    "Giratina V 186",
+    "Mew VMAX 114",
+    "Rayquaza VMAX 111",
+]
+
+
+def _handle_movers(params: dict) -> dict:
+    """Top movers — cards ranked by biggest 7-day price change.
+
+    Evaluates a curated universe of popular cards, fetches a short history
+    for each, and returns them sorted by |change_pct|. Direction (up/down)
+    is preserved so the frontend can show gainers vs losers.
+
+    Query params:
+      ?limit=8        — max cards to return (default 8, max 20)
+      ?window=7       — days to measure change over (default 7, max 30)
+    """
+    import statistics
+    from collections import defaultdict
+    from datetime import date as _date, timedelta as _td
+    from pokequant.scraper import fetch_sales
+
+    try:
+        limit = max(1, min(20, int(params.get("limit", ["8"])[0])))
+    except ValueError:
+        limit = 8
+    try:
+        window = max(3, min(30, int(params.get("window", ["7"])[0])))
+    except ValueError:
+        window = 7
+
+    movers: list[dict] = []
+    for name in _MOVERS_UNIVERSE:
+        try:
+            sales = fetch_sales(card_name=name, days=window, use_cache=True, grade="raw")
+            if not isinstance(sales, list) or len(sales) < 2:
+                continue
+
+            # Outlier-filter the same way history does.
+            raw_prices = [float(s["price"]) for s in sales
+                          if float(s.get("price", 0)) > 0]
+            if len(raw_prices) < 2:
+                continue
+            floor = statistics.median(raw_prices) * 0.15
+
+            buckets: dict[str, list[float]] = defaultdict(list)
+            for s in sales:
+                try:
+                    p = float(s["price"])
+                    if p >= floor:
+                        buckets[str(s["date"])[:10]].append(p)
+                except (KeyError, ValueError, TypeError):
+                    continue
+
+            if len(buckets) < 2:
+                continue
+
+            sorted_dates = sorted(buckets.keys())
+            first_price = statistics.median(buckets[sorted_dates[0]])
+            last_price = statistics.median(buckets[sorted_dates[-1]])
+            if first_price <= 0:
+                continue
+
+            change_pct = round((last_price / first_price - 1) * 100, 2)
+            meta = _lookup_card_meta(name)
+
+            movers.append({
+                "card": name,
+                "current": round(last_price, 2),
+                "change_pct": change_pct,
+                "direction": "up" if change_pct >= 0 else "down",
+                "sales_count": len(sales),
+                "image_small": meta.get("image_small", "") if meta else "",
+                "name": meta.get("name", name) if meta else name,
+                "number": meta.get("number", "") if meta else "",
+            })
+        except Exception:
+            continue  # One card failing shouldn't tank the whole list.
+
+    # Sort by absolute % change descending — biggest movers first.
+    movers.sort(key=lambda m: abs(m["change_pct"]), reverse=True)
+    return {
+        "window_days": window,
+        "count": min(len(movers), limit),
+        "movers": movers[:limit],
+    }
+
+
 _HANDLERS = {
     "price": _handle_price,
     "signal": _handle_signal,
@@ -762,6 +881,7 @@ _HANDLERS = {
     "sales": _handle_sales,
     "gradeit": _handle_grade_roi,
     "meta": _handle_meta,
+    "movers": _handle_movers,
 }
 
 
