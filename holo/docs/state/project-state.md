@@ -14,6 +14,54 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
+## What Was Just Done (2026-04-17 — session 5)
+
+### Supabase L2 cache for scraped sales (dark-launched + DB migration applied) 🚧 AWAITING VERCEL ENV
+
+Built a persistent, cross-instance L2 cache for scraped TCG sales data in the handoffpack Supabase project. Code is shipped dark (feature-gated) and the database migration is applied + API-exposed; final activation pending the operator adding env vars to Vercel.
+
+**Pipeline after activation:**
+```
+request → L1 /tmp sqlite (<1ms) → L2 Supabase (50-150ms) → live scrape
+write-through populates both L1 and L2 after a live scrape
+```
+
+**New files:**
+- `db/migrations/001_holo_sales_cache.sql` — idempotent DDL. Creates `holo` schema (never `public`), two tables (`sales_cache` + `scrape_runs`), indexes, RLS-on-with-zero-policies (service_role-only access), explicit revokes on anon/authenticated/public
+- `pokequant/supabase_cache.py` — PostgREST client module. 3-4s timeouts, try/except around every call, fire-and-forget writes, deterministic sha1 sale_id for dedup. `is_enabled()` returns false when env vars unset → whole module no-ops
+- `docs/supabase-setup.md` — 4-step activation guide + verification queries + revert procedure
+
+**Modified:**
+- `pokequant/scraper.py` — `fetch_sales` wired with L2 check between L1 miss and live scrape, plus write-through after live scrape completes. Graceful fallback on any Supabase failure
+
+**Applied to Supabase (handoffpack2 project) via Chrome automation:**
+- Ran `001_holo_sales_cache.sql` in SQL editor — "Success. No rows returned"
+- Verified: `holo.sales_cache` and `holo.scrape_runs` exist with `rls_enabled = true`
+- Added `holo` to Data API → Exposed schemas (alongside `public`, `graphql_public`)
+- `public` schema untouched; handoffpack data fully isolated
+
+**Commits:** `7baf6dc` feat: Supabase L2 cache for scraped sales (dark-launched, feature-gated)
+
+**Decisions:**
+- **Dedicated `holo` schema, not `public`:** full isolation from handoffpack data. A stray prefix typo can't collide with existing tables.
+- **RLS enabled + zero policies:** defence in depth. Even if someone ever accidentally exposed a query via the anon key, there's literally no policy that grants read/write. Only service_role (bypasses RLS) can touch the cache.
+- **Feature-gated on env vars:** code ships dark. No behaviour change until the operator adds `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` to Vercel. Zero risk to production.
+- **Short timeouts + try/except everywhere:** a Supabase outage must NEVER kill a user request. Supabase being slow → fall through to live scrape, no 500s.
+- **Fire-and-forget writes:** user request returns before L2 write lands. Write failures are logged at DEBUG only.
+- **Idempotent sale_id (sha1 of source+url+price+date):** repeated scrapes of the same underlying sale dedupe cleanly via Postgres UNIQUE + `Prefer: resolution=ignore-duplicates`.
+
+**To activate (operator doing tomorrow):**
+1. Supabase Dashboard → Settings → API → copy `service_role` key
+2. Vercel → **holo** project (not handoffpack-www) → env vars:
+   - `SUPABASE_URL = https://ufilszeczpxxggxqaedd.supabase.co`
+   - `SUPABASE_SERVICE_ROLE_KEY = <key>`
+   - Scope: Production + Preview only
+3. Redeploy
+
+**Free-tier economics:** ~200 bytes/row; 1M sales ≈ 200 MB. Well under the 500 MB DB limit. No new bandwidth costs on Supabase free tier.
+
+---
+
 ## What Was Just Done (2026-04-17 — session 4)
 
 ### Pokédex overlay, card search autocomplete, perf pass, bulletproof audit fixes, Fraunces typography, multi-color takeover ✅ COMPLETE
@@ -110,7 +158,7 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
-## Current Status (as of 2026-04-17 — session 4)
+## Current Status (as of 2026-04-17 — session 5)
 
 ### Phase
 Post-MVP web launch. Pre-monetization. Actively iterating.
@@ -186,10 +234,11 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 
 ## Active Blockers
 - No monetization layer (fully free, no conversion path)
-- No auth — can't build personalized features (saved cards sync'd across devices, alerts)
+- No auth — can't build personalized features (saved cards sync'd across devices, alerts). Supabase is wired up for caching but not yet for auth
 - Scraper fragility — PriceCharting HTML can change silently; no monitoring
 - Test coverage on scraper.py improved but still incomplete — critical paths covered, edge cases remain
 - No signal backtesting — can't validate accuracy claims
+- **L2 Supabase cache pending Vercel activation** — migration applied + schema exposed, operator needs to add SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY env vars and redeploy
 
 ---
 
