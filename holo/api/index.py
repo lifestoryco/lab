@@ -148,6 +148,51 @@ _SOURCE_LABELS = {
 }
 
 
+def _shape_card_meta(best: dict, rich: bool = False) -> dict:
+    """Shape a raw pokemontcg.io card dict into the payload we send over the
+    wire. Shared by name-search and id-lookup paths so both produce the same
+    object (important: the Pokédex overlay trusts this shape)."""
+    set_obj = best.get("set", {}) or {}
+    images = best.get("images", {}) or {}
+    set_images = set_obj.get("images", {}) if isinstance(set_obj.get("images"), dict) else {}
+    meta = {
+        "id": best.get("id", ""),
+        "name": best.get("name", ""),
+        "number": best.get("number", ""),
+        "image_small": images.get("small", ""),
+        "image_large": images.get("large", ""),
+        "set_name": set_obj.get("name", ""),
+        "set_series": set_obj.get("series", ""),
+        "set_symbol": set_images.get("symbol", ""),
+        "set_logo": set_images.get("logo", ""),
+        "rarity": best.get("rarity", ""),
+        "release_date": set_obj.get("releaseDate", ""),
+        "tcgplayer_url": (best.get("tcgplayer") or {}).get("url", ""),
+        "set_printed_total": set_obj.get("printedTotal"),
+        "set_total": set_obj.get("total"),
+    }
+    if rich:
+        meta.update({
+            "hp": best.get("hp", ""),
+            "types": best.get("types", []) or [],
+            "subtypes": best.get("subtypes", []) or [],
+            "supertype": best.get("supertype", ""),
+            "evolvesFrom": best.get("evolvesFrom", ""),
+            "evolvesTo": best.get("evolvesTo", []) or [],
+            "abilities": best.get("abilities", []) or [],
+            "attacks": best.get("attacks", []) or [],
+            "weaknesses": best.get("weaknesses", []) or [],
+            "resistances": best.get("resistances", []) or [],
+            "retreatCost": best.get("retreatCost", []) or [],
+            "convertedRetreatCost": best.get("convertedRetreatCost"),
+            "flavorText": best.get("flavorText", ""),
+            "artist": best.get("artist", ""),
+            "nationalPokedexNumbers": best.get("nationalPokedexNumbers", []) or [],
+            "regulationMark": best.get("regulationMark", ""),
+        })
+    return meta
+
+
 def _lookup_card_meta(card_name: str, rich: bool = False) -> dict:
     """Fetch card metadata (image, set, rarity, release date) from pokemontcg.io.
 
@@ -248,43 +293,7 @@ def _lookup_card_meta(card_name: str, rich: bool = False) -> dict:
     cards.sort(key=_score, reverse=True)
     best = cards[0]
 
-    set_obj = best.get("set", {}) or {}
-    images = best.get("images", {}) or {}
-    meta = {
-        "id": best.get("id", ""),
-        "name": best.get("name", ""),
-        "number": best.get("number", ""),
-        "image_small": images.get("small", ""),
-        "image_large": images.get("large", ""),
-        "set_name": set_obj.get("name", ""),
-        "set_series": set_obj.get("series", ""),
-        "set_symbol": set_obj.get("images", {}).get("symbol", "") if isinstance(set_obj.get("images"), dict) else "",
-        "set_logo": set_obj.get("images", {}).get("logo", "") if isinstance(set_obj.get("images"), dict) else "",
-        "rarity": best.get("rarity", ""),
-        "release_date": set_obj.get("releaseDate", ""),
-        "tcgplayer_url": (best.get("tcgplayer") or {}).get("url", ""),
-        "set_printed_total": set_obj.get("printedTotal"),
-        "set_total": set_obj.get("total"),
-    }
-    if rich:
-        meta.update({
-            "hp": best.get("hp", ""),
-            "types": best.get("types", []) or [],
-            "subtypes": best.get("subtypes", []) or [],
-            "supertype": best.get("supertype", ""),
-            "evolvesFrom": best.get("evolvesFrom", ""),
-            "evolvesTo": best.get("evolvesTo", []) or [],
-            "abilities": best.get("abilities", []) or [],
-            "attacks": best.get("attacks", []) or [],
-            "weaknesses": best.get("weaknesses", []) or [],
-            "resistances": best.get("resistances", []) or [],
-            "retreatCost": best.get("retreatCost", []) or [],
-            "convertedRetreatCost": best.get("convertedRetreatCost"),
-            "flavorText": best.get("flavorText", ""),
-            "artist": best.get("artist", ""),
-            "nationalPokedexNumbers": best.get("nationalPokedexNumbers", []) or [],
-            "regulationMark": best.get("regulationMark", ""),
-        })
+    meta = _shape_card_meta(best, rich=rich)
 
     # Only cache non-empty results so transient API failures don't poison the cache.
     if meta.get("id"):
@@ -423,14 +432,77 @@ def _lookup_pokedex_species(dex_number: int) -> dict:
     return out
 
 
+def _lookup_card_by_id(card_id: str) -> dict:
+    """Fetch the exact card by pokemontcg.io id (set-id + number).
+
+    Bypasses name-based ranking so the Pokédex overlay renders the SAME
+    printing the user is viewing — without this, "Miraidon ex" on a
+    Paldean Fates page could resolve to the Scarlet & Violet base set
+    printing and show a mismatched image/set in the overlay.
+    """
+    import hashlib
+    import json
+    import sqlite3
+
+    cache_db = os.environ.get("HOLO_CACHE_DB", "/tmp/holo_cache.db")
+    slug = f"byid:{hashlib.sha1(card_id.encode()).hexdigest()[:16]}"
+    try:
+        with sqlite3.connect(cache_db) as conn:
+            conn.execute("""CREATE TABLE IF NOT EXISTS card_meta (
+                slug TEXT PRIMARY KEY, payload TEXT NOT NULL, fetched_at TEXT NOT NULL)""")
+            row = conn.execute(
+                "SELECT payload FROM card_meta WHERE slug = ? AND fetched_at > datetime('now','-7 days')",
+                (slug,),
+            ).fetchone()
+            if row:
+                return json.loads(row[0])
+    except Exception:
+        pass
+
+    try:
+        resp = _http_session().get(
+            f"https://api.pokemontcg.io/v2/cards/{card_id}",
+            headers={"User-Agent": "Mozilla/5.0 Holo/1.0"},
+            timeout=8,
+        )
+        if resp.status_code != 200:
+            return {}
+        best = (resp.json() or {}).get("data") or {}
+    except Exception:
+        return {}
+
+    if not best.get("id"):
+        return {}
+    meta = _shape_card_meta(best, rich=True)
+    try:
+        with sqlite3.connect(cache_db) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO card_meta (slug, payload, fetched_at) VALUES (?, ?, datetime('now'))",
+                (slug, json.dumps(meta)),
+            )
+            conn.commit()
+    except Exception:
+        pass
+    return meta
+
+
 def _handle_pokedex(params: dict) -> dict:
-    """Combined TCG metadata + PokeAPI species data for the Pokédex overlay."""
+    """Combined TCG metadata + PokeAPI species data for the Pokédex overlay.
+
+    Prefers `id` (exact pokemontcg.io card id) over `card` (name) so the
+    overlay matches the printing on screen. Falls back to name lookup.
+    """
+    card_id = params.get("id", [""])[0]
     card = params.get("card", [""])[0]
-    if not card:
-        return {"error": "Missing 'card' parameter"}
-    meta = _lookup_card_meta(card, rich=True)
+    if not card_id and not card:
+        return {"error": "Missing 'id' or 'card' parameter"}
+    meta: dict = {}
+    if card_id:
+        meta = _lookup_card_by_id(card_id)
+    if not meta and card:
+        meta = _lookup_card_meta(card, rich=True)
     if not meta:
-        return {"error": f"No card metadata found for '{card}'", "meta": {}, "species": {}}
+        return {"error": "No card metadata found", "meta": {}, "species": {}}
     dex_numbers = meta.get("nationalPokedexNumbers") or []
     species: dict = {}
     if dex_numbers:
