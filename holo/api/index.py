@@ -78,19 +78,20 @@ def _lookup_card_meta(card_name: str) -> dict:
     except Exception:
         pass  # Cache miss is fine.
 
-    # Strip trailing number suffix (e.g. "079/073") but keep single numbers (e.g. "161")
+    # Strip trailing slash-numbers (e.g. "079/073"), capture optional loose number
     stripped = _re.sub(r"\s+\d{3}/\d{3,4}$", "", card_name).strip()
     number_match = _re.search(r"\b(\d{1,3})\b", stripped)
+    target_number = number_match.group(1) if number_match else None
     query_name = _re.sub(r"\b\d{1,3}\b", "", stripped).strip()
 
+    # pokemontcg.io number: is exact match but print numbers vary by variant.
+    # Soft-match by name only, then rank results by name+number similarity.
     query = f'name:"{query_name}"'
-    if number_match:
-        query += f' number:{int(number_match.group(1))}'
 
     try:
         resp = _requests.get(
             "https://api.pokemontcg.io/v2/cards",
-            params={"q": query, "select": "id,name,number,set,rarity,images,tcgplayer", "pageSize": 5},
+            params={"q": query, "select": "id,name,number,set,rarity,images,tcgplayer", "pageSize": 25},
             headers={"User-Agent": "Mozilla/5.0 Holo/1.0"},
             timeout=8,
         )
@@ -100,11 +101,33 @@ def _lookup_card_meta(card_name: str) -> dict:
         return {}
 
     if not cards:
+        # Fallback: try without exact-match quotes (pokemontcg.io fuzzy search)
+        try:
+            resp = _requests.get(
+                "https://api.pokemontcg.io/v2/cards",
+                params={"q": f"name:{query_name.split()[0]}*", "select": "id,name,number,set,rarity,images,tcgplayer", "pageSize": 25},
+                headers={"User-Agent": "Mozilla/5.0 Holo/1.0"},
+                timeout=8,
+            )
+            resp.raise_for_status()
+            cards = resp.json().get("data", [])
+        except Exception:
+            return {}
+
+    if not cards:
         return {}
 
-    # Pick exact-name match if possible, else first.
-    target = query_name.lower()
-    best = next((c for c in cards if c.get("name", "").lower() == target), cards[0])
+    # Rank: prefer exact-name match + exact-number match, then exact-name, then highest-number-proximity
+    def _score(c: dict) -> int:
+        score = 0
+        if c.get("name", "").lower() == query_name.lower():
+            score += 10
+        if target_number and str(c.get("number", "")) == target_number:
+            score += 20
+        return score
+
+    cards.sort(key=_score, reverse=True)
+    best = cards[0]
 
     set_obj = best.get("set", {}) or {}
     images = best.get("images", {}) or {}
@@ -123,15 +146,17 @@ def _lookup_card_meta(card_name: str) -> dict:
         "tcgplayer_url": (best.get("tcgplayer") or {}).get("url", ""),
     }
 
-    try:
-        with sqlite3.connect(cache_db) as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO card_meta (slug, payload, fetched_at) VALUES (?, ?, datetime('now'))",
-                (slug, json.dumps(meta)),
-            )
-            conn.commit()
-    except Exception:
-        pass
+    # Only cache non-empty results so transient API failures don't poison the cache.
+    if meta.get("id"):
+        try:
+            with sqlite3.connect(cache_db) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO card_meta (slug, payload, fetched_at) VALUES (?, ?, datetime('now'))",
+                    (slug, json.dumps(meta)),
+                )
+                conn.commit()
+        except Exception:
+            pass
 
     return meta
 
