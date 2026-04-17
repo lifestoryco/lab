@@ -17,3 +17,6 @@ out/
 
 # OS
 .DS_Store
+
+# Claude Code worktrees (auto-generated)
+.claude/worktrees/
