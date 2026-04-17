@@ -75,3 +75,8 @@ PLATFORM_FEE_RATE: float = 0.13           # Combined eBay + TCGPlayer seller fee
 SHIPPING_COST_BMWT: float = 4.00          # Bubble Mailer with Tracking (≥ $20 cards)
 SHIPPING_COST_PWE: float = 1.00           # Plain White Envelope (< $20 cards)
 FLIP_THIN_MARGIN_THRESHOLD_PCT: float = 20.0  # Below this margin % → "HOLD" verdict
+
+# ---------------------------------------------------------------------------
+# Module 7 — Sealed Product / Box Defaults
+# ---------------------------------------------------------------------------
+DEFAULT_PACKS_PER_BOX: int = 36          # Standard booster box pack count (used for box flip math)

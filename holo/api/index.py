@@ -271,7 +271,7 @@ def _handle_flip(params: dict) -> dict:
         return {"error": f"Invalid cost: '{cost}'"}
 
     # Parse packs (only meaningful for box method).
-    packs_str = params.get("packs", ["36"])[0]
+    packs_str = params.get("packs", [str(DEFAULT_PACKS_PER_BOX)])[0]
     try:
         packs = max(1, int(packs_str))
     except ValueError:
@@ -289,7 +289,7 @@ def _handle_flip(params: dict) -> dict:
 
     from pokequant.scraper import fetch_sales
     from pokequant.comps.generator import generate_comp_from_list
-    from config import PLATFORM_FEE_RATE, SHIPPING_COST_BMWT, SHIPPING_COST_PWE, SHIPPING_VALUE_THRESHOLD, FLIP_THIN_MARGIN_THRESHOLD_PCT
+    from config import PLATFORM_FEE_RATE, SHIPPING_COST_BMWT, SHIPPING_COST_PWE, SHIPPING_VALUE_THRESHOLD, FLIP_THIN_MARGIN_THRESHOLD_PCT, DEFAULT_PACKS_PER_BOX
 
     sales = fetch_sales(card_name=card, days=30, use_cache=True, grade=grade)
     if isinstance(sales, dict) and "error" in sales:
@@ -359,12 +359,11 @@ def _handle_ev(params: dict) -> dict:
         return {"error": f"Invalid retail price: '{retail}'"}
 
     # Use the existing analyze.py helpers for EV.
-    import sys
-    sys.path.insert(0, PROJECT_ROOT)
     from pokequant.analyze import _fetch_set_cards, _build_top3_tier_data
     from pokequant.ev.calculator import calculate_box_ev
+    from config import DEFAULT_PACKS_PER_BOX as _DEFAULT_PACKS
 
-    packs_per_box = int(params.get("packs", ["36"])[0])
+    packs_per_box = int(params.get("packs", [str(_DEFAULT_PACKS)])[0])
     cards = _fetch_set_cards(set_name)
     if not cards:
         return {"error": f"Could not find set '{set_name}'"}
