@@ -1114,7 +1114,9 @@ def fetch_sales(
         # 2b. For long time windows with sparse data, supplement with TCGPlayer
         #     even when PC/eBay returned some results — PriceCharting's visible
         #     table only covers ~30-50 recent sales regardless of the days param.
-        if days >= 90 and len(sales) < 15:
+        #     Only for raw grade: TCGPlayer market prices blend grades, so
+        #     supplementing a PSA 9/10 query would contaminate the comp.
+        if days >= 90 and len(sales) < 15 and grade == "raw":
             logger.info(
                 "Sparse data (%d sales) for %d-day window — supplementing with TCGPlayer.",
                 len(sales), days,
