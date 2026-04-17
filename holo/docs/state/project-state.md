@@ -14,6 +14,75 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
+## What Was Just Done (2026-04-17 — session 4)
+
+### Pokédex overlay, card search autocomplete, perf pass, bulletproof audit fixes, Fraunces typography, multi-color takeover ✅ COMPLETE
+
+**The biggest session to date.** A long coordinated sprint: built the Pokédex overlay, added industry-standard search autocomplete, shipped a performance overhaul (parallel movers + HTTP session keep-alive + WAL sqlite + slim meta payloads + edge-runtime proxy + theme cache), audited the full product with 4 specialist reviews, retired the "vibe-coded" Orbitron/Press Start 2P typography in favour of Fraunces + Inter Tight + JetBrains Mono, and cranked the card-color takeover to full-viewport 3.5× with a multi-hue palette and smooth crossfade.
+
+**New features:**
+- **Pokédex side-panel overlay** (`/api?action=pokedex`) — full-screen on card-tap. Two-column desktop / stacked mobile. Set logo + species banner (genus, generation, legendary/mythical chips), HP/height/weight strip, 18-type color map with weakness/resistance pills, 6-row base-stats bar chart, species flavor text quote block, TCG abilities, attacks with colored energy-cost circles + accent damage, retreat row, TCGPlayer link. Merges pokemontcg.io (TCG card data) + pokeapi.co (species data), 30-day sqlite cache.
+- **Card search autocomplete** (`/api?action=search`) — WAI-ARIA 1.2 combobox, 250ms debounce, AbortController cancels stale fetches. Dropdown with 40×56 thumbnail + name·number + caps meta line (Set · Series · Year · Rarity), `<mark>` on matched substring. ArrowUp/Down wrap, Enter selects or falls back to raw submit, Escape/Tab/click-outside close. Server ranks by exact-number > exact name > starts-with > contains > release date desc. 6-hour sqlite cache.
+- **Top Movers drag + modal** — replaced the 40s CSS marquee with native drag-scroll + pointer handlers, gentle rAF auto-scroll that pauses on interaction, new "View all" button opens portal modal grid of all loaded movers.
+- **Mobile bottom nav** — fixed 4-tab bar (Overview/Sales/Flip/Grade) with `safe-area-inset-bottom` padding, 56px tap targets.
+
+**Performance:**
+- Module-level `requests.Session()` with HTTPAdapter pooling — all pokemontcg.io / PokeAPI calls reuse keep-alive connections (~100–300ms per call saved).
+- `_lookup_card_meta(rich=False)` slim `select=` fieldset for list/search callers; rich reserved for detail+pokedex. Separate cache rows per payload shape. pageSize cut from 25→10.
+- `_handle_movers` parallelized via `ThreadPoolExecutor(max_workers=8)` + 10-min in-process memo. Cold ~12s → ~2s, warm <100ms.
+- SQLite set to `journal_mode=WAL, synchronous=NORMAL, temp_store=MEMORY` at init.
+- Per-action `Cache-Control` presets threaded through `do_GET` (movers/meta/pokedex cacheable at edge with long SWR).
+- Next.js proxy (`app/api/holo/route.ts`) moved to edge runtime, streams upstream body instead of reparse+reserialize, passes `Cache-Control` through.
+- Module-level `THEME_CACHE: Map<url, CardTheme>` — revisiting a card skips the canvas decode.
+
+**Audit-driven bulletproofing:**
+- **[CRITICAL]** `pokequant/scraper.py`: `_resolve_cache_db()` defaults to `/tmp` when `VERCEL` env is set; `_init_cache_db` no longer prints to stdout or `sys.exit` (was killing the serverless handler).
+- **[HIGH]** `api/index.py` generic exception handler now logs traceback to stderr + returns `{error: "Internal error", trace_id}` instead of leaking `str(exc)`.
+- **[HIGH]** Flip `margin_pct` fixed to `profit / cost_basis * 100` (return on cost, not revenue).
+- **[HIGH]** Flip `break_even` now recomputes shipping tier when the calculated break-even falls below `SHIPPING_VALUE_THRESHOLD`.
+- **[MEDIUM]** `_handle_search` stops caching error responses (was poisoning the 6-hour cache on transient upstream failures).
+- **[MEDIUM]** `useCardTheme` now has an `onerror` handler that falls back to `DEFAULT_THEME` (prevents stale theme from a prior card).
+
+**Pokédex / image-mismatch fix:**
+- Users reported the Pokédex overlay showing a different Miraidon ex printing than the detail page. Root cause: the overlay re-searched by name only.
+- New `_lookup_card_by_id()` hits `pokemontcg.io /v2/cards/{id}` for an exact lookup, bypasses name-match scoring.
+- New `_shape_card_meta()` helper — shared by name-search and id-lookup paths so both produce identical wire payloads.
+- `/api?action=pokedex` prefers `?id=` over `?card=`; frontend now passes `meta.id`.
+
+**Pokédex overlay transparency fix (desktop):**
+- Scrim was `bg-black/92`, which isn't in Tailwind's default opacity scale and silently compiled to no background. Replaced with inline `rgba(6,6,8,0.92)`. Mobile unchanged.
+
+**Typography overhaul — retire Orbitron + Press Start 2P:**
+- **Fraunces** (variable, opsz + SOFT + WONK axes) → display + labels + HOLO wordmark (Black italic, 5xl, tight tracking, gold gradient preserved)
+- **Inter Tight** (variable) → body/stats/tabs
+- **JetBrains Mono** (variable) → prices + numerics
+- Semantic aliases in `layout.tsx` keep the 51 existing inline font-var refs working without touching HoloPage.tsx
+
+**Card-color takeover — 3.5× + multi-hue + smooth crossfade:**
+- `useCardTheme` extracts top 3 dominant hues (primary + secondary + tertiary) with angular separation; weighting by `chroma² × √luma` so bright saturated pixels (Miraidon's yellow) beat high-coverage-but-duller pixels (Miraidon's cyan body). Boosted saturation (accent 92%, bgDeep 88%) with warm-band luma bumps so yellow reads as yellow, not olive.
+- 7 takeover layers weave all three hues: primary top, secondary bottom, tertiary bottom-right corner, plus a slow-rotating **conic gradient (120s/rev)** for subtle foil iridescence. Layer 1 flood holds `bgDeep` for 45% of viewport — no fade to black — so colour is visible at every scroll position. Global purity wash at 60% alpha. Respects `prefers-reduced-motion`.
+- Whole takeover set lives in one keyed wrapper div with `opacity 0→1` transitioning 900ms cubic-bezier — card switches crossfade instead of flipping.
+
+**Ultra Ball theme (session 3 work preserved and polished):** SVG pokeball redesigned as Ultra Ball (gold + black H-stripes + red pinstripe accent); brand wordmark floats + hover-spin.
+
+**Files modified:**
+- `api/index.py` (+700 lines net) — pokedex/search/movers endpoints, session pooling, WAL, shared meta shaper, id lookup
+- `pokequant/scraper.py` — safe /tmp fallback, no sys.exit from init
+- `handoffpack-www/components/lab/holo/HoloPage.tsx` (~1000 lines net) — Lightbox→Pokedex, autocomplete combobox, multi-hue theme, takeover layers, font refs
+- `handoffpack-www/app/lab/holo/layout.tsx` — new font stack + semantic aliases
+- `handoffpack-www/app/api/holo/route.ts` — edge runtime, pass-through streaming
+
+**Commits (13 this session):** `a7cc2fc` (flip unbound-local) · `0144481` (ultra-ball theme) · `dc6672d` (state) · `5be7f22` (takeover covers full page) · `f72d164` (pokedex backend) · `ec3c512` (pokedex frontend) · `4e979f6` (search backend) · `95f8189` (search combobox) · `444e0c3` (api perf) · `7435afd` (frontend perf + theme cache) · `cbfcbb7` (3.5× takeover + z-index + onerror) · `b74744e` (takeover no-fade + translucent panels) · `8101d47` (pokedex id lookup) · `89eb6a6` (Fraunces + multi-color + smooth fade + overlay scrim) · `3634367` (scraper /tmp fallback)
+
+**Decisions:**
+- **Pokedex data sourcing:** merge pokemontcg.io + pokeapi.co rather than pick one. pokemontcg.io has the TCG-specific fields (attacks, abilities, energy costs, artist, rarity); pokeapi.co has the species data (genus, flavor text, base stats, dimensions). Both cached in `/tmp` sqlite with long TTLs so cold-start isn't punished.
+- **Pin pokedex by id:** the name-based scorer is fine for initial lookups but unreliable when a card has 5–10 printings. Once we have an id in hand (from history), passing it through eliminates the problem class entirely.
+- **Retire retro pixel font:** Press Start 2P was fun but read as amateur for a trader tool. Fraunces with opsz=144 + SOFT + WONK is distinctive enough to own the brand without being cutesy.
+- **Crossfade via key + opacity transition:** animating gradients directly doesn't interpolate in any browser. Keying the wrapper on `theme.hue` re-mounts the layers with fresh opacity, and a 900ms opacity transition gives a soft crossfade for free. Simpler than `@property`-registered custom properties.
+- **Parallel movers with ThreadPoolExecutor:** Vercel Python supports threads fine; the big worry was concurrent sqlite writes. WAL + short per-task connections handle that.
+
+---
+
 ## What Was Just Done (2026-04-16 — session 3)
 
 ### Ultra Ball theme + full-bleed card takeover + draggable movers + mobile bottom nav + flip bug fix ✅ COMPLETE
@@ -32,40 +101,16 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
-## What Was Just Done (2026-04-16 — session 2)
-
-### Pokéball branding + card-driven palette + Top Movers endpoint ✅ COMPLETE
-
-**Modified:** `api/index.py` — new `_handle_movers` (`/api?action=movers`) ranks a curated universe of ~12 liquid cards by `|change_pct|` over 7D; `_handle_history` now applies an outlier floor at 15% of overall median to drop junk listings (lot sales/proxies/damaged) that were polluting LOW stats  
-**Modified:** `handoffpack-www/app/lab/holo/layout.tsx` — Press Start 2P font loaded as `--font-press-start`  
-**Modified:** `handoffpack-www/components/lab/holo/HoloPage.tsx` — new `<Pokeball>` inline SVG component (currentColor + optional spin); `useCardTheme` replaces `useCardAccent`, returning full palette `{accent, glow, deep, hue, ready}` biased toward the most-saturated pixel (Pikachu→yellow, Charizard→orange, Umbreon→purple); ambient card-driven top-of-viewport glow; Press Start 2P wordmark + pokeball mark in brand header; red-glow lookup screen with decorative pokeball; `TopMovers` component replaces hardcoded `TrendingCarousel` — fetches `/api?action=movers`, auto-scrolling 40s marquee with pause on hover/touch, emerald/red ▲▼ chips, fade masks on both sides; range tabs now solid accent background when active; hero price renamed "Latest Price" (semantically accurate — value IS always the latest sale)  
-**Commits:** `1a4ec7c` — feat(holo): add /api?action=movers endpoint + history outlier filter | `1f23e27` (handoffpack-www) — feat(lab/holo): Press Start 2P + pokeball mark + card-driven palette + auto-scroll top movers  
-**Decisions:** Inline SVG pokeball instead of PNG asset — scales crisp at any size, tintable via `currentColor`, no file dependency. Movers endpoint reuses existing `fetch_sales` cache per-card, so each card is a cache hit on subsequent calls (no N+1 cold-fetch problem). "Moonbreon" removed from the trending list — it's a collector nickname for Umbreon VMAX Alt Art, not a scrapable card name.
-
----
-
-## What Was Just Done (2026-04-16)
-
-### Session tooling + cleanup ✅ COMPLETE
-
-**Modified:** `scripts/end.sh` — added handoffpack-www push block; `HANDOFFPACK_DIR` variable at top for easy path changes  
-**Modified:** `config.py` — added `DEFAULT_PACKS_PER_BOX = 36` constant  
-**Modified:** `api/index.py` — replaced hardcoded `"36"` with `DEFAULT_PACKS_PER_BOX` in both flip and EV handlers  
-**Modified:** `pokequant/scraper.py` — restrict TCGPlayer supplement to `grade == "raw"` (graded queries were getting contaminated market prices)  
-**New files:** `tests/test_scraper.py` — 57-test scraper suite (was untracked from previous session)  
-**Commits:** `55026f4` · `be4c914` · `91f5788` · `d98ec47` · `cad01eb`  
-**Decisions:** `end.sh` uses `git -C $DIR` pattern so it never changes working directory — safe even if holo push fails mid-way.
-
----
-
 ## Previous Sessions
 
-- **Full UX overhaul + multi-source scraping fixes (2026-04-16):** Orbitron/Space Grotesk fonts, card hero background, lightbox, glassmorphism panels, dynamic card accent via canvas sampling (`68644c9`); eBay selector fix (`s-card`→`s-item`), TCGPlayer sparse supplement, box flip math ÷ packs, `?action=meta` endpoint (`1da815d`).
-- **Session workflow + earlier fixes (2026-04-16):** Card images CSP fix (`64a2ccd`), date range tab cache collision fix (`24c0542`), /start-session, /end-session, /run-task, /prompt-builder, /sync, /alpha-squad, /code-review commands built (`fe5b7a5`, `caef365`, `58d14a1`).
+- **Pokéball branding + card-driven palette + Top Movers endpoint (2026-04-16 s2):** `/api?action=movers` endpoint ranks ~12 liquid cards by `|change_pct|` over 7D with history outlier floor at 15% of median. Inline SVG Pokéball component, `useCardTheme` canvas-sampling hook, ambient top glow, auto-scroll marquee. Commits `1a4ec7c`, `1f23e27`.
+- **Session tooling + cleanup (2026-04-16 s1):** `end.sh` handoffpack-www push block, `DEFAULT_PACKS_PER_BOX` config constant, TCGPlayer supplement restricted to raw grade, 57-test scraper suite landed. Commits `55026f4` · `be4c914` · `91f5788` · `d98ec47` · `cad01eb`.
+- **Full UX overhaul + multi-source scraping fixes (2026-04-16):** Orbitron/Space Grotesk fonts (later replaced), card hero background, lightbox (later rebuilt as Pokédex overlay), glassmorphism panels, canvas card accent (`68644c9`); eBay selector fix, TCGPlayer sparse supplement, box flip math ÷ packs, `?action=meta` (`1da815d`).
+- **Session workflow + earlier fixes (2026-04-16):** Card images CSP, date range tab cache collision fix (`24c0542`), /start-session, /end-session, /run-task, /prompt-builder, /sync, /alpha-squad, /code-review commands (`fe5b7a5`, `caef365`, `58d14a1`).
 
 ---
 
-## Current Status (as of 2026-04-16 — session 2)
+## Current Status (as of 2026-04-17 — session 4)
 
 ### Phase
 Post-MVP web launch. Pre-monetization. Actively iterating.
@@ -73,11 +118,13 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 ### What's Live
 - Bloomberg-style 5-tab dashboard (Overview, Sales, Flip, Grade It?)
 - **Card hero UI**: blurred card art background, 140×196px centered card image, click-to-lightbox
-- **Card-driven palette**: `useCardTheme` extracts `{accent, glow, deep, bgBase, bgDeep}` — the detail page gets a full-bleed stacked-gradient takeover driven by card art (biased toward most-saturated pixel)
-- **Top Movers**: draggable horizontal scroller (pointer + touch) with gentle auto-scroll, pause on interact, "View all" modal showing all loaded movers in a grid
-- **Ultra Ball SVG**: gold radial gradient top with black H-stripes + red pinstripe accent; used in brand mark (size 56 with float + hover-spin animations) and lookup decoration
-- **Mobile bottom nav**: fixed 4-tab bar (Overview/Sales/Flip/Grade) with safe-area-inset on card detail; desktop keeps top tabs
-- **Orbitron + Press Start 2P + Space Grotesk** trio via next/font/google (Press Start 2P reserved for wordmark + small retro labels)
+- **Card-driven palette**: `useCardTheme` extracts top-3 dominant hues (`chroma² × √luma` weighted) returning `{accent, accent2, accent3, glow, deep, bgBase, bgDeep, hue, isWarm}`. 7-layer full-bleed takeover including a conic-gradient foil (120s/rev) for subtle iridescence. Smooth 900ms crossfade between cards via keyed wrapper + opacity transition.
+- **Pokédex overlay**: full-screen on card-tap. Two-col desktop / stacked mobile. Merges pokemontcg.io TCG data + pokeapi.co species data. Set logo, species banner, physical strip, type chips (18-type color map), 6-row base stats, species flavor quote, TCG abilities/attacks with energy circles, retreat, TCGPlayer link. Pinned by `meta.id` for exact-printing match.
+- **Card search autocomplete**: WAI-ARIA 1.2 combobox, 250ms debounced `/api?action=search`, AbortController cancels stale. Thumbnail + name + caps meta line (Set · Series · Year · Rarity), `<mark>` highlighted match. ArrowUp/Down wrap, Enter selects or falls back to raw submit. Canonicalizes selection to `"<name> <number>"`.
+- **Top Movers**: draggable horizontal scroller (pointer + touch) with gentle auto-scroll, pause on interact, "View all" modal grid.
+- **Ultra Ball SVG**: gold radial gradient top with black H-stripes + red pinstripe accent; brand mark size 56 with float + hover-spin.
+- **Mobile bottom nav**: fixed 4-tab bar (Overview/Sales/Flip/Grade) with safe-area-inset on card detail; desktop keeps top tabs.
+- **Typography**: Fraunces (variable, opsz/SOFT/WONK axes) for display + HOLO wordmark (Black italic 5xl), Inter Tight for body, JetBrains Mono for numerics.
 - **Glassmorphism panels**: backdrop-blur + semi-transparent + glass-edge highlight
 - Card image lightbox: fullscreen overlay, ESC to dismiss
 - Back navigation: Orbitron pill button with accent hover
@@ -115,6 +162,15 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 ---
 
 ## Resolved Bugs (recent)
+- ✅ Pokédex overlay showed wrong card printing (2026-04-17) — overlay re-searched by name only; now passes `meta.id` and backend uses `_lookup_card_by_id` for an exact pokemontcg.io match
+- ✅ Pokédex overlay transparent on desktop (2026-04-17) — `bg-black/92` not in Tailwind's default scale, silently compiled to no background; replaced with inline rgba
+- ✅ Card takeover confined to hero only (2026-04-17) — root div's opaque gradient painted over `-z-10` layers; moved base to `-z-20` fixed + `isolation: isolate` on root; gradient flood no longer fades to black
+- ✅ Flip `margin_pct` was return-on-revenue not return-on-cost (2026-04-17) — `profit / market_value` → `profit / cost_basis`
+- ✅ Flip break-even overstated when shipping tier would flip (2026-04-17) — recompute with PWE if calculated break-even falls below `SHIPPING_VALUE_THRESHOLD`
+- ✅ Generic exception handler leaked `str(exc)` to clients (2026-04-17) — now logs traceback server-side + returns `{error, trace_id}`
+- ✅ `_handle_search` cached error responses (2026-04-17) — 6-hour empty-typeahead poisoning when pokemontcg.io blipped; skip cache-put on error
+- ✅ `scraper.py` could crash Vercel cold-start with stdout pollution + sys.exit (2026-04-17) — `_resolve_cache_db` detects VERCEL env, safe /tmp fallback, silent stderr warnings only
+- ✅ Autocomplete dropdown overlapped TopMovers on mobile (2026-04-17) — search hero at `z-40`, dropdown at `z-[60]`; TopMovers' drag-scroll stacking context no longer wins
 - ✅ Flip calculator "Bought Single" crashed with `UnboundLocalError: DEFAULT_PACKS_PER_BOX` (2026-04-16) — config import was mid-function, making the default-value lookup on line 274 reference a local bound later; moved import before first use
 - ✅ `$1.49 LOW` on $695 cards (2026-04-16) — `_handle_history` now drops prices below 15% of overall median, killing junk listings (lot sales, proxies, damaged) that polluted the LOW summary stat
 - ✅ "Moonbreon" in trending list (2026-04-16) — it was a collector nickname for Umbreon VMAX Alt Art, not a scrapable card name; replaced the entire hardcoded list with real data from new `/api?action=movers` endpoint
