@@ -16,6 +16,20 @@ They want an unfair data advantage, not another price lookup.
 
 ## What Was Just Done (2026-04-16)
 
+### Session tooling + cleanup ✅ COMPLETE
+
+**Modified:** `scripts/end.sh` — added handoffpack-www push block; `HANDOFFPACK_DIR` variable at top for easy path changes  
+**Modified:** `config.py` — added `DEFAULT_PACKS_PER_BOX = 36` constant  
+**Modified:** `api/index.py` — replaced hardcoded `"36"` with `DEFAULT_PACKS_PER_BOX` in both flip and EV handlers  
+**Modified:** `pokequant/scraper.py` — restrict TCGPlayer supplement to `grade == "raw"` (graded queries were getting contaminated market prices)  
+**New files:** `tests/test_scraper.py` — 57-test scraper suite (was untracked from previous session)  
+**Commits:** `55026f4` — refactor: extract DEFAULT_PACKS_PER_BOX to config | `be4c914` — fix(scraper): restrict TCGPlayer supplement to raw-grade | `91f5788` — chore: add .vercel to gitignore | `d98ec47` — test: add scraper test suite | `cad01eb` — feat(scripts): push handoffpack-www at end of session  
+**Decisions:** `end.sh` uses `git -C $DIR` pattern so it never changes working directory — safe even if holo push fails mid-way.
+
+---
+
+## What Was Just Done (2026-04-16)
+
 ### Full UX overhaul + multi-source scraping fixes ✅ COMPLETE
 
 **Modified:** `handoffpack-www/app/lab/holo/layout.tsx` — added Orbitron + Space Grotesk via next/font/google  
@@ -81,7 +95,7 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 
 ## Resolved Bugs (recent)
 - ✅ eBay scraper returning 0 results (2026-04-16) — selector changed from `li.s-card` to `li.s-item`; title/price/date selectors updated for 2024+ DOM
-- ✅ 1Y chart sparse/empty (2026-04-16) — TCGPlayer now supplements when <15 sales and days>=90
+- ✅ 1Y chart sparse/empty (2026-04-16) — TCGPlayer now supplements when <15 sales and days>=90 (raw grade only — graded queries excluded to avoid market-price contamination)
 - ✅ Box/pack flip math wrong (2026-04-16) — `method=box` now divides entered cost by packs (default 36)
 - ✅ Card images blocked by CSP (2026-04-16) — added pokemontcg.io to remotePatterns + img-src
 - ✅ Date range tabs not updating chart (2026-04-16) — cache key now includes days; hard cutoff in _handle_history
@@ -94,7 +108,7 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 - No monetization layer (fully free, no conversion path)
 - No auth — can't build personalized features (saved cards sync'd across devices, alerts)
 - Scraper fragility — PriceCharting HTML can change silently; no monitoring
-- Low test coverage on scraper.py (~31% overall)
+- Test coverage on scraper.py improved but still incomplete — critical paths covered, edge cases remain
 - No signal backtesting — can't validate accuracy claims
 
 ---
