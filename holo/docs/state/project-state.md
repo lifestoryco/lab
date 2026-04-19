@@ -14,6 +14,27 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
+## What Was Just Done (2026-04-19 — session 6)
+
+### Top Movers scroll with images + Recently Viewed row ✅ COMPLETE
+
+**Modified:** `handoffpack-www/components/lab/holo/HoloPage.tsx` — added `useRecentlyViewed` hook, `RecentlyViewed` component, `RecentItem` interface, `onMetaReady` callback in `CardDetail`
+
+**Commits:** `db396fb` feat(lab/holo): Top Movers scroll with images + Recently Viewed row
+
+**What was built:**
+- `useRecentlyViewed()` hook — localStorage persistence under `holo.recently_viewed`, stores up to 10 `{ card, name, image_small }` items newest-first, dedupes on re-visit
+- `RecentlyViewed` component — drag-scrollable horizontal row at the bottom of the home screen (below TopMovers). Violet accent (`border-violet-400`, `shadow-[0_0_28px_rgba(167,139,250,0.5)]`) to visually distinguish from TopMovers' gold. Hidden when list is empty.
+- `onMetaReady` prop on `CardDetail` — fires via `useEffect` when `history?.meta` loads. Root `HoloPage` captures it and calls `recentlyViewed.add({ card, name, image_small })`. Images are always real card art.
+- TopMovers card images were already present (from session 4); this session confirmed the scroll + image UX is intact.
+
+**Decisions:**
+- **Violet accent for Recently Viewed** — gold is taken by TopMovers/brand. Violet reads as "history/memory" vs. gold "active signal" — clear visual hierarchy.
+- **Capture via `onMetaReady` not on `setCardName`** — wait for meta so we always store the real `image_small`, never a blank placeholder. The ref-stable pattern (`onMetaReadyRef.current`) avoids stale closure issues across range changes.
+- **Max 10, dedupes on re-visit** — visiting the same card twice just promotes it to the top, not a duplicate entry.
+
+---
+
 ## What Was Just Done (2026-04-17 — session 5)
 
 ### Supabase L2 cache for scraped sales (dark-launched + DB migration applied) 🚧 AWAITING VERCEL ENV
