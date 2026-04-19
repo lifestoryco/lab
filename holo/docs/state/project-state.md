@@ -35,6 +35,32 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
+## What Was Just Done (2026-04-19 — session 8)
+
+### Collectr-style mobile home UX + feature-tile revert ✅ COMPLETE
+
+Short, focused session. Added discoverability improvements to the mobile home page, then trimmed back a piece that wasn't pulling its weight.
+
+**Added (kept):**
+- **Market pulse chip** at top of `HomeView` — green pulsing dot + "Market · Live" on the left; tappable top-mover ticker on the right (e.g. "▲ +28.3% Giratina V") that navigates straight to the card. Fetches `/api?action=movers&limit=10&window=7` on mount.
+- **Persistent mobile bottom nav on HomeView** — matches the card-detail nav pattern (`sm:hidden fixed inset-x-0 bottom-0 z-40`, safe-area-inset-bottom, 56px tap targets, gold-for-active, Fraunces caps labels). 4 tabs: Home / Movers / Watchlist / Search. Each smooth-scrolls to its section ref; Search focuses the combobox input and pops the mobile keyboard.
+- Section refs (`searchHeroRef`, `moversRef`, `watchlistRef`, `recentRef`) drive the nav. Local `HomeTab` type avoids collision with card-detail's existing `Tab`.
+
+**Added then removed (same session):**
+- 2×2 feature-tile grid (Top Movers / Watchlist / Recently Viewed / Flip Calculator) between hero and watchlist. Tiles only scrolled to content already visible below on the same page — the operator (rightly) flagged they "didn't go anywhere". Reverted along with the orphaned transient-hint state that only supported the Flip tile.
+
+**Modified:** `handoffpack-www/components/lab/holo/HoloPage.tsx` — `HomeView` restructured with pulse chip + bottom nav + section refs
+
+**Commits (this session):**
+- `e92ad61` feat(lab/holo): Collectr-style mobile home — tiles, market pulse, persistent bottom nav
+- `b89371f` revert(lab/holo): remove feature-tile grid (tiles didn't navigate anywhere meaningful)
+
+**Decisions:**
+- **Tiles require real destinations.** Scrolling to content that's already scroll-visible below isn't discoverability — it's friction. Future tiles must open a view that doesn't otherwise exist (e.g. a Sealed Box EV tool that doesn't need a card, or a "Browse by Set" index).
+- **Preserved the two patterns that do real work:** pulse chip (live market signal + one-tap navigation) and persistent bottom nav (always-visible wayfinding).
+
+---
+
 ## What Was Just Done (2026-04-19 — session 7)
 
 ### Supabase L2 cache fully activated in production ✅ COMPLETE
@@ -66,54 +92,6 @@ write-through populates L1 + L2 on every live scrape
 - **Legacy anon/service_role API keys** chosen over the new `sb_secret_*` format — `supabase_cache.py` was designed and docs reference the legacy key format, and both paths authenticate the same way against PostgREST. Switching to new-format keys is a future migration (separate rotation story).
 
 **Known cosmetic issue (not a blocker):** Vercel log stream doesn't show the `logger.info("supabase L2 HIT …")` messages because Python's default logging level is WARNING. This is purely a visibility gap — the cache is working (verified via Supabase rows). If we want log visibility, a one-line `logging.basicConfig(level=logging.INFO)` at the top of `api/index.py` would surface them. Filed for a later polish pass.
-
----
-
-## What Was Just Done (2026-04-17 — session 5)
-
-### Supabase L2 cache for scraped sales (dark-launched + DB migration applied) ✅ SUPERSEDED BY SESSION 7
-
-Built a persistent, cross-instance L2 cache for scraped TCG sales data in the handoffpack Supabase project. Code is shipped dark (feature-gated) and the database migration is applied + API-exposed; final activation pending the operator adding env vars to Vercel.
-
-**Pipeline after activation:**
-```
-request → L1 /tmp sqlite (<1ms) → L2 Supabase (50-150ms) → live scrape
-write-through populates both L1 and L2 after a live scrape
-```
-
-**New files:**
-- `db/migrations/001_holo_sales_cache.sql` — idempotent DDL. Creates `holo` schema (never `public`), two tables (`sales_cache` + `scrape_runs`), indexes, RLS-on-with-zero-policies (service_role-only access), explicit revokes on anon/authenticated/public
-- `pokequant/supabase_cache.py` — PostgREST client module. 3-4s timeouts, try/except around every call, fire-and-forget writes, deterministic sha1 sale_id for dedup. `is_enabled()` returns false when env vars unset → whole module no-ops
-- `docs/supabase-setup.md` — 4-step activation guide + verification queries + revert procedure
-
-**Modified:**
-- `pokequant/scraper.py` — `fetch_sales` wired with L2 check between L1 miss and live scrape, plus write-through after live scrape completes. Graceful fallback on any Supabase failure
-
-**Applied to Supabase (handoffpack2 project) via Chrome automation:**
-- Ran `001_holo_sales_cache.sql` in SQL editor — "Success. No rows returned"
-- Verified: `holo.sales_cache` and `holo.scrape_runs` exist with `rls_enabled = true`
-- Added `holo` to Data API → Exposed schemas (alongside `public`, `graphql_public`)
-- `public` schema untouched; handoffpack data fully isolated
-
-**Commits:** `7baf6dc` feat: Supabase L2 cache for scraped sales (dark-launched, feature-gated)
-
-**Decisions:**
-- **Dedicated `holo` schema, not `public`:** full isolation from handoffpack data. A stray prefix typo can't collide with existing tables.
-- **RLS enabled + zero policies:** defence in depth. Even if someone ever accidentally exposed a query via the anon key, there's literally no policy that grants read/write. Only service_role (bypasses RLS) can touch the cache.
-- **Feature-gated on env vars:** code ships dark. No behaviour change until the operator adds `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` to Vercel. Zero risk to production.
-- **Short timeouts + try/except everywhere:** a Supabase outage must NEVER kill a user request. Supabase being slow → fall through to live scrape, no 500s.
-- **Fire-and-forget writes:** user request returns before L2 write lands. Write failures are logged at DEBUG only.
-- **Idempotent sale_id (sha1 of source+url+price+date):** repeated scrapes of the same underlying sale dedupe cleanly via Postgres UNIQUE + `Prefer: resolution=ignore-duplicates`.
-
-**To activate (operator doing tomorrow):**
-1. Supabase Dashboard → Settings → API → copy `service_role` key
-2. Vercel → **holo** project (not handoffpack-www) → env vars:
-   - `SUPABASE_URL = https://ufilszeczpxxggxqaedd.supabase.co`
-   - `SUPABASE_SERVICE_ROLE_KEY = <key>`
-   - Scope: Production + Preview only
-3. Redeploy
-
-**Free-tier economics:** ~200 bytes/row; 1M sales ≈ 200 MB. Well under the 500 MB DB limit. No new bandwidth costs on Supabase free tier.
 
 ---
 
@@ -186,34 +164,18 @@ write-through populates both L1 and L2 after a live scrape
 
 ---
 
-## What Was Just Done (2026-04-16 — session 3)
-
-### Ultra Ball theme + full-bleed card takeover + draggable movers + mobile bottom nav + flip bug fix ✅ COMPLETE
-
-**Modified:** `api/index.py` — fixed `UnboundLocalError` on `DEFAULT_PACKS_PER_BOX` in `_handle_flip`. The config import happened mid-function, so Python treated the name as a local throughout, crashing the default value expression on line 274 whenever `?packs=` wasn't explicitly passed. This broke the web-UI "Bought Single" flip flow. Moved the import before first use; removed duplicate from later import line.
-**Modified (handoffpack-www):** `components/lab/holo/HoloPage.tsx` — large coordinated redesign (+394/-116):
-  - `Pokeball` component redesigned as Ultra Ball (gold radial gradient top, black H-stripes flaring from button, red pinstripe accent on equator, premium highlight streak, scoped gradient IDs via `React.useId()`)
-  - Brand header: bigger (size 56) ball with `holo-float` animation + `holo-spin-once` on hover, gold wordmark gradient, warmer black radial page background
-  - `useCardTheme` extended with `bgBase` / `bgDeep` for detail-page takeover
-  - Card detail view: full-bleed stacked gradient layers driven by card palette — the ENTIRE page background pulls from the card, not just the top glow. Frosted glass panels upgraded to blur 22–24px + saturate 1.4–1.5 with stronger edge highlights and accent-tinted shadow rings
-  - `TopMovers`: replaced 40s CSS marquee with native `overflow-x-auto` scroller + pointer-drag handlers + gentle rAF auto-scroll that pauses on interaction. New "View all" button opens `MoversModal` (portal, Escape to close, responsive grid of all loaded movers with image/name/price/delta)
-  - Mobile bottom nav: fixed 4-icon tab bar (Overview/Sales/Flip/Grade) with `safe-area-inset-bottom` padding and 56px tap targets; top tabs hidden on mobile (`hidden sm:flex`), replaced by a small current-tab pill
-  - Readability pass: `zinc-500/600` → `zinc-300/400` body text, min-h-44px tap targets, stronger panel borders  
-**Commits:** `a7cc2fc` fix(api): flip DEFAULT_PACKS_PER_BOX unbound-local | `0144481` (handoffpack-www) feat(lab/holo): ultra-ball theme + full-bleed takeover + draggable movers + mobile bottom nav  
-**Decisions:** Native scroll + pointer events for the movers carousel instead of a drag library — less bundle weight, respects browser fling momentum. Ultra Ball chosen over classic red: yellow/black/white palette gives a premium "serious trader" vibe that the classic red pokeball didn't, while the red pinstripe preserves a nod to the original. Full-bleed takeover only on detail page — lookup screen stays on the base dark theme so it feels like a distinct "portal" into the card.
-
----
-
 ## Previous Sessions
 
-- **Pokéball branding + card-driven palette + Top Movers endpoint (2026-04-16 s2):** `/api?action=movers` endpoint ranks ~12 liquid cards by `|change_pct|` over 7D with history outlier floor at 15% of median. Inline SVG Pokéball component, `useCardTheme` canvas-sampling hook, ambient top glow, auto-scroll marquee. Commits `1a4ec7c`, `1f23e27`.
-- **Session tooling + cleanup (2026-04-16 s1):** `end.sh` handoffpack-www push block, `DEFAULT_PACKS_PER_BOX` config constant, TCGPlayer supplement restricted to raw grade, 57-test scraper suite landed. Commits `55026f4` · `be4c914` · `91f5788` · `d98ec47` · `cad01eb`.
-- **Full UX overhaul + multi-source scraping fixes (2026-04-16):** Orbitron/Space Grotesk fonts (later replaced), card hero background, lightbox (later rebuilt as Pokédex overlay), glassmorphism panels, canvas card accent (`68644c9`); eBay selector fix, TCGPlayer sparse supplement, box flip math ÷ packs, `?action=meta` (`1da815d`).
-- **Session workflow + earlier fixes (2026-04-16):** Card images CSP, date range tab cache collision fix (`24c0542`), /start-session, /end-session, /run-task, /prompt-builder, /sync, /alpha-squad, /code-review commands (`fe5b7a5`, `caef365`, `58d14a1`).
+- **Ultra Ball theme + full-bleed card takeover + draggable movers + mobile bottom nav + flip bug fix (2026-04-16 s3):** `Pokeball` component redesigned as Ultra Ball (gold + black H-stripes + red pinstripe). `useCardTheme` extended with `bgBase/bgDeep`. Full-bleed stacked-gradient takeover on detail page. TopMovers switched to native drag-scroll with auto-scroll + "View all" modal. Mobile bottom nav (Overview/Sales/Flip/Grade) with safe-area-inset. Fixed `UnboundLocalError: DEFAULT_PACKS_PER_BOX` in flip handler. Commits `a7cc2fc` · `0144481`.
+- **Supabase L2 cache — dark launch + DB migration (2026-04-17 s5):** Created `holo` schema with `sales_cache` + `scrape_runs` tables, RLS on zero policies, idempotent migration (`db/migrations/001_holo_sales_cache.sql`). New `pokequant/supabase_cache.py` PostgREST client — feature-gated, graceful fallback, fire-and-forget writes. Wired write-through into `fetch_sales`. Migration applied via Chrome automation; `holo` added to Data API Exposed schemas. Handoffpack `public` untouched. Commit `7baf6dc`.
+- **Pokéball branding + card-driven palette + Top Movers endpoint (2026-04-16 s2):** `/api?action=movers` endpoint ranks ~12 liquid cards by `|change_pct|` over 7D. Inline SVG Pokéball, `useCardTheme` canvas-sampling hook. Commits `1a4ec7c`, `1f23e27`.
+- **Session tooling + cleanup (2026-04-16 s1):** `end.sh` handoffpack-www push block, `DEFAULT_PACKS_PER_BOX` config constant, 57-test scraper suite landed. Commits `55026f4`...`cad01eb`.
+- **Full UX overhaul + multi-source scraping fixes (2026-04-16):** Original fonts, card hero background, lightbox, glassmorphism; eBay selector fix, TCGPlayer sparse supplement, box flip math ÷ packs, `?action=meta`. Commits `68644c9`, `1da815d`.
+- **Session workflow + earlier fixes (2026-04-16):** Card images CSP, date range tab cache collision fix, /start-session, /end-session, /run-task, /prompt-builder, /sync, /alpha-squad, /code-review commands. Commits `24c0542`, `fe5b7a5`, `caef365`, `58d14a1`.
 
 ---
 
-## Current Status (as of 2026-04-17 — session 5)
+## Current Status (as of 2026-04-19 — session 8)
 
 ### Phase
 Post-MVP web launch. Pre-monetization. Actively iterating.
