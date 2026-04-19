@@ -35,9 +35,43 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
+## What Was Just Done (2026-04-19 — session 7)
+
+### Supabase L2 cache fully activated in production ✅ COMPLETE
+
+Finished the activation that was pending from session 5. All three steps applied via Chrome automation:
+
+1. **Service role key** — grabbed from Supabase Dashboard → Settings → API (Legacy tab).
+2. **Vercel env vars** added to the **holo** project (not handoffpack-www):
+   - `SUPABASE_URL = https://ufilszeczpxxggxqaedd.supabase.co` — Production + Preview
+   - `SUPABASE_SERVICE_ROLE_KEY` — Production + Preview, marked **Sensitive** so Vercel masks the value in the dashboard post-save
+3. **Redeployed** the holo Vercel project. Deployment ready in 25s.
+
+**Verification:**
+- `curl https://holo-lac-three.vercel.app/api?action=history&card=Mew%20VMAX%20114&grade=raw&days=30` returned 86 sales (first hit 5.65s cold scrape; second hit 191ms)
+- Queried `holo.sales_cache` in Supabase SQL editor — 5 Mew VMAX ebay rows visible with real prices ($15.00, $22.50, $13.99, $10.81, $8.99), all keyed under `card_slug = mew-vmax-114`. Write-through from production confirmed.
+
+**End-to-end pipeline is live:**
+```
+request → L1 /tmp sqlite → L2 Supabase holo.sales_cache → live PC/eBay scrape
+          (warm instances)  (cross-instance shared)      (cold-only fallback)
+write-through populates L1 + L2 on every live scrape
+```
+
+**Commits:** None (no code change — this session was pure activation).
+
+**Decisions:**
+- **Marked SUPABASE_SERVICE_ROLE_KEY as Sensitive** — Vercel masks the value in the dashboard after save. Slightly less convenient for debugging but the correct default for a bypass-RLS secret.
+- **Scoped to Production + Preview only** — skipped Development so local `vercel dev` testing doesn't pollute production cache.
+- **Legacy anon/service_role API keys** chosen over the new `sb_secret_*` format — `supabase_cache.py` was designed and docs reference the legacy key format, and both paths authenticate the same way against PostgREST. Switching to new-format keys is a future migration (separate rotation story).
+
+**Known cosmetic issue (not a blocker):** Vercel log stream doesn't show the `logger.info("supabase L2 HIT …")` messages because Python's default logging level is WARNING. This is purely a visibility gap — the cache is working (verified via Supabase rows). If we want log visibility, a one-line `logging.basicConfig(level=logging.INFO)` at the top of `api/index.py` would surface them. Filed for a later polish pass.
+
+---
+
 ## What Was Just Done (2026-04-17 — session 5)
 
-### Supabase L2 cache for scraped sales (dark-launched + DB migration applied) 🚧 AWAITING VERCEL ENV
+### Supabase L2 cache for scraped sales (dark-launched + DB migration applied) ✅ SUPERSEDED BY SESSION 7
 
 Built a persistent, cross-instance L2 cache for scraped TCG sales data in the handoffpack Supabase project. Code is shipped dark (feature-gated) and the database migration is applied + API-exposed; final activation pending the operator adding env vars to Vercel.
 
@@ -259,7 +293,7 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 - Scraper fragility — PriceCharting HTML can change silently; no monitoring
 - Test coverage on scraper.py improved but still incomplete — critical paths covered, edge cases remain
 - No signal backtesting — can't validate accuracy claims
-- **L2 Supabase cache pending Vercel activation** — migration applied + schema exposed, operator needs to add SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY env vars and redeploy
+- ~~L2 Supabase cache pending Vercel activation~~ ✅ **RESOLVED session 7** — env vars added, deployment ready, write-through confirmed with real rows in `holo.sales_cache`
 
 ---
 
