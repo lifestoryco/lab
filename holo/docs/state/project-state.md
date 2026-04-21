@@ -14,6 +14,49 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
+## What Was Just Done (2026-04-21 — session 9)
+
+### Interactive price chart scrubber ✅ COMPLETE
+
+Drag mouse or finger across the price sparkline to see price + date at each data point.
+
+**Modified:** `handoffpack-www/components/lab/holo/HoloPage.tsx` — `Sparkline` component fully reworked with scrubber + all code-review fixes applied same session
+
+**Commits:**
+- `408c052` feat(lab/holo): interactive price scrubber on sparkline chart
+- `0539b1e` fix(lab/holo): address all code-review findings on price scrubber
+
+**What was built:**
+- `onPointerMove` handler maps `clientX → nearest data point` (unified mouse + touch via Pointer Events API)
+- Dashed vertical crosshair line tracks cursor position inside the SVG
+- Scrubber dot rendered **outside** the SVG as an absolutely-positioned `<div>` — avoids oval distortion from `preserveAspectRatio="none"`
+- Floating tooltip: accent-colored monospace price + UTC-correct date + sale count. Flips left/right at 58% threshold to prevent edge clipping.
+- Last-point static dot hides while scrubbing to avoid visual collision
+
+**Code-review fixes applied immediately after (all severity levels):**
+- `setPointerCapture` on `pointerdown` — touch scrubs stay tracked past SVG edge bounds
+- `touch-action: none` moved from wrapper `<div>` to `<svg>` only — mobile page scroll no longer blocked
+- `onPointerCancel` handler — clears frozen tooltip on iOS interrupts (call, Face ID, palm rejection)
+- `useMemo` for `xs`/`ys`/path geometry — heavy computations no longer run at 60Hz during scrub ticks
+- `useCallback` for all 4 pointer handlers — stable refs across renders
+- `scrubbedPt` bounds check — stale `idx` after grade/range switch can't crash
+- `formatScrubDate` + `timeZone: 'UTC'` — correct date for US west-coast users
+- `rect.width === 0` guard in handler
+- `tabular-nums` added to date line in tooltip
+- `formatScrubDate` catch returns `'—'` not raw API string
+- `useId()` replaces `spark-grad-${tone}` — per-instance gradient ID, no DOM collision across Sparklines
+- `SPARK_WIDTH`/`SPARK_PAD` extracted as module-level constants; clean `useMemo` deps
+- `role="img"` + `aria-label` on SVG for screen reader accessibility
+- Removed unused `svgRef`; `e.currentTarget.getBoundingClientRect()` used instead
+
+**Decisions:**
+- **Pointer Events API over mouse+touch split** — `onPointerMove` unifies both inputs; `setPointerCapture` handles the touch boundary case cleanly without separate touch event handlers.
+- **Dot outside SVG** — `preserveAspectRatio="none"` with unequal x/y scale renders SVG circles as ovals. A CSS div is always a circle.
+- **useMemo for geometry, not the handler** — xs/ys are computed once per data load; the handler stays lightweight (just index lookup + setScrub).
+- **useId() for gradient IDs** — React 18's stable ID primitive; zero runtime cost, eliminates the multi-Sparkline collision forever.
+
+---
+
 ## What Was Just Done (2026-04-19 — session 6)
 
 ### Top Movers scroll with images + Recently Viewed row ✅ COMPLETE
@@ -175,7 +218,7 @@ write-through populates L1 + L2 on every live scrape
 
 ---
 
-## Current Status (as of 2026-04-19 — session 8)
+## Current Status (as of 2026-04-21 — session 9)
 
 ### Phase
 Post-MVP web launch. Pre-monetization. Actively iterating.
@@ -194,6 +237,7 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 - Card image lightbox: fullscreen overlay, ESC to dismiss
 - Back navigation: Orbitron pill button with accent hover
 - Date range tabs: 7D / 30D / 90D / 1Y sparkline (1Y shows sparsity warning if <20 points); active tab has solid-accent background + glow
+- **Interactive price scrubber**: drag mouse or finger across the sparkline to inspect price + date at each data point. Crosshair line, glowing dot, floating tooltip (accent-colored monospace price + UTC date + sale count). Pointer capture keeps touch tracking stable past edge bounds. `touch-action:none` scoped to SVG only so mobile page scroll works. Per-instance `useId()` gradient IDs prevent multi-chart collision.
 - Grade selector: Raw / PSA 9 / PSA 10
 - Hero price ("Latest Price") + delta chip + Hi/Lo/Open stats; **outlier floor at 15% median** filters junk listings from LOW stat
 - Trade signal (STRONG BUY → STRONG SELL) with RSI-14
