@@ -14,6 +14,28 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
+## What Was Just Done (2026-04-21 — session 9 hotfix)
+
+### Crash on back-nav when Recently Viewed has stale entries ✅ COMPLETE
+
+User reported a full-page crash ("Application error: a client-side exception has occurred") when navigating back from a card detail. Reproduced on production via Chrome console — `TypeError: Cannot read properties of undefined (reading '0')` inside an `Array.map`. Traced to `RecentlyViewed` rendering `item.name[0]` when a stale localStorage entry had no `name` field (from an older schema or an incomplete `handleMetaReady` fire).
+
+**Modified:** `handoffpack-www/components/lab/holo/HoloPage.tsx` — hardened `useRecentlyViewed` hook and render site
+
+**Commits:**
+- `8206a1d` fix(lab/holo): crash on back nav when Recently Viewed has stale entries
+
+**Three-layer fix:**
+- **Self-healing localStorage** — `useRecentlyViewed` validates parsed list on mount, drops entries missing `card`/`name`, and writes back the pruned list so bad data auto-clears on next load.
+- **Reject incomplete writes** — `add()` bails if `card` or `name` is missing; coerces `image_small` to `''` so `JSON.stringify` can't drop the field to undefined.
+- **Safe render** — `item.name?.[0] || '?'` as belt-and-suspenders for any future stale entry.
+
+**Decisions:**
+- **Three layers not one** — fixing only the render would leave bad data in localStorage forever. Fixing only the hook would still crash anyone whose browser had the data from before the fix deployed. All three layers together make the bug unrecoverable.
+- **Reproduced in Chrome first** — confirmed the exact error signature before writing the fix. Cheap step, kept the fix narrowly targeted.
+
+---
+
 ## What Was Just Done (2026-04-21 — session 9)
 
 ### Interactive price chart scrubber ✅ COMPLETE
@@ -271,6 +293,7 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 ---
 
 ## Resolved Bugs (recent)
+- ✅ Full-app crash on back-nav when Recently Viewed had stale entries (2026-04-21) — `RecentlyViewed` rendered `item.name[0]` without guarding for undefined; fixed with 3-layer hardening in `useRecentlyViewed` (self-healing prune on mount, rejecting incomplete writes, optional-chaining at render)
 - ✅ Pokédex overlay showed wrong card printing (2026-04-17) — overlay re-searched by name only; now passes `meta.id` and backend uses `_lookup_card_by_id` for an exact pokemontcg.io match
 - ✅ Pokédex overlay transparent on desktop (2026-04-17) — `bg-black/92` not in Tailwind's default scale, silently compiled to no background; replaced with inline rgba
 - ✅ Card takeover confined to hero only (2026-04-17) — root div's opaque gradient painted over `-z-10` layers; moved base to `-z-20` fixed + `isolation: isolate` on root; gradient flood no longer fades to black
