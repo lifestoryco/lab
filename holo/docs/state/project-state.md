@@ -30,11 +30,14 @@ Full-app review focused on quality and price-data accuracy. Found 2 CRITICAL and
 - `H-1-7_04-22_shared-http-session.md` — share `requests.Session` between api/ and pokequant/
 - `H-1-8_04-22_scraper-drift-canary.md` — daily canary + Supabase baseline + GitHub Actions webhook alert
 - `H-1-9_04-22_edge-rate-limit.md` — Upstash Redis + Next.js middleware per-IP / per-action rate limits
+- `H-1-10_04-22_multi-source-adapters.md` — PhD-level XL prompt: unified `SourceAdapter` ABC + `NormalizedSale` schema + registry + reconciler + 9 concrete adapters (eBay Browse API, 130point, PSA Pop, BGS Pop, Cardmarket, Card Ladder, TCGPlayer Pro, Limitless, Goldin/PWCC). Feature-flagged per adapter; credential-gated adapters stub-ship disabled; parity test gates registry cutover.
 
 **Commits:**
 - `d6f8b80` fix(holo): accuracy hardening — flag market-estimate data, dedup PC+eBay, tz-aware dates, robust movers floor
 - `8398d89` (handoffpack-www) feat(lab/holo): surface data_quality_warning on flip + price chart
 - `30e59bd` docs: queue 4 hardening task prompts from 2026-04-22 code review
+- `7bef122` docs: update project state after session 10 (code-review + accuracy hardening)
+- `7c78be9` docs: queue H-1.10 multi-source adapter platform prompt
 
 **Decisions:**
 - **`source_type` over weighted blending.** Considered down-weighting market-estimate records inside `generate_comp`. Chose explicit tagging + UI warning instead — simpler, more honest ("we're showing you an estimate, not a sale"), and non-destructive to existing comp math. Blending can come later once we have enough data to calibrate the weight.
