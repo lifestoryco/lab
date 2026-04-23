@@ -1,0 +1,37 @@
+name: Scraper drift canary
+
+# Disabled by default — trigger manually from the Actions tab until the
+# baseline has been seeded and tolerance tuned. Once stable, uncomment the
+# schedule block to run daily at 13:00 UTC.
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: "0 13 * * *"
+
+jobs:
+  canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install
+        run: pip install -r requirements.txt pytest
+
+      - name: Run live canary
+        env:
+          HOLO_RUN_CANARY: "1"
+        run: pytest tests/canary.py -v -m canary
+
+      # Uncomment once a webhook is provisioned.
+      # - name: Alert on failure
+      #   if: failure()
+      #   run: |
+      #     curl -X POST "${{ secrets.CANARY_WEBHOOK }}" \
+      #       -H 'Content-Type: application/json' \
+      #       -d '{"text":"Holo scraper canary failed — check recent deploys + upstream DOM changes"}'
