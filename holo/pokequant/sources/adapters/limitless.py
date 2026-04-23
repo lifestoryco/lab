@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Sequence
+from typing import Any, Sequence
 
 from pokequant.http import session as _http_session
 from pokequant.sources.base import SourceAdapter
@@ -43,7 +43,7 @@ class LimitlessAdapter(SourceAdapter):
         # Flip enabled_by_default=True when /api?action=meta_signal lands.
         return []
 
-    def health_check(self) -> dict:
+    def health_check(self) -> dict[str, Any]:
         t0 = time.time()
         try:
             resp = _http_session().get(_BASE, timeout=5)

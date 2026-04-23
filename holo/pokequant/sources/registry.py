@@ -9,7 +9,7 @@ import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Iterable
+from typing import Any, Iterable
 
 from pokequant.sources.base import SourceAdapter
 from pokequant.sources.exceptions import InvalidSaleRecord
@@ -46,7 +46,7 @@ def _validate(r: NormalizedSale) -> None:
         raise InvalidSaleRecord(f"lot_size>1 only valid on sale records ({r.adapter})")
 
 
-def _emit_metric(event: str, **fields) -> None:
+def _emit_metric(event: str, **fields: Any) -> None:
     payload = {"ts": time.time(), "event": event, **fields}
     print(json.dumps(payload, default=str), file=sys.stderr)
 

@@ -27,7 +27,7 @@ from pokequant.sources.registry import SourceRegistry, registry
 #     from pokequant.sources import LAST_AUDIT
 #     audit = LAST_AUDIT.get()
 #     if audit is not None: response["reconciliation_audit"] = audit.to_dict()
-LAST_AUDIT: ContextVar = ContextVar("LAST_AUDIT", default=None)
+LAST_AUDIT: ContextVar[object | None] = ContextVar("LAST_AUDIT", default=None)
 
 __all__ = [
     "AdapterNotConfigured",

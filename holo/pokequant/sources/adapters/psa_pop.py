@@ -16,7 +16,7 @@ import re
 import sqlite3
 import time
 from datetime import date, datetime, timezone
-from typing import Sequence
+from typing import Any, Sequence
 
 from pokequant.http import session as _http_session
 from pokequant.sources.base import SourceAdapter
@@ -30,7 +30,7 @@ _CACHE_DB = os.environ.get("HOLO_CACHE_DB", "/tmp/holo_cache.db")
 _CACHE_TTL_S = 7 * 24 * 3600  # weekly
 
 
-def _cache_get(key: str) -> dict | None:
+def _cache_get(key: str) -> dict[str, Any] | None:
     try:
         with sqlite3.connect(_CACHE_DB) as conn:
             conn.execute(
@@ -49,12 +49,13 @@ def _cache_get(key: str) -> dict | None:
     if time.time() - float(fetched_at) > _CACHE_TTL_S:
         return None
     try:
-        return json.loads(payload_json)
+        loaded: dict[str, Any] = json.loads(payload_json)
+        return loaded
     except json.JSONDecodeError:
         return None
 
 
-def _cache_put(key: str, payload: dict) -> None:
+def _cache_put(key: str, payload: dict[str, Any]) -> None:
     try:
         with sqlite3.connect(_CACHE_DB) as conn:
             conn.execute(
@@ -107,7 +108,7 @@ class PSAPopAdapter(SourceAdapter):
             )
         ]
 
-    def fetch_pop(self, card_name: str) -> dict:
+    def fetch_pop(self, card_name: str) -> dict[str, Any]:
         """Return {pop10, pop9, pop8, total, url} for a card or {} on failure.
 
         Used by api/index.py::_handle_grade_roi to replace the hardcoded
@@ -137,7 +138,7 @@ class PSAPopAdapter(SourceAdapter):
         return pop
 
     @staticmethod
-    def _parse(html: str, url: str) -> dict:
+    def _parse(html: str, url: str) -> dict[str, Any]:
         """Extract pop10 / pop9 / pop8 / total from PSA's pop-report page.
 
         PSA's table has rows per grade with columns: grade, count, percentage.
@@ -146,7 +147,7 @@ class PSAPopAdapter(SourceAdapter):
         from bs4 import BeautifulSoup
 
         soup = BeautifulSoup(html, "html.parser")
-        pop = {"pop10": 0, "pop9": 0, "pop8": 0, "total": 0, "url": url}
+        pop: dict[str, Any] = {"pop10": 0, "pop9": 0, "pop8": 0, "total": 0, "url": url}
 
         # PSA historically uses a #pop-report-table or similar. Fall back to
         # a row-scan with grade-label detection.
@@ -167,7 +168,7 @@ class PSAPopAdapter(SourceAdapter):
         pop["total"] = pop["pop10"] + pop["pop9"] + pop["pop8"]
         return pop if pop["total"] > 0 else {}
 
-    def health_check(self) -> dict:
+    def health_check(self) -> dict[str, Any]:
         t0 = time.time()
         try:
             resp = _http_session().get(_PSA_BASE, timeout=5)

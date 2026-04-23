@@ -11,7 +11,7 @@ import logging
 import re
 import time
 from datetime import date, datetime
-from typing import Sequence
+from typing import Any, Sequence
 
 from pokequant.http import session as _http_session
 from pokequant.sources.base import SourceAdapter
@@ -103,7 +103,7 @@ class OneThirtyPointAdapter(SourceAdapter):
             )
         return out
 
-    def health_check(self) -> dict:
+    def health_check(self) -> dict[str, Any]:
         t0 = time.time()
         try:
             resp = _http_session().get(_BASE, timeout=5)

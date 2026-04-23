@@ -8,7 +8,7 @@ import logging
 import statistics
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
-from typing import Iterable
+from typing import Any, Iterable
 
 from pokequant.sources.fx import to_usd
 from pokequant.sources.priority import priority_for
@@ -25,7 +25,7 @@ class ReconciliationAudit:
     fx_normalized: int = 0
     warnings: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "reconciled_count": self.reconciled_count,
             "by_adapter": dict(self.by_adapter),

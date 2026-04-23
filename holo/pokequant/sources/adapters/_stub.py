@@ -7,7 +7,7 @@ which credential is missing so /api?action=health surfaces the setup gap.
 from __future__ import annotations
 
 import os
-from typing import Sequence
+from typing import Any, Sequence
 
 from pokequant.sources.base import SourceAdapter
 from pokequant.sources.schema import Grade, NormalizedSale
@@ -36,7 +36,7 @@ class CredentialStub(SourceAdapter):
             return False
         return not self.missing_credentials()
 
-    def health_check(self) -> dict:
+    def health_check(self) -> dict[str, Any]:
         missing = self.missing_credentials()
         if missing:
             return {

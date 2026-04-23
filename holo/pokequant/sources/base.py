@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from typing import Sequence
+from typing import Any, Sequence
 
 from pokequant.sources.schema import Currency, Grade, NormalizedSale
 
@@ -25,7 +25,7 @@ class SourceAdapter(ABC):
     ) -> Sequence[NormalizedSale]: ...
 
     @abstractmethod
-    def health_check(self) -> dict:
+    def health_check(self) -> dict[str, Any]:
         """Return {"ok": bool, "latency_ms": float, "error": str | None}.
 
         Must not raise. Called by /api?action=health.
