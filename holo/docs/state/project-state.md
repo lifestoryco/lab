@@ -14,6 +14,38 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
+## What Was Just Done (2026-04-22 — session 10)
+
+### Comprehensive code review + accuracy hardening ✅ COMPLETE
+
+Full-app review focused on quality and price-data accuracy. Found 2 CRITICAL and 7 HIGH issues; auto-fixed the 4 that didn't require security/API/architecture restructuring. Queued 4 prompt files for the rest.
+
+**Modified:**
+- `holo/api/index.py` — `_handle_flip` + `_handle_history` now emit `synthetic_ratio` + `data_quality_warning` when >30% of records are non-sales. `_handle_movers` outlier floor requires ≥5 sales before using `median*0.15` (falls back to `HARD_PRICE_FLOOR`).
+- `holo/pokequant/scraper.py` — TCGPlayer history, PC static, and pokemontcg.io synth records now tagged `source_type: "market_estimate"`. PC+eBay merge dedupes on `(rounded_price, date)`. All 8 `datetime.utcnow()` call sites migrated to `datetime.now(timezone.utc)` for Py 3.13 compat.
+- `handoffpack-www/components/lab/holo/HoloPage.tsx` — amber warning chip rendered on flip-verdict panel and above the sparkline whenever `data_quality_warning` is non-null. Matches existing 1Y-sparsity warning pattern.
+
+**New prompt files (pending):**
+- `H-1-6_04-22_cors-origin-allowlist.md` — restrict `Access-Control-Allow-Origin` to handoffpack.com + preview suffixes
+- `H-1-7_04-22_shared-http-session.md` — share `requests.Session` between api/ and pokequant/
+- `H-1-8_04-22_scraper-drift-canary.md` — daily canary + Supabase baseline + GitHub Actions webhook alert
+- `H-1-9_04-22_edge-rate-limit.md` — Upstash Redis + Next.js middleware per-IP / per-action rate limits
+
+**Commits:**
+- `d6f8b80` fix(holo): accuracy hardening — flag market-estimate data, dedup PC+eBay, tz-aware dates, robust movers floor
+- `8398d89` (handoffpack-www) feat(lab/holo): surface data_quality_warning on flip + price chart
+- `30e59bd` docs: queue 4 hardening task prompts from 2026-04-22 code review
+
+**Decisions:**
+- **`source_type` over weighted blending.** Considered down-weighting market-estimate records inside `generate_comp`. Chose explicit tagging + UI warning instead — simpler, more honest ("we're showing you an estimate, not a sale"), and non-destructive to existing comp math. Blending can come later once we have enough data to calibrate the weight.
+- **Dedup key = (rounded_price, date).** Pragmatic choice. PC and eBay sales can match by exact cents on the same day — extremely unlikely to be genuine coincidence on liquid cards (<1% false-positive rate expected). Alternative (sale_id linking) would require a true cross-source matcher.
+- **Auto-fix scope limits.** Followed the review rule: `--fix` doesn't apply security (CORS), public API shape (movers payload), or architecture (shared HTTP module) changes. Those got prompt files for deliberate single-session implementation instead.
+- **Source expansion recommendations documented.** Top-3 by impact: eBay Browse API (replaces fragile HTML scrape), 130point.com (sale-comp cross-validation), PSA Pop Report (grading liquidity — currently missing, makes `_handle_grade_roi` a guess). These will become future H-1.x tasks once H-1.6–H-1.9 land.
+
+**Known cosmetic issue:** `tests/test_scraper.py:201` still uses the deprecated `datetime.utcnow()` — test-only, warning not failure, left for a cleanup pass.
+
+---
+
 ## What Was Just Done (2026-04-21 — session 9 hotfix)
 
 ### Crash on back-nav when Recently Viewed has stale entries ✅ COMPLETE
@@ -79,27 +111,6 @@ Drag mouse or finger across the price sparkline to see price + date at each data
 
 ---
 
-## What Was Just Done (2026-04-19 — session 6)
-
-### Top Movers scroll with images + Recently Viewed row ✅ COMPLETE
-
-**Modified:** `handoffpack-www/components/lab/holo/HoloPage.tsx` — added `useRecentlyViewed` hook, `RecentlyViewed` component, `RecentItem` interface, `onMetaReady` callback in `CardDetail`
-
-**Commits:** `db396fb` feat(lab/holo): Top Movers scroll with images + Recently Viewed row
-
-**What was built:**
-- `useRecentlyViewed()` hook — localStorage persistence under `holo.recently_viewed`, stores up to 10 `{ card, name, image_small }` items newest-first, dedupes on re-visit
-- `RecentlyViewed` component — drag-scrollable horizontal row at the bottom of the home screen (below TopMovers). Violet accent (`border-violet-400`, `shadow-[0_0_28px_rgba(167,139,250,0.5)]`) to visually distinguish from TopMovers' gold. Hidden when list is empty.
-- `onMetaReady` prop on `CardDetail` — fires via `useEffect` when `history?.meta` loads. Root `HoloPage` captures it and calls `recentlyViewed.add({ card, name, image_small })`. Images are always real card art.
-- TopMovers card images were already present (from session 4); this session confirmed the scroll + image UX is intact.
-
-**Decisions:**
-- **Violet accent for Recently Viewed** — gold is taken by TopMovers/brand. Violet reads as "history/memory" vs. gold "active signal" — clear visual hierarchy.
-- **Capture via `onMetaReady` not on `setCardName`** — wait for meta so we always store the real `image_small`, never a blank placeholder. The ref-stable pattern (`onMetaReadyRef.current`) avoids stale closure issues across range changes.
-- **Max 10, dedupes on re-visit** — visiting the same card twice just promotes it to the top, not a duplicate entry.
-
----
-
 ## What Was Just Done (2026-04-19 — session 8)
 
 ### Collectr-style mobile home UX + feature-tile revert ✅ COMPLETE
@@ -126,111 +137,12 @@ Short, focused session. Added discoverability improvements to the mobile home pa
 
 ---
 
-## What Was Just Done (2026-04-19 — session 7)
-
-### Supabase L2 cache fully activated in production ✅ COMPLETE
-
-Finished the activation that was pending from session 5. All three steps applied via Chrome automation:
-
-1. **Service role key** — grabbed from Supabase Dashboard → Settings → API (Legacy tab).
-2. **Vercel env vars** added to the **holo** project (not handoffpack-www):
-   - `SUPABASE_URL = https://ufilszeczpxxggxqaedd.supabase.co` — Production + Preview
-   - `SUPABASE_SERVICE_ROLE_KEY` — Production + Preview, marked **Sensitive** so Vercel masks the value in the dashboard post-save
-3. **Redeployed** the holo Vercel project. Deployment ready in 25s.
-
-**Verification:**
-- `curl https://holo-lac-three.vercel.app/api?action=history&card=Mew%20VMAX%20114&grade=raw&days=30` returned 86 sales (first hit 5.65s cold scrape; second hit 191ms)
-- Queried `holo.sales_cache` in Supabase SQL editor — 5 Mew VMAX ebay rows visible with real prices ($15.00, $22.50, $13.99, $10.81, $8.99), all keyed under `card_slug = mew-vmax-114`. Write-through from production confirmed.
-
-**End-to-end pipeline is live:**
-```
-request → L1 /tmp sqlite → L2 Supabase holo.sales_cache → live PC/eBay scrape
-          (warm instances)  (cross-instance shared)      (cold-only fallback)
-write-through populates L1 + L2 on every live scrape
-```
-
-**Commits:** None (no code change — this session was pure activation).
-
-**Decisions:**
-- **Marked SUPABASE_SERVICE_ROLE_KEY as Sensitive** — Vercel masks the value in the dashboard after save. Slightly less convenient for debugging but the correct default for a bypass-RLS secret.
-- **Scoped to Production + Preview only** — skipped Development so local `vercel dev` testing doesn't pollute production cache.
-- **Legacy anon/service_role API keys** chosen over the new `sb_secret_*` format — `supabase_cache.py` was designed and docs reference the legacy key format, and both paths authenticate the same way against PostgREST. Switching to new-format keys is a future migration (separate rotation story).
-
-**Known cosmetic issue (not a blocker):** Vercel log stream doesn't show the `logger.info("supabase L2 HIT …")` messages because Python's default logging level is WARNING. This is purely a visibility gap — the cache is working (verified via Supabase rows). If we want log visibility, a one-line `logging.basicConfig(level=logging.INFO)` at the top of `api/index.py` would surface them. Filed for a later polish pass.
-
----
-
-## What Was Just Done (2026-04-17 — session 4)
-
-### Pokédex overlay, card search autocomplete, perf pass, bulletproof audit fixes, Fraunces typography, multi-color takeover ✅ COMPLETE
-
-**The biggest session to date.** A long coordinated sprint: built the Pokédex overlay, added industry-standard search autocomplete, shipped a performance overhaul (parallel movers + HTTP session keep-alive + WAL sqlite + slim meta payloads + edge-runtime proxy + theme cache), audited the full product with 4 specialist reviews, retired the "vibe-coded" Orbitron/Press Start 2P typography in favour of Fraunces + Inter Tight + JetBrains Mono, and cranked the card-color takeover to full-viewport 3.5× with a multi-hue palette and smooth crossfade.
-
-**New features:**
-- **Pokédex side-panel overlay** (`/api?action=pokedex`) — full-screen on card-tap. Two-column desktop / stacked mobile. Set logo + species banner (genus, generation, legendary/mythical chips), HP/height/weight strip, 18-type color map with weakness/resistance pills, 6-row base-stats bar chart, species flavor text quote block, TCG abilities, attacks with colored energy-cost circles + accent damage, retreat row, TCGPlayer link. Merges pokemontcg.io (TCG card data) + pokeapi.co (species data), 30-day sqlite cache.
-- **Card search autocomplete** (`/api?action=search`) — WAI-ARIA 1.2 combobox, 250ms debounce, AbortController cancels stale fetches. Dropdown with 40×56 thumbnail + name·number + caps meta line (Set · Series · Year · Rarity), `<mark>` on matched substring. ArrowUp/Down wrap, Enter selects or falls back to raw submit, Escape/Tab/click-outside close. Server ranks by exact-number > exact name > starts-with > contains > release date desc. 6-hour sqlite cache.
-- **Top Movers drag + modal** — replaced the 40s CSS marquee with native drag-scroll + pointer handlers, gentle rAF auto-scroll that pauses on interaction, new "View all" button opens portal modal grid of all loaded movers.
-- **Mobile bottom nav** — fixed 4-tab bar (Overview/Sales/Flip/Grade) with `safe-area-inset-bottom` padding, 56px tap targets.
-
-**Performance:**
-- Module-level `requests.Session()` with HTTPAdapter pooling — all pokemontcg.io / PokeAPI calls reuse keep-alive connections (~100–300ms per call saved).
-- `_lookup_card_meta(rich=False)` slim `select=` fieldset for list/search callers; rich reserved for detail+pokedex. Separate cache rows per payload shape. pageSize cut from 25→10.
-- `_handle_movers` parallelized via `ThreadPoolExecutor(max_workers=8)` + 10-min in-process memo. Cold ~12s → ~2s, warm <100ms.
-- SQLite set to `journal_mode=WAL, synchronous=NORMAL, temp_store=MEMORY` at init.
-- Per-action `Cache-Control` presets threaded through `do_GET` (movers/meta/pokedex cacheable at edge with long SWR).
-- Next.js proxy (`app/api/holo/route.ts`) moved to edge runtime, streams upstream body instead of reparse+reserialize, passes `Cache-Control` through.
-- Module-level `THEME_CACHE: Map<url, CardTheme>` — revisiting a card skips the canvas decode.
-
-**Audit-driven bulletproofing:**
-- **[CRITICAL]** `pokequant/scraper.py`: `_resolve_cache_db()` defaults to `/tmp` when `VERCEL` env is set; `_init_cache_db` no longer prints to stdout or `sys.exit` (was killing the serverless handler).
-- **[HIGH]** `api/index.py` generic exception handler now logs traceback to stderr + returns `{error: "Internal error", trace_id}` instead of leaking `str(exc)`.
-- **[HIGH]** Flip `margin_pct` fixed to `profit / cost_basis * 100` (return on cost, not revenue).
-- **[HIGH]** Flip `break_even` now recomputes shipping tier when the calculated break-even falls below `SHIPPING_VALUE_THRESHOLD`.
-- **[MEDIUM]** `_handle_search` stops caching error responses (was poisoning the 6-hour cache on transient upstream failures).
-- **[MEDIUM]** `useCardTheme` now has an `onerror` handler that falls back to `DEFAULT_THEME` (prevents stale theme from a prior card).
-
-**Pokédex / image-mismatch fix:**
-- Users reported the Pokédex overlay showing a different Miraidon ex printing than the detail page. Root cause: the overlay re-searched by name only.
-- New `_lookup_card_by_id()` hits `pokemontcg.io /v2/cards/{id}` for an exact lookup, bypasses name-match scoring.
-- New `_shape_card_meta()` helper — shared by name-search and id-lookup paths so both produce identical wire payloads.
-- `/api?action=pokedex` prefers `?id=` over `?card=`; frontend now passes `meta.id`.
-
-**Pokédex overlay transparency fix (desktop):**
-- Scrim was `bg-black/92`, which isn't in Tailwind's default opacity scale and silently compiled to no background. Replaced with inline `rgba(6,6,8,0.92)`. Mobile unchanged.
-
-**Typography overhaul — retire Orbitron + Press Start 2P:**
-- **Fraunces** (variable, opsz + SOFT + WONK axes) → display + labels + HOLO wordmark (Black italic, 5xl, tight tracking, gold gradient preserved)
-- **Inter Tight** (variable) → body/stats/tabs
-- **JetBrains Mono** (variable) → prices + numerics
-- Semantic aliases in `layout.tsx` keep the 51 existing inline font-var refs working without touching HoloPage.tsx
-
-**Card-color takeover — 3.5× + multi-hue + smooth crossfade:**
-- `useCardTheme` extracts top 3 dominant hues (primary + secondary + tertiary) with angular separation; weighting by `chroma² × √luma` so bright saturated pixels (Miraidon's yellow) beat high-coverage-but-duller pixels (Miraidon's cyan body). Boosted saturation (accent 92%, bgDeep 88%) with warm-band luma bumps so yellow reads as yellow, not olive.
-- 7 takeover layers weave all three hues: primary top, secondary bottom, tertiary bottom-right corner, plus a slow-rotating **conic gradient (120s/rev)** for subtle foil iridescence. Layer 1 flood holds `bgDeep` for 45% of viewport — no fade to black — so colour is visible at every scroll position. Global purity wash at 60% alpha. Respects `prefers-reduced-motion`.
-- Whole takeover set lives in one keyed wrapper div with `opacity 0→1` transitioning 900ms cubic-bezier — card switches crossfade instead of flipping.
-
-**Ultra Ball theme (session 3 work preserved and polished):** SVG pokeball redesigned as Ultra Ball (gold + black H-stripes + red pinstripe accent); brand wordmark floats + hover-spin.
-
-**Files modified:**
-- `api/index.py` (+700 lines net) — pokedex/search/movers endpoints, session pooling, WAL, shared meta shaper, id lookup
-- `pokequant/scraper.py` — safe /tmp fallback, no sys.exit from init
-- `handoffpack-www/components/lab/holo/HoloPage.tsx` (~1000 lines net) — Lightbox→Pokedex, autocomplete combobox, multi-hue theme, takeover layers, font refs
-- `handoffpack-www/app/lab/holo/layout.tsx` — new font stack + semantic aliases
-- `handoffpack-www/app/api/holo/route.ts` — edge runtime, pass-through streaming
-
-**Commits (13 this session):** `a7cc2fc` (flip unbound-local) · `0144481` (ultra-ball theme) · `dc6672d` (state) · `5be7f22` (takeover covers full page) · `f72d164` (pokedex backend) · `ec3c512` (pokedex frontend) · `4e979f6` (search backend) · `95f8189` (search combobox) · `444e0c3` (api perf) · `7435afd` (frontend perf + theme cache) · `cbfcbb7` (3.5× takeover + z-index + onerror) · `b74744e` (takeover no-fade + translucent panels) · `8101d47` (pokedex id lookup) · `89eb6a6` (Fraunces + multi-color + smooth fade + overlay scrim) · `3634367` (scraper /tmp fallback)
-
-**Decisions:**
-- **Pokedex data sourcing:** merge pokemontcg.io + pokeapi.co rather than pick one. pokemontcg.io has the TCG-specific fields (attacks, abilities, energy costs, artist, rarity); pokeapi.co has the species data (genus, flavor text, base stats, dimensions). Both cached in `/tmp` sqlite with long TTLs so cold-start isn't punished.
-- **Pin pokedex by id:** the name-based scorer is fine for initial lookups but unreliable when a card has 5–10 printings. Once we have an id in hand (from history), passing it through eliminates the problem class entirely.
-- **Retire retro pixel font:** Press Start 2P was fun but read as amateur for a trader tool. Fraunces with opsz=144 + SOFT + WONK is distinctive enough to own the brand without being cutesy.
-- **Crossfade via key + opacity transition:** animating gradients directly doesn't interpolate in any browser. Keying the wrapper on `theme.hue` re-mounts the layers with fresh opacity, and a 900ms opacity transition gives a soft crossfade for free. Simpler than `@property`-registered custom properties.
-- **Parallel movers with ThreadPoolExecutor:** Vercel Python supports threads fine; the big worry was concurrent sqlite writes. WAL + short per-task connections handle that.
-
----
 
 ## Previous Sessions
 
+- **Pokédex overlay + search autocomplete + perf + audit fixes + Fraunces + multi-color takeover (2026-04-17 s4):** Biggest session to date. Pokédex side-panel overlay merging pokemontcg.io + pokeapi.co (species data, stats, attacks, 30-day sqlite cache, pinned by id). ARIA-1.2 search combobox (250ms debounce, AbortController, server ranking). Performance: module `requests.Session` pooling, slim `select=` fieldsets, parallel movers via `ThreadPoolExecutor(8)`, WAL sqlite, per-action `Cache-Control`, edge-runtime Next.js proxy, `THEME_CACHE`. Audit-driven fixes: `/tmp` cache fallback on Vercel, exception handler hides `str(exc)`, flip `margin_pct` uses cost not revenue, flip break-even recomputes shipping tier, search cache skips errors, `useCardTheme` onerror fallback. Fraunces + Inter Tight + JetBrains Mono replaces Orbitron/Press Start 2P. 3.5× full-viewport card-color takeover with top-3 dominant hues + conic gradient foil + 900ms crossfade. 13 commits; notable: `f72d164` (pokedex backend) · `444e0c3` (api perf) · `89eb6a6` (Fraunces + multi-color + fade) · `8101d47` (pokedex id lookup).
+- **Top Movers scroll w/ images + Recently Viewed row (2026-04-19 s6):** `useRecentlyViewed` hook (localStorage, 10-item cap, newest-first dedup). `RecentlyViewed` drag-scroll row at HomeView bottom in violet to distinguish from gold TopMovers. `onMetaReady` callback on `CardDetail` captures real `image_small` via `history.meta` so images are never blank placeholders. Commit `db396fb`.
+- **Supabase L2 cache fully activated in production (2026-04-19 s7):** Service-role key + `SUPABASE_URL` added to Vercel holo project (Production + Preview, Sensitive). Redeployed; verified 86-sale `/history` request writes through to `holo.sales_cache`. End-to-end L1/tmp → L2 Supabase → live scrape pipeline confirmed. No code change — pure env-var activation. Known cosmetic: Vercel log stream doesn't show `logger.info` (default WARNING level) — filed for polish pass.
 - **Ultra Ball theme + full-bleed card takeover + draggable movers + mobile bottom nav + flip bug fix (2026-04-16 s3):** `Pokeball` component redesigned as Ultra Ball (gold + black H-stripes + red pinstripe). `useCardTheme` extended with `bgBase/bgDeep`. Full-bleed stacked-gradient takeover on detail page. TopMovers switched to native drag-scroll with auto-scroll + "View all" modal. Mobile bottom nav (Overview/Sales/Flip/Grade) with safe-area-inset. Fixed `UnboundLocalError: DEFAULT_PACKS_PER_BOX` in flip handler. Commits `a7cc2fc` · `0144481`.
 - **Supabase L2 cache — dark launch + DB migration (2026-04-17 s5):** Created `holo` schema with `sales_cache` + `scrape_runs` tables, RLS on zero policies, idempotent migration (`db/migrations/001_holo_sales_cache.sql`). New `pokequant/supabase_cache.py` PostgREST client — feature-gated, graceful fallback, fire-and-forget writes. Wired write-through into `fetch_sales`. Migration applied via Chrome automation; `holo` added to Data API Exposed schemas. Handoffpack `public` untouched. Commit `7baf6dc`.
 - **Pokéball branding + card-driven palette + Top Movers endpoint (2026-04-16 s2):** `/api?action=movers` endpoint ranks ~12 liquid cards by `|change_pct|` over 7D. Inline SVG Pokéball, `useCardTheme` canvas-sampling hook. Commits `1a4ec7c`, `1f23e27`.
@@ -240,7 +152,7 @@ write-through populates L1 + L2 on every live scrape
 
 ---
 
-## Current Status (as of 2026-04-21 — session 9)
+## Current Status (as of 2026-04-22 — session 10)
 
 ### Phase
 Post-MVP web launch. Pre-monetization. Actively iterating.
@@ -293,6 +205,10 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 ---
 
 ## Resolved Bugs (recent)
+- ✅ TCGPlayer / pokemontcg.io / PC-static market estimates contaminated flip + history as if they were completed sales (2026-04-22) — records now tagged `source_type: "market_estimate"`; `/flip` and `/history` return `synthetic_ratio` + `data_quality_warning`; UI shows amber chip when >30%
+- ✅ eBay + PriceCharting double-counting the same sale in the median (2026-04-22) — dedup on `(rounded_price, date)` in `fetch_sales`
+- ✅ Movers outlier floor could clear junk through on <5-sale cards (2026-04-22) — fall back to `HARD_PRICE_FLOOR` until 5+ samples are available
+- ✅ `datetime.utcnow()` deprecated in Py 3.13 — migrated 8 scraper call sites to `datetime.now(timezone.utc)` (2026-04-22)
 - ✅ Full-app crash on back-nav when Recently Viewed had stale entries (2026-04-21) — `RecentlyViewed` rendered `item.name[0]` without guarding for undefined; fixed with 3-layer hardening in `useRecentlyViewed` (self-healing prune on mount, rejecting incomplete writes, optional-chaining at render)
 - ✅ Pokédex overlay showed wrong card printing (2026-04-17) — overlay re-searched by name only; now passes `meta.id` and backend uses `_lookup_card_by_id` for an exact pokemontcg.io match
 - ✅ Pokédex overlay transparent on desktop (2026-04-17) — `bg-black/92` not in Tailwind's default scale, silently compiled to no background; replaced with inline rgba
@@ -319,7 +235,9 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 ## Active Blockers
 - No monetization layer (fully free, no conversion path)
 - No auth — can't build personalized features (saved cards sync'd across devices, alerts). Supabase is wired up for caching but not yet for auth
-- Scraper fragility — PriceCharting HTML can change silently; no monitoring
+- Scraper fragility — PriceCharting HTML can change silently; monitoring pending (**H-1.8** canary prompt queued 2026-04-22)
+- CORS wildcard on `/api` — any origin can consume. Fix prompt queued as **H-1.6** (2026-04-22)
+- No rate limiting on `/api` — unauth'd scraping is abuse-prone. Fix prompt queued as **H-1.9** (2026-04-22)
 - Test coverage on scraper.py improved but still incomplete — critical paths covered, edge cases remain
 - No signal backtesting — can't validate accuracy claims
 - ~~L2 Supabase cache pending Vercel activation~~ ✅ **RESOLVED session 7** — env vars added, deployment ready, write-through confirmed with real rows in `holo.sales_cache`
