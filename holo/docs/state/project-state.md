@@ -14,6 +14,32 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
+## What Was Just Done (2026-04-22 — session 10 tooling fix)
+
+### end.sh actually pushes to origin/main now ✅ COMPLETE
+
+Discovered mid-session that `scripts/end.sh` had been silently orphaning commits on worktree branches since its introduction. Every `/end-session` from a `claude/*` worktree claimed success but left commits unpushed to `origin/main` — next session's `/start-session` saw stale state.
+
+**Root cause:** `git push origin main` pushes the *local* `main` ref, which on a worktree branch is whatever was there the last time main was updated — i.e. stale. Git correctly reported "Everything up-to-date" because local `main` equalled `origin/main`. The feature-branch HEAD never participated in the push.
+
+**Fix:** switch to `git push origin HEAD:main` with a divergence guard:
+- Fast-forward path: pushes current HEAD to origin/main, updates local `main` ref so sibling worktrees pick up the advance on next fetch.
+- Divergence path: refuses the push, explains how to rebase, exits non-zero.
+- Same pattern applied to the handoffpack-www push block for future-proofing.
+- Added an explicit `git fetch origin main` at the start so ahead/behind counts are actually current.
+
+**Modified:** `holo/scripts/end.sh` — push logic rewritten
+
+**Commits:**
+- `7927a6f` fix(scripts): end.sh actually pushes commits to origin/main
+
+**Decisions:**
+- **Fail loud on divergence, not force-push.** A force-push would silently eat remote commits made by a parallel agent. Better to stop and ask.
+- **Keep local `main` in sync via `update-ref` after the push.** Without this, sibling worktrees would still see stale local `main` until they fetched — surprising and easy to trip over.
+- **Retroactively repaired this session.** Manually pushed `HEAD:main` earlier to recover the 5 orphaned commits (d6f8b80 → 3e937d8) plus this fix (7927a6f). Verified `origin/main` + local `main` both at `7927a6f` before /end-session.
+
+---
+
 ## What Was Just Done (2026-04-22 — session 10)
 
 ### Comprehensive code review + accuracy hardening ✅ COMPLETE
