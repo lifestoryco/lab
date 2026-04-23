@@ -1119,6 +1119,11 @@ def fetch_sales(
     """
     import os as _os
 
+    # Clear any prior-call audit so a legacy-path response never inherits
+    # a stale registry audit from an earlier call in the same warm instance.
+    from pokequant.sources import LAST_AUDIT as _LAST_AUDIT
+    _LAST_AUDIT.set(None)
+
     if _os.environ.get("HOLO_USE_REGISTRY", "0") == "1":
         try:
             return _fetch_sales_via_registry(card_name, set_name=set_name,
@@ -1139,7 +1144,7 @@ def _fetch_sales_via_registry(
 ) -> list[dict[str, Any]] | dict[str, Any]:
     """Registry + reconciler path. Empty-result fallback to legacy is handled
     by the dispatcher's try/except."""
-    from pokequant.sources import registry as _registry
+    from pokequant.sources import LAST_AUDIT, registry as _registry
     from pokequant.sources.reconciler import reconcile
 
     _registry.discover()
@@ -1149,7 +1154,8 @@ def _fetch_sales_via_registry(
         # the cache; dispatcher raises so legacy takes over.
         raise RuntimeError("registry returned zero records across all adapters")
 
-    reconciled, _audit = reconcile(records, days=days)
+    reconciled, audit = reconcile(records, days=days)
+    LAST_AUDIT.set(audit)
     return [r.to_dict() for r in reconciled]
 
 

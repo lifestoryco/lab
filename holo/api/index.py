@@ -724,6 +724,7 @@ def _handle_flip(params: dict) -> dict:
         ),
         "sources": _extract_sources(sales),
         "grade": grade,
+        "reconciliation_audit": _current_audit(),
     }
 
 
@@ -925,6 +926,7 @@ def _handle_history(params: dict) -> dict:
         ),
         "sources": _extract_sources(sales),
         "meta": _lookup_card_meta(card),
+        "reconciliation_audit": _current_audit(),
     }
 
 
@@ -1475,6 +1477,20 @@ def _handle_search(params: dict) -> dict:
             pass
 
     return payload
+
+
+def _current_audit() -> dict | None:
+    """Return the reconciliation audit dict from the last fetch_sales() call,
+    if it went through the registry path. None when the legacy path served
+    the request (HOLO_USE_REGISTRY=0 or adapter fallback)."""
+    try:
+        from pokequant.sources import LAST_AUDIT
+        audit = LAST_AUDIT.get()
+    except Exception:
+        return None
+    if audit is None:
+        return None
+    return audit.to_dict()
 
 
 def _handle_health(params):
