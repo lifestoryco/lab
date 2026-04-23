@@ -64,6 +64,7 @@ _CACHE_HEADERS = {
     "signal":  "public, max-age=180, s-maxage=600, stale-while-revalidate=1800",
     "price":   "public, max-age=180, s-maxage=600, stale-while-revalidate=1800",
     "health":  "public, max-age=30, s-maxage=30",
+    "meta_signal": "public, max-age=300, s-maxage=900, stale-while-revalidate=3600",
 }
 _DEFAULT_CACHE = "s-maxage=300, stale-while-revalidate=600"
 
@@ -1479,6 +1480,50 @@ def _handle_search(params: dict) -> dict:
     return payload
 
 
+def _handle_meta_signal(params: dict) -> dict:
+    """Tournament meta-signal roll-up — consumes the Limitless adapter.
+
+    Returns `{signals: [...], source: "limitless", enabled: bool}`.
+    While the Limitless adapter is a stub, signals is empty and enabled
+    is False — the endpoint exists so frontend work can develop against
+    a stable shape. Flesh this out as part of H-1.3 (tournament meta-
+    shift signal).
+    """
+    card = params.get("card", [""])[0]
+    if not card:
+        return {"error": "Missing 'card' parameter"}
+
+    from pokequant.sources import registry as _registry
+    _registry.discover()
+    limitless = _registry.get_adapter("limitless")
+    enabled = bool(limitless and limitless.is_configured())
+
+    if not enabled:
+        return {
+            "card": card,
+            "source": "limitless",
+            "enabled": False,
+            "signals": [],
+            "note": "Limitless adapter not yet enabled — H-1.3 will activate tournament meta-signals.",
+        }
+
+    # Active path: fetch meta-signal records via the adapter. fetch() returns
+    # NormalizedSale records with source_type="meta_signal".
+    try:
+        records = list(limitless.fetch(card, days=30, grade="raw"))
+    except Exception as exc:
+        return {"card": card, "source": "limitless", "enabled": True,
+                "signals": [], "error": str(exc)[:200]}
+
+    signals = [r.extra for r in records if r.source_type == "meta_signal"]
+    return {
+        "card": card,
+        "source": "limitless",
+        "enabled": True,
+        "signals": signals,
+    }
+
+
 def _current_audit() -> dict | None:
     """Return the reconciliation audit dict from the last fetch_sales() call,
     if it went through the registry path. None when the legacy path served
@@ -1545,6 +1590,7 @@ _HANDLERS = {
     "pokedex": _handle_pokedex,
     "search": _handle_search,
     "health": _handle_health,
+    "meta_signal": _handle_meta_signal,
 }
 
 

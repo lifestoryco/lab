@@ -84,10 +84,39 @@ Claude reads .claude/commands/holo-*.md
 | `pokequant/bulk/optimizer.py` | Bulk liquidation calculator |
 | `.claude/commands/` | Claude Code slash command definitions |
 
-## Data Sources (No API Keys Required)
+## Data Sources
+
+Two code paths exist in parallel:
+
+### Legacy cascade (default — `HOLO_USE_REGISTRY=0`)
+
+Linear if/elif in `pokequant/scraper.py::_fetch_sales_legacy`. Data sources:
 
 - **PriceCharting.com** — historical sold listings (primary for signals + comps)
-- **pokemontcg.io** — free card database + TCGPlayer market prices (used for EV)
+- **eBay HTML** — supplements raw-grade with recent completed auctions
+- **TCGPlayer** — redirect hack + infinite-api for market estimates
+- **pokemontcg.io** — card meta + final-fallback synthetic prices
+
+### Multi-source registry (opt-in — `HOLO_USE_REGISTRY=1`)
+
+Unified adapter framework in `pokequant/sources/`. Spec:
+[docs/architecture/sources.md](docs/architecture/sources.md). Adapters:
+
+| Adapter | Feature flag | Credentials | Status |
+|---|---|---|---|
+| `psa_pop` | `HOLO_ADAPTER_PSA_POP` | none | **LIVE** — powers `_handle_grade_roi` pop-based probabilities |
+| `130point` | `HOLO_ADAPTER_130POINT` | none | **LIVE** — sale-comp cross-validator |
+| `limitless` | `HOLO_ADAPTER_LIMITLESS` | none | Stub — activate with H-1.3 |
+| `goldin` | `HOLO_ADAPTER_GOLDIN` | none | Stub — endpoint URLs pending verification |
+| `bgs_pop` | `HOLO_ADAPTER_BGS_POP` | `BECKETT_SESSION_COOKIE` | Stub — session-auth required |
+| `cardmarket` | `HOLO_ADAPTER_CARDMARKET` | `CARDMARKET_APP_TOKEN` + 3 more | Stub — OAuth 1.0 (EUR) |
+| `ebay_api` | `HOLO_ADAPTER_EBAY_API` | `EBAY_APP_ID`, `EBAY_CERT_ID` | Stub — OAuth 2.0 approval |
+| `tcgplayer_pro` | `HOLO_ADAPTER_TCGPLAYER_PRO` | `TCGPLAYER_PUBLIC_KEY`, `_PRIVATE_KEY` | Stub — partner approval |
+| `card_ladder` | `HOLO_ADAPTER_CARD_LADDER` | `CARDLADDER_API_KEY` | Stub — paid ($99/mo), blocks on spend approval |
+
+Health surface: `GET /api?action=health`. Parity test (gate for flipping
+the registry flag on in production):
+`HOLO_RUN_PARITY=1 pytest tests/test_fetch_sales_parity.py -v`.
 
 ## Requirements
 

@@ -14,6 +14,42 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
+## What Was Just Done (2026-04-23 — session 12)
+
+### H-1.10a backend wiring + parity gate + mypy + docs ✅ COMPLETE
+
+Closed the backend side of the H-1.10 follow-up. Frontend provenance panel (single remaining scope item, cross-repo in `handoffpack-www`) filed as **H-1.10a-ui**.
+
+**Reconciliation audit plumbing (`<hash>` audit-wiring commit)**:
+- New `LAST_AUDIT` contextvar in `pokequant.sources` — set by `_fetch_sales_via_registry` after `reconcile()`, cleared by the dispatcher before each call so legacy-path responses never inherit a stale audit.
+- `api/index.py::_current_audit()` helper reads the contextvar and returns the dict or None.
+- `_handle_history` and `_handle_flip` responses now carry a `reconciliation_audit` field. Null when `HOLO_USE_REGISTRY=0` served the request.
+- `_handle_movers` intentionally skipped — ThreadPoolExecutor fan-out overwrites the contextvar per worker; aggregation is its own design problem, filed as a deferred detail.
+- 5 new audit-plumbing tests.
+
+**Parity test + mypy (`<hash>` parity-and-mypy commit)**:
+- `tests/test_fetch_sales_parity.py` — 5 canary cards run through both legacy and registry paths with `HOLO_USE_REGISTRY` toggled; asserts ±5% median delta. Live-gated on `HOLO_RUN_PARITY=1` (same pattern as the drift canary). 4 offline delta-math tests run in the default suite.
+- This is the **gate** for flipping `HOLO_USE_REGISTRY=1` in production. Do not enable the flag until this test runs green.
+- `mypy --strict --ignore-missing-imports pokequant/sources/` → Success, no issues found in 19 source files. Fixed 15 initial errors (mostly `dict` → `dict[str, Any]`, typed `**kwargs`, LAST_AUDIT contextvar parameterized).
+- mypy + types-requests added to dev deps.
+
+**meta_signal endpoint (`<hash>` meta-signal commit)**:
+- `GET /api?action=meta_signal&card=<name>` — consumes the Limitless adapter. Currently returns `{enabled: false, signals: [], note: "H-1.3 will activate"}` since Limitless is still a stub. Endpoint shape is stable so frontend work can develop against it without blocking.
+
+**Documentation (`<hash>` docs commit)**:
+- New `docs/architecture/sources.md` — full spec: package layout, fetch-path diagram with registry path, invariants, priority table, audit schema, health endpoint, feature flags, observability, testing, rollback procedures.
+- `CLAUDE.md` Data Sources section rewritten — now a dual-path explanation with a full adapter table (9 adapters, live/stub status, feature flag, required env vars).
+
+**Test suite:** 122 passed, 10 skipped (5 live canary, 5 live parity). mypy strict clean.
+
+**Decisions:**
+- **ContextVar over thread-local** — `threading.local` would bind to the ThreadPoolExecutor worker, invisible to the caller. `contextvars.ContextVar` propagates correctly across `asyncio` and across `ThreadPoolExecutor` workers when using `concurrent.futures` properly. Clean API, standard library.
+- **Movers audit deferred** — honest scope cut. Cross-worker aggregation needs a new primitive; not worth inventing one before we know what the UI wants.
+- **Parity test lives in the test suite, not as a separate script** — keeps the gate adjacent to the code it protects. `HOLO_RUN_PARITY=1` toggle mirrors the canary's `HOLO_RUN_CANARY=1`, consistent operator model.
+- **meta_signal endpoint ships empty** — the shape matters more than the content right now. Frontend consumers get a stable contract they can build against while H-1.3 fleshes in the Limitless data.
+
+---
+
 ## What Was Just Done (2026-04-23 — session 11 part 2)
 
 ### H-1.10 multi-source adapter platform — foundation + 2 live adapters + 7 stubs 🚧 PARTIAL
@@ -370,7 +406,8 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 | H-1.5 | Backtesting harness for signal validation | Not started | Medium |
 | H-1.9 | Edge rate limiting (Upstash + Next.js middleware) | Queued (deferred) | Medium |
 | H-1.10 | Multi-source adapter platform — foundation + free adapters | 🚧 Partial (session 11) | High |
-| H-1.10a | Registry wiring + provenance panel + parity test + docs | Queued | Medium |
+| H-1.10a | Registry audit wiring + parity test + docs + meta_signal | ✅ Complete (session 12) | Medium |
+| H-1.10a-ui | Data provenance panel on card detail (handoffpack-www) | Queued | Low |
 | H-2.0 | Auth layer + personalization | Not started | High |
 | H-2.1 | Price alerts (email / push) | Not started | Medium |
 | H-2.2 | Monetization / freemium tier | Not started | High |
