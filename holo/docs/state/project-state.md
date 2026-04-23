@@ -14,6 +14,58 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
+## What Was Just Done (2026-04-23 — session 11 part 2)
+
+### H-1.10 multi-source adapter platform — foundation + 2 live adapters + 7 stubs 🚧 PARTIAL
+
+Landed Steps 1–7 + 10–12 of the H-1.10 prompt. Remaining work (wiring `reconciliation_audit` into `/history`/`/flip`/`/movers`, frontend provenance panel, parity test, full docs pass) queued as **H-1.10a**. `HOLO_USE_REGISTRY=0` stays the default in production — no behavior change until the parity test passes.
+
+**Foundation (`9a94375`)** — `pokequant/sources/` package:
+- `schema.py` — `NormalizedSale` dataclass, `Currency`/`Grade`/`SourceType` literals, invariant constants
+- `base.py` — `SourceAdapter` ABC with `HOLO_ADAPTER_<NAME>` env flag
+- `registry.py` — `SourceRegistry` singleton; auto-discovers `pokequant.sources.adapters.*`; parallel fan-out via `ThreadPoolExecutor(max_workers=len(active))` with 12s per-adapter timeout; enforces `NormalizedSale` invariants on ingress; emits one JSON line per adapter call to stderr (`{ts, event, adapter, card, count, latency_ms, error}`)
+- `reconciler.py` — pure merge/FX-normalize/dedup/IQR-outlier function; returns `(records, ReconciliationAudit)`
+- `priority.py` — `ADAPTER_PRIORITY` table drives dedup tie-breaks
+- `fx.py` — static `EUR=1.08 / GBP=1.27 / JPY=0.0066` → USD
+- `exceptions.py` — `InvalidSaleRecord`, `AdapterTimeout`, `AdapterNotConfigured`
+- 21 foundation tests (schema invariants + reconciler algorithm)
+
+**Health + parity shim (`4c66ad0`)**:
+- `/api?action=health` iterates the registry, calls each adapter's `health_check()`, returns `{adapters: [...], summary: {total, configured, healthy}}`, cache 30s
+- `fetch_sales()` is now a dispatcher. With `HOLO_USE_REGISTRY=1`, routes to a registry + reconciler path; empty-result or exception falls back to the legacy cascade. Legacy implementation renamed to `_fetch_sales_legacy` verbatim. Kill-switch is instant via env var
+
+**Live adapters:**
+
+- **PSA Pop Report** (`69a720e`) — `PSAPopAdapter` scrapes `psacard.com/pop/tcg-cards/pokemon/...`, 7-day sqlite cache (matches PSA's weekly update cadence). Emits `source_type="pop_report"`, exposes `fetch_pop()` for `_handle_grade_roi`. Handler now uses real `pop10/total` + `pop9/total` probabilities when `total >= PSA_POP_MIN_SAMPLES` (=50); user-supplied `?p10=/?p9=` still wins. Response now includes `assumptions.pop_source` = `"heuristic"|"psa_pop"` + raw `pop_data` for transparency. 8 unit tests.
+
+- **130point** (`3beb18c`) — `OneThirtyPointAdapter` scrapes `130point.com/sales/?search=<card>`. Raw grade only. Propagates 130point's lot/damaged/reprint keyword hints to `outlier_flag` with `confidence=0.9`. Tolerant parser: ISO + `M/D/YYYY` dates, thousands-comma prices, skips malformed rows. 8 unit tests.
+
+**Credential-gated stubs (`f0ebff5`)** — all `enabled_by_default=False`:
+- `bgs_pop` (session cookie)
+- `cardmarket` (OAuth 1.0 HMAC, EUR)
+- `goldin` (scrape, $500+ cards; endpoint URLs pending verification)
+- `limitless` (free JSON API; disabled until meta_signal endpoint wired)
+- `ebay_api` (OAuth 2.0, 5k/day free tier)
+- `tcgplayer_pro` (multi-day partner approval)
+- `card_ladder` (paid $99/mo, blocks on spend approval)
+
+Shared `CredentialStub` base in `adapters/_stub.py` — concrete stubs only declare name + priority + currency + `required_env` + `stub_reason`. `health_check` reports the missing credential so `/api?action=health` surfaces the setup gap.
+
+**Bug discovered + fixed during this task:**
+- **Registry deadlock on `discover()`** — `discover()` held `self._lock` while adapter modules imported and called `registry.register()`, which also grabbed `self._lock`. Python's `threading.Lock` is not reentrant → deadlock on first `/api?action=health` request. Fix: `threading.RLock()`. Caught by `test_sources_stubs.py::test_all_stubs_register` hanging. This is exactly the kind of "the point of the refactor is to surface bugs" the prompt's DoD anticipates.
+
+**Test suite:** 113 passed, 5 skipped (live canary), 0 failed. 46 new tests this session.
+
+**Commits (this half):** `9a94375`, `4c66ad0`, `69a720e`, `3beb18c`, `f0ebff5`.
+
+**Decisions:**
+- **File-based adapter discovery over explicit registration** — `pkgutil.iter_modules` + `importlib.import_module` at boot. Each adapter `register()`s itself at import time. Easier to add/remove adapters without touching a central list.
+- **Reconciler is pure; registry enforces invariants** — separation of concerns. Adapters trust the registry to reject bad records; reconciler never touches the network or sqlite. Makes reconciler fully unit-testable with synthetic fixtures.
+- **`HOLO_USE_REGISTRY=0` is default** — the registry path has zero adapter coverage that matches the full legacy cascade (no eBay API, no PC scraper rehoused). Flipping the flag now would drop most records. The parity test in H-1.10a is the gate.
+- **RLock over Lock** — the single-word fix. Discovery is inherently reentrant; `threading.Lock` was the wrong primitive. Documented in the commit message so future readers don't re-break it.
+
+---
+
 ## What Was Just Done (2026-04-23 — session 11)
 
 ### Hardening sweep — CORS, shared HTTP session, scraper canary ✅ COMPLETE
@@ -316,6 +368,9 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 | H-1.3 | Tournament meta-shift signal (Limitless TCG) | Not started | High |
 | H-1.4 | Pull rate database for accurate sealed EV | Not started | Medium |
 | H-1.5 | Backtesting harness for signal validation | Not started | Medium |
+| H-1.9 | Edge rate limiting (Upstash + Next.js middleware) | Queued (deferred) | Medium |
+| H-1.10 | Multi-source adapter platform — foundation + free adapters | 🚧 Partial (session 11) | High |
+| H-1.10a | Registry wiring + provenance panel + parity test + docs | Queued | Medium |
 | H-2.0 | Auth layer + personalization | Not started | High |
 | H-2.1 | Price alerts (email / push) | Not started | Medium |
 | H-2.2 | Monetization / freemium tier | Not started | High |
