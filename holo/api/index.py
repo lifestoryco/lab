@@ -651,8 +651,15 @@ def _handle_flip(params: dict) -> dict:
     if not isinstance(sales, list) or len(sales) == 0:
         return {"error": f"No sales found for '{card}'"}
 
-    # Warn if all data came from the synthetic API fallback.
+    # Data-quality flags. `synthetic_only` kept for API compat (true when
+    # 100% of data is synthetic pokemontcg.io fallback). `synthetic_ratio`
+    # is the richer signal: TCGPlayer market estimates, PC static snapshots,
+    # and pokemontcg.io fallbacks all count as non-sale records. A flip
+    # verdict based on >30% market-estimate data should be treated with
+    # caution — these are condition-blended prices, not completed sales.
     synthetic_only = all(r.get("source") == "pokemontcg.io" for r in sales)
+    synthetic_count = sum(1 for r in sales if r.get("source_type") == "market_estimate")
+    synthetic_ratio = round(synthetic_count / len(sales), 3) if sales else 0.0
 
     comp = generate_comp_from_list(sales=sales, card_id="flip", card_name=card, n_sales=500)
     market_value = comp.cmc
@@ -703,6 +710,12 @@ def _handle_flip(params: dict) -> dict:
         "confidence": comp.confidence,
         "sales_used": comp.sales_used,
         "synthetic_only": synthetic_only,
+        "synthetic_ratio": synthetic_ratio,
+        "data_quality_warning": (
+            f"{int(synthetic_ratio * 100)}% of data is market estimate, "
+            "not completed sales — verdict is a best-effort estimate."
+            if synthetic_ratio > 0.3 else None
+        ),
         "sources": _extract_sources(sales),
         "grade": grade,
     }
@@ -879,6 +892,12 @@ def _handle_history(params: dict) -> dict:
     change = round(last - first_price, 2)
     change_pct = round((last / first_price - 1) * 100, 2) if first_price > 0 else 0.0
 
+    # Data-quality flags — expose ratio of market-estimate records (TCGPlayer
+    # averages, PC static snapshots, pokemontcg.io synth) vs completed sales
+    # so the UI can show a caveat when the chart is mostly estimates.
+    synthetic_count = sum(1 for r in sales if r.get("source_type") == "market_estimate")
+    synthetic_ratio = round(synthetic_count / len(sales), 3) if sales else 0.0
+
     return {
         "card": card,
         "grade": grade,
@@ -893,6 +912,11 @@ def _handle_history(params: dict) -> dict:
             "change_pct": change_pct,
             "sales_count": len(sales),
         },
+        "synthetic_ratio": synthetic_ratio,
+        "data_quality_warning": (
+            f"{int(synthetic_ratio * 100)}% of data is market estimate, not completed sales."
+            if synthetic_ratio > 0.3 else None
+        ),
         "sources": _extract_sources(sales),
         "meta": _lookup_card_meta(card),
     }
@@ -1193,7 +1217,15 @@ def _handle_movers(params: dict) -> dict:
                           if float(s.get("price", 0)) > 0]
             if len(raw_prices) < 2:
                 return None
-            floor = statistics.median(raw_prices) * 0.15
+            # Percentage-of-median floor is only reliable once we have enough
+            # samples that the median itself isn't an outlier. Below 5 sales a
+            # single junk listing can drag the median down and let other junk
+            # through. Fall back to the absolute hard floor from config.
+            from config import HARD_PRICE_FLOOR
+            if len(raw_prices) >= 5:
+                floor = statistics.median(raw_prices) * 0.15
+            else:
+                floor = HARD_PRICE_FLOOR
 
             buckets: dict[str, list[float]] = defaultdict(list)
             for s in sales:

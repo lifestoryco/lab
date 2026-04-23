@@ -32,7 +32,7 @@ import sqlite3
 import sys
 import time
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Generator
 
@@ -550,7 +550,7 @@ def _scrape_pricecharting(
         logger.warning("No sales table found for '%s' (grade=%s).", card_name, grade)
         return []
 
-    cutoff_date = datetime.utcnow().date() - timedelta(days=days)
+    cutoff_date = datetime.now(timezone.utc).date() - timedelta(days=days)
     sales: list[dict[str, Any]] = []
     counter = 0
     graded_dropped: int = 0
@@ -608,7 +608,7 @@ def _scrape_pricecharting(
                 # Try "Mon DD, YYYY" format.
                 sale_date = datetime.strptime(date_text, "%b %d, %Y").date()
         except (ValueError, TypeError):
-            sale_date = datetime.utcnow().date()
+            sale_date = datetime.now(timezone.utc).date()
 
         # Filter by date window.
         if sale_date < cutoff_date:
@@ -690,7 +690,7 @@ def _fetch_tcgapi(card_name: str, days: int = 30) -> list[dict[str, Any]]:
     card = _best_card_match(cards, card_name) or cards[0]
     sales: list[dict[str, Any]] = []
 
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).date()
 
     # Extract price points from TCGPlayer prices.
     tcg = card.get("tcgplayer", {}).get("prices", {})
@@ -714,6 +714,8 @@ def _fetch_tcgapi(card_name: str, days: int = 30) -> list[dict[str, Any]]:
                         "date": sale_date.isoformat(),
                         "condition": label,
                         "source": "pokemontcg.io",
+                        # Synthetic market price — not a completed sale.
+                        "source_type": "market_estimate",
                         "quantity": 1,
                     }
                 )
@@ -757,7 +759,7 @@ def _extract_pricecharting_price_data(
     if price <= 0:
         return []
 
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).date()
     sale_id = "pc_static_" + hashlib.md5(f"{card_name}_{price}".encode()).hexdigest()[:8]
 
     logger.info("Extracted PriceCharting static price $%.2f for '%s'.", price, card_name)
@@ -768,6 +770,8 @@ def _extract_pricecharting_price_data(
             "date": today.isoformat(),
             "condition": "NM",
             "source": "pricecharting_static",
+            # Current market snapshot, not a completed sale.
+            "source_type": "market_estimate",
             "source_url": _PC_BASE,  # caller overwrites this with the resolved card URL
             "quantity": 1,
         }
@@ -896,7 +900,7 @@ def _fetch_tcgplayer_history(
         logger.error("TCGPlayer history request failed: %s", exc)
         return []
 
-    cutoff = datetime.utcnow().date() - timedelta(days=days)
+    cutoff = datetime.now(timezone.utc).date() - timedelta(days=days)
     sales: list[dict[str, Any]] = []
     counter = 0
 
@@ -931,6 +935,10 @@ def _fetch_tcgplayer_history(
                 "date": sale_date.isoformat(),
                 "condition": "NM",  # TCGPlayer averages mix conditions; tag as NM
                 "source": "tcgplayer",
+                # Not a completed sale — TCGPlayer's averageSalesPrice blends
+                # conditions (LP/MP mixed in). Callers should weight these
+                # records lower or surface a data-quality warning to users.
+                "source_type": "market_estimate",
                 "source_url": f"https://www.tcgplayer.com/product/{product_id}",
                 "quantity": qty,
             })
@@ -982,7 +990,7 @@ def _scrape_ebay(card_name: str, days: int = 30) -> list[dict[str, Any]]:
         return []
 
     soup = BeautifulSoup(resp.text, "html.parser")
-    cutoff_date = datetime.utcnow().date() - timedelta(days=days)
+    cutoff_date = datetime.now(timezone.utc).date() - timedelta(days=days)
     sales: list[dict[str, Any]] = []
     graded_dropped = 0
     counter = 0
@@ -1056,7 +1064,7 @@ def _scrape_ebay(card_name: str, days: int = 30) -> list[dict[str, Any]]:
             except ValueError:
                 continue
         if not parsed:
-            sale_date = datetime.utcnow().date()
+            sale_date = datetime.now(timezone.utc).date()
 
         if sale_date < cutoff_date:
             continue
@@ -1165,8 +1173,25 @@ def fetch_sales(
             try:
                 ebay_supplement = _scrape_ebay(card_name, days=days)
                 if ebay_supplement:
-                    logger.info("Supplementing PC with %d eBay sales.", len(ebay_supplement))
-                    sales = sales + ebay_supplement
+                    # Dedupe PC + eBay on (rounded price, date) — PC mirrors
+                    # some eBay completed sales and counting them twice skews
+                    # the median on low-volume days.
+                    seen: set = {
+                        (round(float(s.get("price", 0)), 2), str(s.get("date", ""))[:10])
+                        for s in sales
+                    }
+                    deduped: list[dict[str, Any]] = []
+                    for s in ebay_supplement:
+                        key = (round(float(s.get("price", 0)), 2), str(s.get("date", ""))[:10])
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        deduped.append(s)
+                    logger.info(
+                        "Supplementing PC with %d eBay sales (%d dropped as dupes).",
+                        len(deduped), len(ebay_supplement) - len(deduped),
+                    )
+                    sales = sales + deduped
             except Exception as exc:
                 logger.warning("eBay supplement failed (continuing with PC-only): %s", exc)
 
