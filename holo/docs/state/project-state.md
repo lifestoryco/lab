@@ -14,6 +14,41 @@ They want an unfair data advantage, not another price lookup.
 
 ---
 
+## What Was Just Done (2026-04-23 — session 11)
+
+### Hardening sweep — CORS, shared HTTP session, scraper canary ✅ COMPLETE
+
+Closed three of the four hardening prompts queued from the 2026-04-22 code review. H-1.9 (edge rate limit via Upstash) deferred — lives in `handoffpack-www` and needs operator signup; decided to defer until a real abuse signal shows up.
+
+**H-1.6 — CORS origin allowlist** (`fc9e707`)
+- Replaced `Access-Control-Allow-Origin: *` with `_resolve_allowed_origin()` in `api/index.py`
+- Allowlist: `handoffpack.com`, `www.handoffpack.com`, `*.vercel.app` containing `handoffpack-www`, `localhost:3000` outside production
+- Added `do_OPTIONS` preflight handler + `Vary: Origin` when CORS header is emitted
+- 10 unit tests in `tests/test_cors.py`
+
+**H-1.7 — Shared HTTP keep-alive session** (`3aedf7f`)
+- New `pokequant/http.py` — thread-safe singleton `requests.Session` with 16/32 connection pool
+- `api/index.py::_http_session` now delegates to `pokequant.http.session`; all 3 direct `requests.get()` sites in `pokequant/scraper.py` migrated (PC/eBay `_get`, TCGPlayer redirect, TCGPlayer infinite-api history)
+- Saves ~100–300ms per call on warm Vercel instances by reusing TCP+TLS handshakes across fan-outs
+- Existing test mocks patch `_get` one layer up, so no test changes needed
+
+**H-1.8 — Scraper drift canary** (`bec3cb6`)
+- `tests/canary.py` — 5 liquid canary cards (Charizard VMAX 20, Pikachu 58, Umbreon VMAX 215, Giratina V 186, Mew VMAX 114). Each `fetch_sales()` asserted against a baseline median with ±50% drift fence
+- `data/canary_baseline.json` — file-based baseline (deferred the Supabase `holo.canary_baseline` table from the prompt; avoids a schema migration for v1)
+- EWMA update (alpha=0.3) resists single-day noise
+- `pytest.ini` registers the `canary` marker and extends `python_files` so `canary.py` is discoverable
+- `.github/workflows/scraper-canary.yml` — `workflow_dispatch` only until baseline seeded + tolerance tuned; webhook alert stubbed/commented
+- Live tests gated on `HOLO_RUN_CANARY=1`; 4 offline drift-math tests run in the default suite
+
+**Test suite:** 71 passed, 5 skipped (live canary), 1 pre-existing deprecation warning unchanged.
+
+**Decisions:**
+- **File-based canary baseline over Supabase table** — avoids a schema migration for a v1 canary; JSON is human-readable and diff-friendly in git. Can migrate to Supabase later if we need multi-environment or historical data.
+- **GitHub workflow lands disabled** — follows the prompt's rollout plan: seed baseline manually 3× over 48h, then enable the schedule. Avoids false alerts on an empty baseline.
+- **H-1.9 deferred** — cross-repo in `handoffpack-www`, requires Upstash signup + Vercel env vars. Operator not ready for that ops surface yet; prompt stays in `pending/`.
+
+---
+
 ## What Was Just Done (2026-04-22 — session 10 tooling fix)
 
 ### end.sh actually pushes to origin/main now ✅ COMPLETE
@@ -264,9 +299,9 @@ Post-MVP web launch. Pre-monetization. Actively iterating.
 ## Active Blockers
 - No monetization layer (fully free, no conversion path)
 - No auth — can't build personalized features (saved cards sync'd across devices, alerts). Supabase is wired up for caching but not yet for auth
-- Scraper fragility — PriceCharting HTML can change silently; monitoring pending (**H-1.8** canary prompt queued 2026-04-22)
-- CORS wildcard on `/api` — any origin can consume. Fix prompt queued as **H-1.6** (2026-04-22)
-- No rate limiting on `/api` — unauth'd scraping is abuse-prone. Fix prompt queued as **H-1.9** (2026-04-22)
+- ~~Scraper fragility — PriceCharting HTML can change silently~~ ✅ **RESOLVED session 11 (H-1.8)** — drift canary lands in `tests/canary.py`; GitHub workflow still `workflow_dispatch` until baseline seeded
+- ~~CORS wildcard on `/api`~~ ✅ **RESOLVED session 11 (H-1.6)** — allowlist resolver in `api/index.py`
+- No rate limiting on `/api` — unauth'd scraping is abuse-prone. Fix prompt **H-1.9** still queued; lives in `handoffpack-www` and needs Upstash signup, deferred until abuse signal appears
 - Test coverage on scraper.py improved but still incomplete — critical paths covered, edge cases remain
 - No signal backtesting — can't validate accuracy claims
 - ~~L2 Supabase cache pending Vercel activation~~ ✅ **RESOLVED session 7** — env vars added, deployment ready, write-through confirmed with real rows in `holo.sales_cache`
