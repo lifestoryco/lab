@@ -63,6 +63,7 @@ _CACHE_HEADERS = {
     "sales":   "public, max-age=180, s-maxage=600, stale-while-revalidate=3600",
     "signal":  "public, max-age=180, s-maxage=600, stale-while-revalidate=1800",
     "price":   "public, max-age=180, s-maxage=600, stale-while-revalidate=1800",
+    "health":  "public, max-age=30, s-maxage=30",
 }
 _DEFAULT_CACHE = "s-maxage=300, stale-while-revalidate=600"
 
@@ -1450,6 +1451,43 @@ def _handle_search(params: dict) -> dict:
     return payload
 
 
+def _handle_health(params):
+    """Adapter health roll-up for /api?action=health.
+
+    Iterates the multi-source registry, calls health_check() on each
+    configured adapter, returns a grep-able status envelope.
+    """
+    from pokequant.sources import registry as _registry
+    _registry.discover()
+
+    adapters = []
+    for adapter in _registry.all_adapters():
+        configured = adapter.is_configured()
+        try:
+            hc = adapter.health_check() if configured else {
+                "ok": False, "latency_ms": 0.0, "error": "disabled"
+            }
+        except Exception as exc:
+            hc = {"ok": False, "latency_ms": 0.0, "error": f"health_check raised: {exc}"}
+        adapters.append({
+            "name": adapter.name,
+            "priority": adapter.priority,
+            "configured": configured,
+            "enabled_by_default": adapter.enabled_by_default,
+            **hc,
+        })
+
+    healthy = sum(1 for a in adapters if a.get("ok"))
+    return {
+        "adapters": adapters,
+        "summary": {
+            "total": len(adapters),
+            "configured": sum(1 for a in adapters if a["configured"]),
+            "healthy": healthy,
+        },
+    }
+
+
 _HANDLERS = {
     "price": _handle_price,
     "signal": _handle_signal,
@@ -1464,6 +1502,7 @@ _HANDLERS = {
     "movers": _handle_movers,
     "pokedex": _handle_pokedex,
     "search": _handle_search,
+    "health": _handle_health,
 }
 
 
