@@ -83,10 +83,31 @@ _CACHE_HEADERS = {
 _DEFAULT_CACHE = "s-maxage=300, stale-while-revalidate=600"
 
 
+_PROD_ORIGINS = {
+    "https://www.handoffpack.com",
+    "https://handoffpack.com",
+}
+
+
+def _resolve_allowed_origin(request_origin: str) -> str | None:
+    if not request_origin:
+        return None
+    if request_origin in _PROD_ORIGINS:
+        return request_origin
+    if request_origin.endswith(".vercel.app") and "handoffpack-www" in request_origin:
+        return request_origin
+    if os.environ.get("VERCEL_ENV") != "production" and request_origin.startswith("http://localhost"):
+        return request_origin
+    return None
+
+
 def _json_response(handler, data: dict, status: int = 200, cache: str | None = None):
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
-    handler.send_header("Access-Control-Allow-Origin", "*")
+    origin = _resolve_allowed_origin(handler.headers.get("Origin", ""))
+    if origin:
+        handler.send_header("Access-Control-Allow-Origin", origin)
+        handler.send_header("Vary", "Origin")
     handler.send_header("Cache-Control", cache or _DEFAULT_CACHE)
     handler.end_headers()
     handler.wfile.write(json.dumps(data, default=str).encode())
@@ -1492,3 +1513,14 @@ class handler(BaseHTTPRequestHandler):
                 {"error": "Internal error", "trace_id": trace_id},
                 500,
             )
+
+    def do_OPTIONS(self):
+        origin = _resolve_allowed_origin(self.headers.get("Origin", ""))
+        self.send_response(204 if origin else 403)
+        if origin:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", "Content-Type")
+            self.send_header("Access-Control-Max-Age", "86400")
+        self.end_headers()
