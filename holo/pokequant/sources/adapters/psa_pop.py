@@ -29,6 +29,18 @@ _PSA_BASE = "https://www.psacard.com/pop/tcg-cards/pokemon"
 _CACHE_DB = os.environ.get("HOLO_CACHE_DB", "/tmp/holo_cache.db")
 _CACHE_TTL_S = 7 * 24 * 3600  # weekly
 
+_BROWSER_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5",
+    "Accept-Encoding": "gzip, deflate",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+}
+
 
 def _cache_get(key: str) -> dict[str, Any] | None:
     try:
@@ -124,7 +136,7 @@ class PSAPopAdapter(SourceAdapter):
         # or a best-effort slug query. Conservative fallback: return empty.
         url = f"{_PSA_BASE}/{slug}"
         try:
-            resp = _http_session().get(url, timeout=8)
+            resp = _http_session().get(url, timeout=8, headers=_BROWSER_HEADERS)
             if resp.status_code != 200:
                 logger.info("psa_pop non-200 for %s: %s", slug, resp.status_code)
                 return {}
@@ -171,7 +183,7 @@ class PSAPopAdapter(SourceAdapter):
     def health_check(self) -> dict[str, Any]:
         t0 = time.time()
         try:
-            resp = _http_session().get(_PSA_BASE, timeout=5)
+            resp = _http_session().get(_PSA_BASE, timeout=5, headers=_BROWSER_HEADERS)
             latency = round((time.time() - t0) * 1000, 1)
             return {
                 "ok": resp.status_code == 200,

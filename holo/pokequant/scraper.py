@@ -1254,6 +1254,46 @@ def _fetch_sales_legacy(
             except Exception as exc:
                 logger.warning("eBay supplement failed (continuing with PC-only): %s", exc)
 
+            # 2a. Supplement with 130point — they pre-reject lot sales and
+            #     damaged listings, so records arrive pre-cleaned. Called
+            #     directly via the registry adapter (no HOLO_USE_REGISTRY flag
+            #     required). Graceful fallback: any failure is logged and
+            #     skipped.
+            try:
+                from pokequant.sources import registry as _registry
+                _registry.discover()
+                adapter_130 = _registry.get_adapter("130point")
+                if adapter_130 and adapter_130.is_configured():
+                    records = adapter_130.fetch(card_name, days=days, grade="raw")
+                    if records:
+                        seen_keys: set = {
+                            (round(float(s.get("price", 0)), 2), str(s.get("date", ""))[:10])
+                            for s in sales
+                        }
+                        new_130: list[dict[str, Any]] = []
+                        for r in records:
+                            sale_dict = {
+                                "sale_id": r.sale_id,
+                                "price": r.price,
+                                "date": r.date.isoformat(),
+                                "condition": r.condition,
+                                "source": "130point",
+                                "source_url": r.source_url,
+                                "outlier_flag": r.outlier_flag,
+                            }
+                            key = (round(sale_dict["price"], 2), sale_dict["date"])
+                            if key in seen_keys:
+                                continue
+                            seen_keys.add(key)
+                            new_130.append(sale_dict)
+                        if new_130:
+                            logger.info(
+                                "Supplementing with %d 130point sales.", len(new_130)
+                            )
+                            sales = sales + new_130
+            except Exception as exc:
+                logger.warning("130point supplement failed (continuing): %s", exc)
+
         # 2b. For long time windows with sparse data, supplement with TCGPlayer
         #     even when PC/eBay returned some results — PriceCharting's visible
         #     table only covers ~30-50 recent sales regardless of the days param.
