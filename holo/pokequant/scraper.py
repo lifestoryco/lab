@@ -37,6 +37,8 @@ from pathlib import Path
 from typing import Any, Generator
 
 import requests
+
+from pokequant.http import session as _http_session
 from bs4 import BeautifulSoup
 
 # ---------------------------------------------------------------------------
@@ -267,7 +269,7 @@ def _get(url: str, timeout: int = 10, retries: int = 3) -> requests.Response:
                 "Connection": "keep-alive",
                 "DNT": "1",
             }
-            resp = requests.get(url, headers=headers, timeout=timeout)
+            resp = _http_session().get(url, headers=headers, timeout=timeout)
 
             if resp.status_code == 429:
                 wait = 5 * (2 ** attempt)  # 5s, 10s, 20s
@@ -838,7 +840,7 @@ def _lookup_tcgplayer_product_id(card_name: str) -> int | None:
 
     for attempt in range(2):  # one retry on timeout
         try:
-            r = requests.get(
+            r = _http_session().get(
                 redirect_url,
                 headers={"User-Agent": random.choice(_USER_AGENTS)},
                 timeout=(5, 12),
@@ -893,7 +895,7 @@ def _fetch_tcgplayer_history(
     }
 
     try:
-        resp = requests.get(url, headers=headers, timeout=10)
+        resp = _http_session().get(url, headers=headers, timeout=10)
         resp.raise_for_status()
         data = resp.json()
     except (requests.RequestException, json.JSONDecodeError) as exc:

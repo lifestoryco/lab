@@ -29,26 +29,10 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 
-# ---- Module-level requests.Session for HTTP keep-alive -----------------------
-# Reused across invocations on warm Vercel instances. Saves TCP+TLS handshake
-# (~100–300ms) per outbound call to pokemontcg.io / PokeAPI etc.
-_HTTP_SESSION = None
-_HTTP_SESSION_LOCK = threading.Lock()
-
-
-def _http_session():
-    global _HTTP_SESSION
-    if _HTTP_SESSION is None:
-        with _HTTP_SESSION_LOCK:
-            if _HTTP_SESSION is None:
-                import requests as _requests
-                from requests.adapters import HTTPAdapter
-                s = _requests.Session()
-                adapter = HTTPAdapter(pool_connections=16, pool_maxsize=32, max_retries=0)
-                s.mount("https://", adapter)
-                s.mount("http://", adapter)
-                _HTTP_SESSION = s
-    return _HTTP_SESSION
+# ---- Shared requests.Session for HTTP keep-alive -----------------------------
+# Delegates to pokequant.http so api/ and scraper code share one pool across
+# warm Vercel instances. Saves TCP+TLS handshake (~100–300ms) per outbound call.
+from pokequant.http import session as _http_session  # noqa: E402
 
 
 # ---- Tiny in-process memo for movers (survives warm invocations) -------------
