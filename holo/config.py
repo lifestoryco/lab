@@ -80,3 +80,9 @@ FLIP_THIN_MARGIN_THRESHOLD_PCT: float = 20.0  # Below this margin % → "HOLD" v
 # Module 7 — Sealed Product / Box Defaults
 # ---------------------------------------------------------------------------
 DEFAULT_PACKS_PER_BOX: int = 36          # Standard booster box pack count (used for box flip math)
+
+# ---------------------------------------------------------------------------
+# Module 8 — PSA Pop Report grading probabilities
+# ---------------------------------------------------------------------------
+PSA_POP_MIN_SAMPLES: int = 50            # Minimum total-graded population before using real pop data;
+                                         # below this, _handle_grade_roi falls back to heuristic defaults.

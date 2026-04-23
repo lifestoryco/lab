@@ -1012,9 +1012,33 @@ def _handle_grade_roi(params: dict) -> dict:
     }
     svc = services.get(service, services["psa_value"])
 
-    p10 = _fl("p10", 0.35)   # modern-era NM raw → PSA 10 rate is typically 30-40%
-    p9  = _fl("p9",  0.45)   # 40-50% land at PSA 9
-    p_sub = _fl("p_sub", 1.0 - p10 - p9)  # remainder come back sub-grade
+    # Default heuristics; overridden by real PSA Pop Report data when available.
+    DEFAULT_P10 = 0.35
+    DEFAULT_P9 = 0.45
+    pop_source = "heuristic"
+    pop_data: dict = {}
+
+    # Try PSA pop data unless user explicitly overrode p10/p9.
+    if "p10" not in params and "p9" not in params:
+        try:
+            from pokequant.sources import registry as _registry
+            _registry.discover()
+            psa_adapter = _registry.get_adapter("psa_pop")
+            if psa_adapter and psa_adapter.is_configured():
+                pop_data = psa_adapter.fetch_pop(card) or {}
+                import config as _cfg
+                min_samples = getattr(_cfg, "PSA_POP_MIN_SAMPLES", 50)
+                total = pop_data.get("total", 0)
+                if total >= min_samples:
+                    DEFAULT_P10 = pop_data["pop10"] / total
+                    DEFAULT_P9 = pop_data["pop9"] / total
+                    pop_source = "psa_pop"
+        except Exception as exc:
+            print(f"[gradeit] psa_pop lookup failed: {exc}", file=sys.stderr)
+
+    p10 = _fl("p10", DEFAULT_P10)
+    p9  = _fl("p9",  DEFAULT_P9)
+    p_sub = _fl("p_sub", 1.0 - p10 - p9)
     if p_sub < 0:
         p_sub = 0.0
 
@@ -1092,6 +1116,8 @@ def _handle_grade_roi(params: dict) -> dict:
             "p_sub": p_sub,
             "sell_fees": sell_fees,
             "shipping": shipping,
+            "pop_source": pop_source,
+            "pop_data": pop_data if pop_source == "psa_pop" else None,
         },
         "breakdown": {
             "expected_psa10_value": round(gross_10, 2),
