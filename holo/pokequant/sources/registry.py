@@ -54,7 +54,8 @@ def _emit_metric(event: str, **fields) -> None:
 class SourceRegistry:
     def __init__(self) -> None:
         self._adapters: list[SourceAdapter] = []
-        self._lock = threading.Lock()
+        # RLock — discover() grabs this while adapter modules re-enter via register().
+        self._lock = threading.RLock()
         self._discovered = False
 
     def register(self, adapter: SourceAdapter) -> None:
