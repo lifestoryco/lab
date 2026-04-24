@@ -17,9 +17,16 @@
 
 ---
 
+## Next Session Agenda
+
+1. Run `/alpha-squad` on the full system design — get 7-advisor critique before writing more code
+2. Refine the 3 target lanes based on alpha squad output
+3. Tackle S-1.1: get the scraper returning live results
+
 ## Active Blockers
 
-None.
+- `ANTHROPIC_API_KEY` must be added to `coin/.env` before any Claude API calls work
+- System Python is 3.9 — always use `.venv/bin/python` (built on Python 3.13 via Homebrew)
 
 ---
 
