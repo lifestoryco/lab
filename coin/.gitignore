@@ -1,0 +1,11 @@
+.venv/
+.env
+data/db/pipeline.db
+data/resumes/generated/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+build/
