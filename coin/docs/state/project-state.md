@@ -2,10 +2,17 @@
 
 ## What Was Just Done (2026-04-24)
 
+### Environment setup ✅ COMPLETE
+
+**New files:** `.env` (local only), `data/db/pipeline.db` (gitignored)
+**Commits:** none (setup artifacts are gitignored)
+**Decisions:** Using Python 3.13 (Homebrew) — system Python is 3.9, not compatible
+**Tests:** 6/6 passing
+
 ### Initial scaffold ✅ COMPLETE
 
 **New files:** Full project structure — see directory layout in CLAUDE.md
-**Commits:** (initial)
+**Commits:** 2dff486 — feat: scaffold coin — agentic career ops engine
 **Decisions:** Python + SQLite for Phase 1 (no external DB deps); prompt caching on all transformer calls; Rich for terminal output matching holo aesthetic
 
 ---
@@ -20,7 +27,7 @@ None.
 
 | Task | Description | Status |
 |------|-------------|--------|
-| S-1.1 | Scraper: LinkedIn + Indeed working results | 🚧 Pending |
+| S-1.1 | Scraper: LinkedIn + Indeed working results | ▶️ Up Next |
 | S-1.2 | Analyzer: JD parsing via Claude API | 🚧 Pending |
 | S-1.3 | Transformer: lane-aware resume rewriting | 🚧 Pending |
 | S-1.4 | Pipeline DB: CRUD + dashboard rendering | 🚧 Pending |
