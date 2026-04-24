@@ -24,32 +24,39 @@ fi
 if [ -d ".venv" ]; then
   echo "  Venv:     ✅ .venv/"
 else
-  echo "  Venv:     ❌ missing — run /coin-setup"
+  echo "  Venv:     ❌ missing — create with: python3 -m venv .venv && .venv/bin/pip install -r requirements.txt"
   PASS=false
 fi
 
-# Dependencies
-if [ -f ".venv/lib/python3.11/site-packages/anthropic/__init__.py" ] || \
-   .venv/bin/python -c "import anthropic" 2>/dev/null; then
-  echo "  Packages: ✅"
+# Core dependencies (httpx, bs4, rich, yaml) — anthropic is intentionally absent
+if .venv/bin/python -c "import httpx, bs4, rich, yaml" 2>/dev/null; then
+  echo "  Packages: ✅ (httpx, bs4, rich, yaml)"
 else
   echo "  Packages: ❌ run: .venv/bin/pip install -r requirements.txt"
   PASS=false
 fi
 
-# .env file
-if [ -f ".env" ]; then
-  echo "  Env:      ✅ .env found"
+# Coin runs inside Claude Code subscription — no API key required.
+# Check that no Anthropic SDK is installed (confuses users if it is).
+if .venv/bin/python -c "import anthropic" 2>/dev/null; then
+  echo "  API key:  ⚠️  anthropic SDK installed — Coin does not need it (safe to ignore)"
 else
-  echo "  Env:      ❌ missing .env — copy .env.example and fill in ANTHROPIC_API_KEY"
-  PASS=false
+  echo "  API key:  ✅ no anthropic SDK — runs inside Claude Code session"
+fi
+
+# .env file (optional — only used to override defaults like comp floors)
+if [ -f ".env" ]; then
+  echo "  Env:      ✅ .env found (overrides active)"
+else
+  echo "  Env:      ℹ️  no .env — using defaults from .env.example (OK for most users)"
 fi
 
 # Pipeline DB
 if [ -f "data/db/pipeline.db" ]; then
-  echo "  DB:       ✅ pipeline.db"
+  COUNT=$(.venv/bin/python -c "from careerops.pipeline import summary; print(summary().get('total', 0))" 2>/dev/null)
+  echo "  DB:       ✅ pipeline.db ($COUNT roles tracked)"
 else
-  echo "  DB:       ⚠️  not initialized — run /coin-setup"
+  echo "  DB:       ⚠️  not initialized — will auto-create on first /coin run"
 fi
 
 echo "═══════════════════════════════════════════════"
@@ -58,5 +65,5 @@ if [ "$PASS" = false ]; then
   echo "  ❌ Environment has issues — fix before starting work"
   exit 1
 else
-  echo "  ✅ Environment healthy"
+  echo "  ✅ Environment healthy — ready for /coin"
 fi

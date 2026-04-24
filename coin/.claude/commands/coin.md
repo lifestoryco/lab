@@ -1,37 +1,21 @@
 ---
-description: Plain-English interface. Ask anything about your job search — Coin interprets and routes to the right module.
+description: Coin career ops — modal router. No args = discover new roles. Or pass a URL, `tailor <id>`, `track <id> <status>`, `status`, `score <id>`.
 ---
 
-# /coin [question]
+# /coin {input}
 
-**Usage:**
-- `/coin should I apply to this Stripe TPM role?` — paste a URL or job description
-- `/coin what's my strongest lane right now?` — strategic analysis
-- `/coin how many roles am I tracking?` — pipeline status
-- `/coin rewrite my summary for a sales role at Salesforce`
+Invoke the Coin skill with the given input (or no input to start discovery).
 
----
+The skill router lives at `.claude/skills/coin/SKILL.md`. Load it and
+dispatch to the correct mode file under `modes/` based on `{input}`.
 
-## Routing logic
+Modes:
+- **(no input)** → discover new roles across all 5 archetypes
+- **`<URL>`** → ingest and score one role
+- **`score <id>`** → fetch + parse JD for role
+- **`tailor <id>`** → generate lane-tailored resume JSON
+- **`track <id> <status>`** → transition pipeline state
+- **`status`** → Rich dashboard
 
-Parse the user's question and route:
-
-| Intent | Route to |
-|--------|----------|
-| Find new roles | `/coin-search` with detected lane |
-| Generate resume for specific role | `/coin-apply` |
-| Pipeline status question | `/coin-track` |
-| Strategic / "should I" | `/alpha-squad` with question as topic |
-| Rewrite request without specific role | `transformer.transform()` with lane + generic role |
-| Comp question | `compensation.lookup()` |
-
-Always confirm the routing before executing:
-```
-I'll {action}. Proceed? [y/n]
-```
-
-Wait for confirmation, then execute.
-
-## Rules
-- Never execute destructive pipeline operations (delete, archive) from plain-English commands — require explicit `/coin-track` usage
-- If the lane is ambiguous, ask: "Which lane? tpm-high / pm-ai / sales-ent"
+Always read `modes/_shared.md` first, then the selected mode.
+Run all Python via `.venv/bin/python` from the coin/ directory.

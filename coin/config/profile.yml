@@ -1,0 +1,87 @@
+# Coin — Sean Ivins North Star Profile
+#
+# Each archetype represents a target role family grounded in Sean's real
+# experience. `north_star` is the one-line pitch used at the top of resumes
+# and cover letters. `proof_points` are the stories weighted highest for that
+# archetype (IDs match data/resumes/base.py PROFILE["stories"]).
+#
+# Edit `north_star` freely — it's the voice of your resume for that lane.
+
+identity:
+  name: Sean Ivins
+  credentials: [PMP, MBA]
+  current_title: Senior Technical Program Manager
+  years_experience: 15
+  email: sean@lifestory.co
+  domains: [wireless infrastructure, IoT systems, B2B SaaS, aerospace/defense, RF]
+  target_comp:
+    min_base: 180000
+    min_total: 250000
+  target_locations: [Remote, Salt Lake City, San Francisco, New York, Austin]
+
+archetypes:
+
+  cox-style-tpm:
+    label: High-Tier TPM (Cox / True-Local-Labs lineage)
+    north_star: >
+      I took a telecom concept to $1M Year 1 revenue, twelve months ahead of
+      schedule, at Cox True Local Labs. I run programs where engineering,
+      product, and go-to-market ship as one.
+    proof_points: [cox_true_local_labs, global_engineering_orchestration]
+    keyword_emphasis:
+      - program execution
+      - cross-functional leadership
+      - hardware + software delivery
+      - revenue-producing launches
+
+  titanx-style-pm:
+    label: AI / SaaS Product Manager with operator chops
+    north_star: >
+      I was fractional COO at TitanX — operator-grade PM who drove a $27M
+      Series A in under two years. I know how product, product-led growth,
+      and revenue engineering compound together.
+    proof_points: [titanx_fractional_coo, cox_true_local_labs]
+    keyword_emphasis:
+      - product strategy
+      - go-to-market design
+      - B2B SaaS scaling
+      - investor-grade metrics
+
+  enterprise-sales-engineer:
+    label: Enterprise Technical Sales / Solutions Engineer
+    north_star: >
+      I took an enterprise book from $6M to $13M ARR while owning the
+      technical credibility in the room. RF, IoT, SaaS — I've sold and
+      deployed all three at seven-figure deal sizes.
+    proof_points: [arr_growth_6m_to_13m, titanx_fractional_coo, utah_broadband_acquisition]
+    keyword_emphasis:
+      - ARR growth
+      - enterprise discovery
+      - technical deal credibility
+      - RF / IoT / SaaS domain
+
+  revenue-ops-transformation:
+    label: Transformation / Revenue Ops Leader
+    north_star: >
+      I drove Utah Broadband's revenue growth to a $27M acquisition by
+      Boston Omaha. I turn messy operations into repeatable revenue and
+      exit-ready businesses.
+    proof_points: [utah_broadband_acquisition, titanx_fractional_coo, arr_growth_6m_to_13m]
+    keyword_emphasis:
+      - revenue operations
+      - operational cadence
+      - M&A preparation
+      - cross-functional P&L
+
+  global-eng-orchestrator:
+    label: Global Engineering / Platform TPM
+    north_star: >
+      I orchestrate engineering across continents — aerospace/defense,
+      wireless infra, IoT — and I hold PMP + MBA behind it. Teams ship on
+      schedule because I architect how the work flows, not just what ships.
+    proof_points: [global_engineering_orchestration, cox_true_local_labs]
+    keyword_emphasis:
+      - distributed engineering
+      - platform delivery
+      - cross-timezone cadence
+      - aerospace / wireless / IoT domain

@@ -16,9 +16,10 @@ bash scripts/start.sh "$PWD"
 
 If any `❌` appears, stop and report the error. Do NOT continue past a broken environment.
 Common fixes:
-- Missing venv → run `/coin-setup`
+- Missing venv → `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt`
 - Missing packages → `.venv/bin/pip install -r requirements.txt`
-- Missing `.env` → copy `.env.example` to `.env` and fill in `ANTHROPIC_API_KEY`
+- No `.env` is OK — Coin runs without one (`.env` only overrides comp floors and location)
+- Coin does NOT need `ANTHROPIC_API_KEY` — all LLM reasoning runs in the host Claude Code session
 
 ## Step 2 — Read context
 
