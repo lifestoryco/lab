@@ -1,0 +1,560 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Semantic Design Tokens — "Electric Void & Engine Red" ───
+   :root = light mode (default)
+   .dark = dark mode override
+   Both driven by next-themes + system preference
+   Palette: Void Black #0D0D0D · Stark White #F2F2F2
+            Engine Red #F20F22 · Trust Blue #3B82F6
+            Trust Blue #3B82F6 (retained for B2B)
+   ─────────────────────────────────────────────────────────── */
+
+:root {
+  color-scheme: light;
+
+  /* Backgrounds */
+  --background: #F2F2F2;
+  --surface: #FFFFFF;
+  --surface-elevated: #FAFAFA;
+  --surface-sunken: #E8E8E8;
+  --surface-hover: #E0E0E0;
+
+  /* Text — WCAG 2.2 AA/AAA on #F2F2F2 */
+  --foreground: #0D0D0D;              /* ~18:1 — AAA */
+  --foreground-secondary: #525252;   /* ~7.5:1 — AAA */
+  --foreground-muted: #737373;        /* ~4.6:1 — AA */
+
+  /* Borders */
+  --border: #D4D4D4;
+  --border-strong: #A3A3A3;
+  --ring: #F20F22;
+
+  /* Brand — Contrast-as-Brand (mode-adaptive primary) */
+  --primary-50: #F5F5F5;
+  --primary-100: #E5E5E5;
+  --primary-300: #525252;
+  --primary-400: #2E2E2E;
+  --primary-500: #0D0D0D;
+  --primary-600: #000000;
+  --primary-700: #000000;
+  /* Secondary = Engine Red (accent, hover, boom moments) */
+  --secondary-50: #FFF0F1;
+  --secondary-300: #F76D78;
+  --secondary-400: #F53E4D;
+  --secondary-500: #F20F22;
+  --secondary-600: #D10D1E;
+
+  /* Trust Blue — co-primary for B2B trust signals */
+  --trust-50: #EFF6FF;
+  --trust-100: #DBEAFE;
+  --trust-500: #3B82F6;
+  --trust-600: #2563EB;
+  --trust-700: #1D4ED8;
+  --trust-muted: #5C8DC5;
+
+  /* Verification colors — semantic only, never decorative */
+  --verify-green: #10B981;
+  --verify-green-bg: #ECFDF5;
+  --verify-red: #EF4444;
+  --verify-red-bg: #FEF2F2;
+
+  /* Highlight accents — multicolor for badges, tags, categories */
+  --highlight-yellow: #EAB308;
+  --highlight-green: #22C55E;
+  --highlight-blue: #3B82F6;
+
+  /* Slate Blue accent (Ink Wash) */
+  --slate-blue: #6D8196;
+
+  /* Colored surfaces — barely-there tints */
+  --surface-blue:   #EFF6FF;
+  --surface-green:  #F0FDF4;
+  --surface-amber:  #FFFBEB;
+  --surface-ivory:  #F8F4EC;
+  --surface-yellow: #FFFEF0;
+
+  /* Glows — subtle in light mode */
+  --glow-red:    rgba(242, 15, 34, 0.06);
+  --glow-blue:   rgba(59, 130, 246, 0.04);
+
+  /* Gradient meshes — Engine Red + Trust Blue hero */
+  --gradient-hero: radial-gradient(ellipse 70% 50% at 15% 80%, rgba(242,15,34,0.05) 0%, transparent 60%),
+                   radial-gradient(ellipse 80% 60% at 50% 110%, rgba(59,130,246,0.06) 0%, transparent 50%);
+  --gradient-trust: radial-gradient(ellipse 100% 80% at 50% 0%, rgba(59,130,246,0.08) 0%, transparent 60%);
+
+  /* Final CTA section — void black with subtle red warmth */
+  --gradient-cta-section: linear-gradient(160deg, #0D0D0D 0%, #1A0005 45%, #0D0D0D 100%);
+
+  /* Glass card */
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(212, 212, 212, 0.4);
+  --glass-shadow: 0 2px 8px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+
+  /* Inputs */
+  --input-bg: rgba(0, 0, 0, 0.03);
+  --input-border: rgba(0, 0, 0, 0.08);
+
+  /* Dividers */
+  --divider: rgba(0, 0, 0, 0.06);
+  --divider-subtle: rgba(0, 0, 0, 0.04);
+
+  /* Scrollbar */
+  --scrollbar-track: #F2F2F2;
+  --scrollbar-thumb: rgba(242, 15, 34, 0.2);
+  --scrollbar-thumb-hover: rgba(242, 15, 34, 0.35);
+}
+
+/* ─── Dark mode override — Electric Void ─────────────────────── */
+.dark {
+  color-scheme: dark;
+
+  /* Backgrounds */
+  --background: #0D0D0D;
+  --surface: #161616;
+  --surface-elevated: #1A1A1A;
+  --surface-sunken: #0A0A0A;
+  --surface-hover: rgba(26, 26, 26, 0.8);
+
+  /* Text */
+  --foreground: #F2F2F2;
+  --foreground-secondary: #A3A3A3;
+  --foreground-muted: #737373;
+
+  /* Primary = canvas inversion (white on dark) */
+  --primary-50: #1A1A1A;
+  --primary-100: #2E2E2E;
+  --primary-300: #A3A3A3;
+  --primary-400: #D4D4D4;
+  --primary-500: #F2F2F2;
+  --primary-600: #FFFFFF;
+  --primary-700: #FFFFFF;
+
+  /* Borders — neutral for Electric Void */
+  --border: #262626;
+  --border-strong: #404040;
+  --ring: #F20F22;
+
+  /* Trust Blue — dark mode variants */
+  --trust-50: rgba(59, 130, 246, 0.08);
+  --trust-100: rgba(59, 130, 246, 0.15);
+  --trust-500: #60A5FA;
+  --trust-600: #3B82F6;
+  --trust-700: #2563EB;
+  --trust-muted: #7DA4CC;
+
+  /* Verification colors — dark mode */
+  --verify-green: #34D399;
+  --verify-green-bg: rgba(16, 185, 129, 0.08);
+  --verify-red: #F87171;
+  --verify-red-bg: rgba(239, 68, 68, 0.08);
+
+  /* Slate Blue — dark mode */
+  --slate-blue: #94A3B8;
+
+  /* Colored surfaces — dark mode (subtle tints) */
+  --surface-blue:   rgba(59,  130, 246, 0.07);
+  --surface-green:  rgba(16,  185, 129, 0.07);
+  --surface-amber:  rgba(242, 208,  34, 0.06);
+  --surface-ivory:  rgba(255, 255, 227, 0.04);
+  --surface-yellow: rgba(242, 208,  34, 0.08);
+
+  /* Glows — vivid in dark mode */
+  --glow-red:    rgba(242, 15, 34, 0.3);
+  --glow-blue:   rgba(96, 165, 250, 0.2);
+
+  /* Gradient meshes — dark mode Electric Void */
+  --gradient-hero: radial-gradient(ellipse 70% 50% at 15% 80%, rgba(242,15,34,0.05) 0%, transparent 60%),
+                   radial-gradient(ellipse 80% 60% at 50% 110%, rgba(59,130,246,0.05) 0%, transparent 50%);
+  --gradient-trust: radial-gradient(ellipse 100% 80% at 50% 0%, rgba(96,165,250,0.1) 0%, transparent 60%);
+
+  /* Final CTA section — void black with deeper red warmth */
+  --gradient-cta-section: linear-gradient(160deg, #0A0A0A 0%, #1A0005 45%, #0D0D0D 100%);
+
+  /* Glass card */
+  --glass-bg: rgba(22, 22, 22, 0.7);
+  --glass-border: rgba(64, 64, 64, 0.3);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  /* Inputs */
+  --input-bg: rgba(13, 13, 13, 0.6);
+  --input-border: rgba(255, 255, 255, 0.08);
+
+  /* Dividers */
+  --divider: rgba(255, 255, 255, 0.06);
+  --divider-subtle: rgba(255, 255, 255, 0.04);
+
+  /* Scrollbar */
+  --scrollbar-track: #0D0D0D;
+  --scrollbar-thumb: rgba(242, 15, 34, 0.2);
+  --scrollbar-thumb-hover: rgba(242, 15, 34, 0.35);
+}
+
+/* ─── Base reset ────────────────────────────────────────────── */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Marketing theme transition ────────────────────────────── */
+/* Smooth 250ms sweep between light/dark — marketing WOW moment */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, fill, stroke, box-shadow, opacity;
+  transition-duration: 250ms;
+  transition-timing-function: ease;
+}
+
+/* Exclude animated elements to prevent lag */
+.animate-float,
+.animate-orbPulse,
+.animate-shimmer,
+.animate-pulseGlow,
+.animate-marquee-left,
+.animate-marquee-right {
+  transition: none !important;
+}
+
+/* ─── Custom utilities ──────────────────────────────────────── */
+@layer utilities {
+  /* Gradient text — Engine Red → foreground (brand) */
+  .gradient-text {
+    background: linear-gradient(135deg, #F20F22 0%, var(--foreground) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Gradient text — Engine Red solid (accent) */
+  .gradient-text-red {
+    background: linear-gradient(135deg, #F20F22 0%, #D10D1E 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Gradient text — trust blue → Engine Red (CTAs, trust signals) */
+  .gradient-text-trust {
+    background: linear-gradient(135deg, #3B82F6 0%, #F20F22 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Section flow gradients — soft fade-in/out at section edges ──
+     Each section fades from page background → peak surface color → background
+     so adjacent sections always transition through neutral rather than hard-cutting.
+     64px fade matches the py-24 (96px) padding so content sits in full color. */
+  .flow-blue {
+    background: linear-gradient(
+      to bottom,
+      var(--background) 0px,
+      var(--surface-blue) 64px,
+      var(--surface-blue) calc(100% - 64px),
+      var(--background) 100%
+    );
+  }
+  .flow-green {
+    background: linear-gradient(
+      to bottom,
+      var(--background) 0px,
+      var(--surface-green) 64px,
+      var(--surface-green) calc(100% - 64px),
+      var(--background) 100%
+    );
+  }
+  .flow-amber {
+    background: linear-gradient(
+      to bottom,
+      var(--background) 0px,
+      var(--surface-amber) 64px,
+      var(--surface-amber) calc(100% - 64px),
+      var(--background) 100%
+    );
+  }
+  .flow-ivory {
+    background: linear-gradient(
+      to bottom,
+      var(--background) 0px,
+      var(--surface-ivory) 64px,
+      var(--surface-ivory) calc(100% - 64px),
+      var(--background) 100%
+    );
+  }
+  .flow-yellow {
+    background: linear-gradient(
+      to bottom,
+      var(--background) 0px,
+      var(--surface-yellow) 64px,
+      var(--surface-yellow) calc(100% - 64px),
+      var(--background) 100%
+    );
+  }
+
+  /* Frosted glass card — theme-adaptive via CSS variables */
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    box-shadow: var(--glass-shadow), var(--glass-inset);
+  }
+
+  /* Glow border — Engine Red (adapts via variables) */
+  .glow-border-red {
+    box-shadow:
+      0 0 0 1px var(--glow-red),
+      0 0 40px var(--glow-red),
+      inset 0 0 30px rgba(242, 15, 34, 0.05);
+  }
+
+  /* Orb blobs for animated backgrounds */
+  .orb {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    filter: blur(80px);
+  }
+
+  /* Section padding helpers */
+  .section-padding {
+    @apply py-24 px-6;
+  }
+
+  .section-padding-lg {
+    @apply py-32 px-6;
+  }
+
+  /* Text balance */
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* ─── Grain texture overlay ─────────────────────────────────── */
+/* Dark mode: overlay blend — adds warmth to deep navy bg */
+/* Light mode: multiply blend — adds texture without harshness */
+.grain-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  opacity: 0;  /* hidden by default (light mode) */
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+  mix-blend-mode: overlay;
+}
+
+/* Subtle grain only in dark mode — adds depth without sandiness */
+.dark .grain-overlay {
+  opacity: 0.012;
+}
+
+/* ─── Cursor spotlight ──────────────────────────────────────── */
+.cursor-spotlight {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  transition: background 0.1s ease;
+}
+
+/* ─── Marquee (testimonials / logo tickers) ─────────────────── */
+@keyframes marquee-left {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+@keyframes marquee-right {
+  from { transform: translateX(-50%); }
+  to   { transform: translateX(0); }
+}
+.animate-marquee-left  { animation: marquee-left  40s linear infinite; }
+.animate-marquee-right { animation: marquee-right 40s linear infinite; }
+
+/* ─── Count-up number highlight ─────────────────────────────── */
+.stat-number {
+  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Scrollbar styling ─────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* ─── Blog prose typography ─────────────────────────────────── */
+.blog-prose {
+  color: #CBD5E1; /* slate-300 */
+  font-size: 1.0625rem;
+  line-height: 1.8;
+}
+
+.blog-prose p {
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+}
+
+.blog-prose h2 {
+  font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #F1F5F9;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+
+.blog-prose h3 {
+  font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #E2E8F0;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.005em;
+  line-height: 1.4;
+}
+
+.blog-prose h4 {
+  font-family: var(--font-display), "Space Grotesk", system-ui, sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #E2E8F0;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.blog-prose strong {
+  color: #F1F5F9;
+  font-weight: 600;
+}
+
+.blog-prose em {
+  color: #CBD5E1;
+  font-style: italic;
+}
+
+.blog-prose a {
+  color: var(--secondary-500); /* Engine Red */
+  text-decoration: underline;
+  text-decoration-color: rgba(242, 15, 34, 0.3);
+  text-underline-offset: 3px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+
+.blog-prose a:hover {
+  color: var(--secondary-600);
+  text-decoration-color: var(--secondary-500);
+}
+
+.blog-prose ul {
+  list-style: none;
+  padding-left: 0;
+  margin-bottom: 1.5rem;
+}
+
+.blog-prose ul li {
+  position: relative;
+  padding-left: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.blog-prose ul li::before {
+  content: "–";
+  position: absolute;
+  left: 0;
+  color: var(--secondary-500); /* Engine Red — never purple */
+}
+
+.blog-prose ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.blog-prose ol li {
+  margin-bottom: 0.5rem;
+  padding-left: 0.25rem;
+}
+
+.blog-prose blockquote {
+  border-left: 3px solid var(--secondary-500); /* Engine Red */
+  padding: 0.75rem 0 0.75rem 1.25rem;
+  margin: 2rem 0;
+  color: var(--foreground-secondary);
+  font-style: italic;
+  background: var(--surface-elevated);
+  border-radius: 0 8px 8px 0;
+}
+
+.blog-prose blockquote p {
+  margin-bottom: 0;
+}
+
+.blog-prose hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  margin: 2.5rem 0;
+}
+
+.blog-prose code {
+  font-family: "JetBrains Mono", "Fira Code", Consolas, monospace;
+  font-size: 0.875rem;
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  color: #94A3B8;
+}
+
+.blog-prose pre {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 1.25rem;
+  overflow-x: auto;
+  margin-bottom: 1.5rem;
+}
+
+.blog-prose pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.875rem;
+  color: #94A3B8;
+}
+
+/* ─── Reduce motion ─────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

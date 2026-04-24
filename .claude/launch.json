@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "lab-web",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd /Users/tealizard/Documents/Lab/lab/web && npm run dev -- -p 3103"
+      ],
+      "port": 3103
+    }
+  ]
+}
