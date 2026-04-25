@@ -113,14 +113,61 @@ BOARDS = {
 # ── Database ──────────────────────────────────────────────────────────────────
 DB_PATH = os.getenv("COIN_DB_PATH", "data/db/pipeline.db")
 
-# ── Fit scoring weights (comp-first per CRO verdict) ─────────────────────────
-FIT_SCORE_WEIGHTS = {
-    "comp": 0.40,
-    "skill_match": 0.30,
-    "title_match": 0.20,
-    "remote": 0.10,
+# ── Company tier list (for company_tier scoring dimension) ───────────────────
+# Tier 1: FAANG+ and equivalents — benchmark pay, brand recognition
+# Tier 2: Well-funded unicorns / high-growth public / Series C+
+# Tier 3 (default): everyone else
+COMPANY_TIERS = {
+    "tier1": {
+        "score": 100.0,
+        "label": "FAANG+",
+        "companies": [
+            "netflix", "google", "meta", "apple", "amazon", "microsoft",
+            "stripe", "openai", "anthropic", "deepmind", "nvidia", "tesla",
+            "linkedin", "salesforce", "uber", "airbnb", "palantir", "snowflake",
+            "databricks", "figma", "notion", "vercel", "github", "shopify",
+            "twilio", "square", "block",
+        ],
+    },
+    "tier2": {
+        "score": 75.0,
+        "label": "High-growth / Series C+",
+        "companies": [
+            "roku", "datadog", "elastic", "cloudflare", "hubspot", "zendesk",
+            "workday", "servicenow", "okta", "crowdstrike", "zscaler",
+            "asana", "coupa", "docusign", "splunk", "hashicorp", "rippling",
+            "acorns", "harvest", "hayden ai", "brex", "ramp", "retool",
+            "linear", "notion", "intercom", "segment", "amplitude",
+        ],
+    },
 }
+COMPANY_TIER_DEFAULT_SCORE = 45.0  # unknown / small co
+
+# ── Fit scoring weights — 8 dimensions, sum = 1.0 ────────────────────────────
+# Comp stays the dominant signal (CRO verdict). Company tier is new — FAANG
+# pays 2× and it's correlated with role quality. Effort matters because a
+# 20-field Taleo portal has a real opportunity cost.
+FIT_SCORE_WEIGHTS = {
+    "comp":               0.30,
+    "company_tier":       0.15,
+    "skill_match":        0.22,
+    "title_match":        0.12,
+    "remote":             0.08,
+    "application_effort": 0.05,
+    "seniority_fit":      0.05,
+    "culture_fit":        0.03,
+}
+
+# ── Score → letter grade thresholds ──────────────────────────────────────────
+SCORE_GRADE_THRESHOLDS = [
+    (85, "A"),  # apply immediately after tailoring
+    (70, "B"),  # tailor + review together
+    (55, "C"),  # only if Sean explicitly asks
+    (40, "D"),  # skip
+]
+# Below lowest threshold → "F"
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 PROFILE_YAML_PATH = "config/profile.yml"
 GENERATED_RESUMES_DIR = "data/resumes/generated"
+RESUME_TEMPLATE_PATH = "data/resume_template.html"

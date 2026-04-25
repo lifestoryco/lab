@@ -241,14 +241,17 @@ def dashboard() -> None:
         console.print("[yellow]Pipeline empty — run `/coin` to discover roles.[/yellow]")
         return
 
+    from careerops.score import score_grade
+
     table = Table(box=box.SIMPLE_HEAVY, show_header=True, header_style="bold cyan")
     table.add_column("ID", style="dim", width=4)
     table.add_column("Status", width=16)
     table.add_column("Lane", width=22)
     table.add_column("Company", width=20)
-    table.add_column("Title", width=36)
+    table.add_column("Title", width=34)
     table.add_column("Comp", width=14)
     table.add_column("Fit", justify="right", width=5)
+    table.add_column("Grade", justify="center", width=5)
 
     for r in active:
         if r["comp_min"]:
@@ -257,16 +260,20 @@ def dashboard() -> None:
                 comp += f"–${r['comp_max']//1000}K"
         else:
             comp = "—"
-        fit = f"{r['fit_score']:.0f}" if r["fit_score"] is not None else "—"
-        fit_color = "green" if r["fit_score"] and r["fit_score"] >= 75 else ("yellow" if r["fit_score"] and r["fit_score"] >= 55 else "red")
+        fit_val = r["fit_score"]
+        fit = f"{fit_val:.0f}" if fit_val is not None else "—"
+        grade = score_grade(fit_val) if fit_val is not None else "—"
+        fit_color = "green" if fit_val and fit_val >= 70 else ("yellow" if fit_val and fit_val >= 55 else "red")
+        grade_color = {"A": "bold green", "B": "green", "C": "yellow", "D": "red", "F": "dim red"}.get(grade, "dim")
         table.add_row(
             str(r["id"]),
             r["status"] or "",
             r["lane"] or "",
             (r["company"] or "")[:20],
-            (r["title"] or "")[:36],
+            (r["title"] or "")[:34],
             comp,
             f"[{fit_color}]{fit}[/{fit_color}]",
+            f"[{grade_color}]{grade}[/{grade_color}]",
         )
 
     console.print(table)

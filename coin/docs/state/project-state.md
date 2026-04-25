@@ -1,6 +1,41 @@
 # Coin — Project State
 
-## What Was Just Done (2026-04-25, Session 3)
+## What Was Just Done (2026-04-25, Session 3 — Part 3)
+
+### santifer feature parity: scoring richness + liveness + PDF ✅ COMPLETE
+
+**4 features added:**
+
+**1. 8-dimension scoring with A-F grades** (`config.py`, `careerops/score.py`):
+- Old: 4 dimensions (comp, skill, title, remote)
+- New: 8 dimensions — added `company_tier` (FAANG+ vs unicorn vs unknown),
+  `application_effort` (LinkedIn easy vs ATS vs custom), `seniority_fit`
+  (staff/principal vs senior vs junior), `culture_fit` (red flag count)
+- New `score_breakdown()` returns per-dimension raw scores, weights, and
+  contributions — useful for diagnosing why a role scored low
+- New `score_grade()` converts composite to A–F (A≥85, B≥70, C≥55, D≥40, F<40)
+- Netflix TPM Infrastructure: 76.1 → **80.0 (B)** under new weights
+- Tests: 20 → **48 passing**
+
+**2. Dashboard shows Grade column** (`careerops/pipeline.py`):
+- Fit column still present; Grade column added with color coding
+  (bold green=A, green=B, yellow=C, red=D, dim red=F)
+
+**3. Liveness check** (`scripts/liveness_check.py`):
+- Pings all non-terminal roles; marks `closed` if HTTP 404 or JD removal
+  phrases detected. `--dry-run` flag for report-only mode.
+- System dep: requires `httpx` (already in deps)
+
+**4. PDF generation** (`scripts/render_pdf.py`, `data/resume_template.html`):
+- Reads generated resume JSON, renders via Jinja2 HTML template, writes
+  print-ready PDF via weasyprint
+- System dep: requires `brew install pango` (one-time, done on this machine)
+- First PDF: `data/resumes/generated/0004_cox-style-tpm_2026-04-25.pdf`
+- `requirements.txt` now includes `jinja2>=3.1.0`
+
+---
+
+## What Was Just Done (2026-04-25, Session 3 — Part 2)
 
 ### First end-to-end run on new machine ✅ COMPLETE
 
@@ -73,18 +108,16 @@ heuristic fit scores 65–83.
 
 ## Next Session Agenda
 
-1. **Submit the Netflix application.** Resume is generated. Sean reviews
-   `data/resumes/generated/0004_cox-style-tpm_2026-04-25.json`, copies into
-   his template, and applies. Then: `/coin track 4 applied`.
-2. **Score + tailor the Netflix TPM 6 — Data Systems role (role 5)** — same
-   company, different infra focus; $420K–$630K comp range expected.
-3. **Add comp extraction to scraper** — currently `comp_min` is null for
-   most roles because LinkedIn's card HTML rarely includes ranges. Consider
-   cross-referencing Levels.fyi for high-signal companies (Netflix, Stripe,
-   Meta, Airbnb).
-4. **Phase 2 kickoff:** batch scoring for 50+ roles — port santifer's
-   `claude -p` pattern or use `/coin discover --all-lanes --limit 20` in a
-   loop and auto-score the top-10 by heuristic.
+1. **Submit the Netflix application.** Resume + PDF are generated:
+   `data/resumes/generated/0004_cox-style-tpm_2026-04-25.{json,pdf}`.
+   Sean reviews, applies, then: `/coin track 4 applied`.
+2. **Score + tailor the Netflix TPM 6 — Data Systems role** — same company,
+   different infra focus; $420K–$630K comp range expected.
+3. **Re-score all 31 existing roles** under the new 8-dimension weights —
+   run: `python scripts/discover.py --rescore-existing` (not yet wired) or
+   inline Python loop against `list_roles()`.
+4. **Add comp extraction to scraper** — most roles have null comp_min;
+   cross-reference Levels.fyi for Tier 1 companies.
 
 ## Active Blockers
 

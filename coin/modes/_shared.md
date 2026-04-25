@@ -39,23 +39,52 @@ You are the intelligence layer; Python scripts are your hands.
 North Star pitches live in `config/profile.yml` — load it when you need
 voice/positioning.
 
-## Scoring rubric (for your reasoning; the numeric score is in `careerops/score.py`)
+## Scoring system (8 dimensions · A-F grade)
 
-Evaluate every role on six dimensions, 1–5 each. Use these to *narrate*
-fit to Sean; the weighted composite is computed by Python.
+Python computes the numeric composite and grade automatically. Your job is
+to *narrate* fit to Sean — explain the grade, not just quote the number.
 
-1. **Comp delta** — How far above Sean's floors does this role go?
-2. **Archetype match** — Which archetype (if any) does the title + JD fit?
-3. **Proof-point leverage** — Do Sean's top stories directly answer the JD?
-4. **Culture signals** — Red or green flags in "about us" / benefits / role req's.
-5. **Growth path** — Is this a next step (promotion trajectory, equity, scope)?
-6. **Red flags** — Unicorn-unicorn language, stack-ranking, "rockstar", etc.
+### The 8 dimensions (from `careerops/score.py`)
 
-**Thresholds (numeric fit_score from score.py):**
-- ≥ 80 → apply immediately after tailoring
-- 65–79 → tailor + review together
-- 50–64 → only if Sean explicitly asks
-- < 50 → skip, mark `no_apply`
+| Dimension | Weight | What Python scores |
+|---|---|---|
+| `comp` | 30% | Explicit TC vs Sean's $250K floor; 55 if unverified |
+| `company_tier` | 15% | 100 = FAANG+, 75 = funded unicorn, 45 = unknown |
+| `skill_match` | 22% | JD skill overlap with Sean's PROFILE["skills"] |
+| `title_match` | 12% | Archetype title keyword match |
+| `remote` | 8% | Remote/hybrid vs in-office |
+| `application_effort` | 5% | LinkedIn Easy = 90, Greenhouse = 65, custom = 40 |
+| `seniority_fit` | 5% | staff/principal = 100, senior = 80, junior = 0 |
+| `culture_fit` | 3% | 80 base − 10/red-flag + 5/positive signal |
+
+### Grade thresholds
+
+| Grade | Score | Action |
+|---|---|---|
+| **A** | ≥ 85 | Apply immediately after tailoring |
+| **B** | 70–84 | Tailor + review together |
+| **C** | 55–69 | Only if Sean explicitly asks |
+| **D** | 40–54 | Skip |
+| **F** | < 40 | Skip, mark `no_apply` |
+
+### Score breakdown command
+
+After recomputing fit, show Sean the breakdown:
+
+```bash
+.venv/bin/python -c "
+import sys; sys.path.insert(0,'.')
+from careerops.pipeline import get_role
+from careerops.score import score_breakdown
+import json
+r = get_role(<role_id>)
+parsed = json.loads(r['jd_parsed']) if r.get('jd_parsed') else {}
+bd = score_breakdown(r, r['lane'], parsed_jd=parsed)
+print(f\"Composite: {bd['composite']} ({bd['grade']})\")
+for dim, d in bd['dimensions'].items():
+    print(f'  {dim:<20} raw={d[\"raw\"]:>5.1f}  weight={d[\"weight\"]}  contrib={d[\"contribution\"]:>4.1f}')
+"
+```
 
 ## State machine
 

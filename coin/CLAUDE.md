@@ -118,6 +118,8 @@ discovered → scored → resume_generated → applied →
 - **No ORM:** raw `sqlite3` — schema in `careerops/pipeline.py`
 - **LLM integration:** NONE. All reasoning runs in the host Claude Code
   session. Do not add `anthropic` to requirements.
+- **PDF generation:** `weasyprint` + `jinja2` — `scripts/render_pdf.py` reads
+  a generated resume JSON and produces a print-ready PDF.
 
 ---
 
@@ -175,6 +177,8 @@ coin/
     update_role.py          # status / fit / parsed_jd updates
     fetch_jd.py             # pull JD text for one role
     dashboard.py            # print pipeline dashboard
+    liveness_check.py       # ping open roles; mark dead ones closed
+    render_pdf.py           # resume JSON → print-ready PDF via weasyprint
   config/
     profile.yml             # North Star pitches (editable by Sean)
   config.py                 # Python constants + archetype keywords
