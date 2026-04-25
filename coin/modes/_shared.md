@@ -81,7 +81,7 @@ Use `scripts/update_role.py --id N --status S` to transition.
 Run from the coin/ directory with the project venv:
 
 ```bash
-/Users/sean/Documents/Handoffpack/lab/coin/.venv/bin/python scripts/<name>.py <args>
+/Users/tealizard/Documents/lab/coin/.venv/bin/python scripts/<name>.py <args>
 ```
 
 For read-heavy steps, pipe JSON back to yourself:

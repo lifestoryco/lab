@@ -96,7 +96,10 @@ def score_fit(role: dict, lane: str, parsed_jd: dict | None = None, profile: dic
     jd = parsed_jd or role
 
     w = FIT_SCORE_WEIGHTS
-    comp = score_comp(role.get("comp_min"), role.get("comp_max"))
+    # Use DB comp_min/max first; fall back to parsed JD when comp_explicit is True.
+    comp_min = role.get("comp_min") or (parsed_jd.get("comp_min") if parsed_jd and parsed_jd.get("comp_explicit") else None)
+    comp_max = role.get("comp_max") or (parsed_jd.get("comp_max") if parsed_jd and parsed_jd.get("comp_explicit") else None)
+    comp = score_comp(comp_min, comp_max)
     title = score_title(role.get("title"), lane)
     skills = score_skills(jd, lane, profile)
     remote = score_remote(role)

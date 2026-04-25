@@ -162,11 +162,17 @@ def update_fit_score(role_id: int, score: float) -> None:
 
 
 def update_jd_parsed(role_id: int, parsed: dict) -> None:
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     with _conn() as conn:
         conn.execute(
             "UPDATE roles SET jd_parsed = ?, updated_at = ? WHERE id = ?",
-            (json.dumps(parsed), datetime.now(timezone.utc).isoformat(timespec="seconds"), role_id),
+            (json.dumps(parsed), now, role_id),
         )
+        if parsed.get("comp_explicit") and parsed.get("comp_min"):
+            conn.execute(
+                "UPDATE roles SET comp_min = ?, comp_max = ?, comp_source = 'explicit', updated_at = ? WHERE id = ?",
+                (parsed["comp_min"], parsed.get("comp_max"), now, role_id),
+            )
 
 
 def update_jd_raw(role_id: int, jd: str) -> None:

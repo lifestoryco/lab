@@ -31,7 +31,7 @@ If the input is ambiguous, ask one clarifying question then dispatch.
 
 1. Load `modes/_shared.md` (framework, rubric, archetypes, state machine).
 2. Load the mode file above.
-3. Always run from `/Users/sean/Documents/Handoffpack/lab/coin/` using the
+3. Always run from `/Users/tealizard/Documents/lab/coin/` using the
    venv at `.venv/bin/python`.
 4. Before the first tool call each session, verify Sean is in the right
    directory by running `pwd` and `ls config/profile.yml` — if missing,

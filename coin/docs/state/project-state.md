@@ -1,5 +1,37 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-25, Session 3)
+
+### First end-to-end run on new machine ✅ COMPLETE
+
+**Goal:** Set up Coin on new machine, fix bugs found during first live run, execute
+full discover → score → tailor pipeline.
+
+**Setup:**
+- Created `.venv/` at `/Users/tealizard/Documents/lab/coin/`
+- Installed all deps from `requirements.txt` — 20/20 tests pass
+- Fixed stale path `/Users/sean/Documents/Handoffpack/...` → `/Users/tealizard/Documents/lab/coin/` in `SKILL.md` and `modes/_shared.md`
+
+**Bug fixed — comp-blindness in score_fit:**
+- `score_fit()` was reading `comp_min`/`comp_max` from the DB row only, ignoring the
+  parsed JD. When the JD has `comp_explicit=True`, the real comp was silently dropped,
+  collapsing every explicitly-priced role to score 55 (unverified penalty).
+- Fix 1: `score.py` — fallback to `parsed_jd["comp_min"]` when DB row comp is null
+  and `comp_explicit` is True.
+- Fix 2: `pipeline.py` `update_jd_parsed()` — now also persists `comp_min`/`comp_max`
+  to the DB row when `comp_explicit=True`, so subsequent calls don't need the fallback.
+
+**Live discovery:** 32 roles across all 5 archetypes, all active in pipeline.
+
+**First resume generated:**
+- Role: Netflix "Technical Program Manager - Infrastructure Engineering"
+- Comp: $420K–$630K (explicitly stated in JD)
+- Fit score: 76.1 (was 58.1 before comp-blindness fix)
+- Saved to `data/resumes/generated/0004_cox-style-tpm_2026-04-25.json`
+- Status: `resume_generated`
+
+---
+
 ## What Was Just Done (2026-04-24, Session 2)
 
 ### Alpha-Squad rearchitecture ✅ COMPLETE
@@ -41,12 +73,18 @@ heuristic fit scores 65–83.
 
 ## Next Session Agenda
 
-1. **Run `/coin` in Claude Code desktop** as Sean for real — first human-driven
-   end-to-end: discover → pick one → score (JD parse) → tailor → file a real
-   application.
-2. **Refine one North Star pitch** based on how the first tailor output reads.
-3. **Phase 2 kickoff:** port santifer's `claude -p` batch resumability for
-   scoring 50+ roles in parallel.
+1. **Submit the Netflix application.** Resume is generated. Sean reviews
+   `data/resumes/generated/0004_cox-style-tpm_2026-04-25.json`, copies into
+   his template, and applies. Then: `/coin track 4 applied`.
+2. **Score + tailor the Netflix TPM 6 — Data Systems role (role 5)** — same
+   company, different infra focus; $420K–$630K comp range expected.
+3. **Add comp extraction to scraper** — currently `comp_min` is null for
+   most roles because LinkedIn's card HTML rarely includes ranges. Consider
+   cross-referencing Levels.fyi for high-signal companies (Netflix, Stripe,
+   Meta, Airbnb).
+4. **Phase 2 kickoff:** batch scoring for 50+ roles — port santifer's
+   `claude -p` pattern or use `/coin discover --all-lanes --limit 20` in a
+   loop and auto-score the top-10 by heuristic.
 
 ## Active Blockers
 
