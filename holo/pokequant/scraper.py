@@ -37,8 +37,6 @@ from pathlib import Path
 from typing import Any, Generator
 
 import requests
-
-from pokequant.http import session as _http_session
 from bs4 import BeautifulSoup
 
 # ---------------------------------------------------------------------------
@@ -269,7 +267,7 @@ def _get(url: str, timeout: int = 10, retries: int = 3) -> requests.Response:
                 "Connection": "keep-alive",
                 "DNT": "1",
             }
-            resp = _http_session().get(url, headers=headers, timeout=timeout)
+            resp = requests.get(url, headers=headers, timeout=timeout)
 
             if resp.status_code == 429:
                 wait = 5 * (2 ** attempt)  # 5s, 10s, 20s
@@ -840,7 +838,7 @@ def _lookup_tcgplayer_product_id(card_name: str) -> int | None:
 
     for attempt in range(2):  # one retry on timeout
         try:
-            r = _http_session().get(
+            r = requests.get(
                 redirect_url,
                 headers={"User-Agent": random.choice(_USER_AGENTS)},
                 timeout=(5, 12),
@@ -895,7 +893,7 @@ def _fetch_tcgplayer_history(
     }
 
     try:
-        resp = _http_session().get(url, headers=headers, timeout=10)
+        resp = requests.get(url, headers=headers, timeout=10)
         resp.raise_for_status()
         data = resp.json()
     except (requests.RequestException, json.JSONDecodeError) as exc:
@@ -1110,63 +1108,6 @@ def fetch_sales(
     use_cache: bool = True,
     grade: str = "raw",
 ) -> list[dict[str, Any]] | dict[str, Any]:
-    """Dispatcher. Routes to the registry path when HOLO_USE_REGISTRY=1,
-    otherwise preserves the legacy linear scraper cascade.
-
-    The registry path is behind a feature flag until the adapter coverage
-    matches the legacy cascade and the parity test (H-1.10 Step 3) shows
-    <5% distributional delta on canary cards.
-    """
-    import os as _os
-
-    # Clear any prior-call audit so a legacy-path response never inherits
-    # a stale registry audit from an earlier call in the same warm instance.
-    from pokequant.sources import LAST_AUDIT as _LAST_AUDIT
-    _LAST_AUDIT.set(None)
-
-    if _os.environ.get("HOLO_USE_REGISTRY", "0") == "1":
-        try:
-            return _fetch_sales_via_registry(card_name, set_name=set_name,
-                                             days=days, grade=grade, use_cache=use_cache)
-        except Exception as exc:
-            logger.warning("registry path failed, falling back to legacy: %s", exc)
-    return _fetch_sales_legacy(card_name, set_name=set_name, days=days,
-                               source=source, use_cache=use_cache, grade=grade)
-
-
-def _fetch_sales_via_registry(
-    card_name: str,
-    *,
-    set_name: str | None,
-    days: int,
-    grade: str,
-    use_cache: bool,
-) -> list[dict[str, Any]] | dict[str, Any]:
-    """Registry + reconciler path. Empty-result fallback to legacy is handled
-    by the dispatcher's try/except."""
-    from pokequant.sources import LAST_AUDIT, registry as _registry
-    from pokequant.sources.reconciler import reconcile
-
-    _registry.discover()
-    records = _registry.fetch_all(card_name, days=days, grade=grade)
-    if not records:
-        # No active adapter returned records — don't bake an empty list into
-        # the cache; dispatcher raises so legacy takes over.
-        raise RuntimeError("registry returned zero records across all adapters")
-
-    reconciled, audit = reconcile(records, days=days)
-    LAST_AUDIT.set(audit)
-    return [r.to_dict() for r in reconciled]
-
-
-def _fetch_sales_legacy(
-    card_name: str,
-    set_name: str | None = None,
-    days: int = 30,
-    source: str = "pricecharting",
-    use_cache: bool = True,
-    grade: str = "raw",
-) -> list[dict[str, Any]] | dict[str, Any]:
     """Fetch sold listings for a card, with SQLite caching.
 
     Parameters
@@ -1253,46 +1194,6 @@ def _fetch_sales_legacy(
                     sales = sales + deduped
             except Exception as exc:
                 logger.warning("eBay supplement failed (continuing with PC-only): %s", exc)
-
-            # 2a. Supplement with 130point — they pre-reject lot sales and
-            #     damaged listings, so records arrive pre-cleaned. Called
-            #     directly via the registry adapter (no HOLO_USE_REGISTRY flag
-            #     required). Graceful fallback: any failure is logged and
-            #     skipped.
-            try:
-                from pokequant.sources import registry as _registry
-                _registry.discover()
-                adapter_130 = _registry.get_adapter("130point")
-                if adapter_130 and adapter_130.is_configured():
-                    records = adapter_130.fetch(card_name, days=days, grade="raw")
-                    if records:
-                        seen_keys: set = {
-                            (round(float(s.get("price", 0)), 2), str(s.get("date", ""))[:10])
-                            for s in sales
-                        }
-                        new_130: list[dict[str, Any]] = []
-                        for r in records:
-                            sale_dict = {
-                                "sale_id": r.sale_id,
-                                "price": r.price,
-                                "date": r.date.isoformat(),
-                                "condition": r.condition,
-                                "source": "130point",
-                                "source_url": r.source_url,
-                                "outlier_flag": r.outlier_flag,
-                            }
-                            key = (round(sale_dict["price"], 2), sale_dict["date"])
-                            if key in seen_keys:
-                                continue
-                            seen_keys.add(key)
-                            new_130.append(sale_dict)
-                        if new_130:
-                            logger.info(
-                                "Supplementing with %d 130point sales.", len(new_130)
-                            )
-                            sales = sales + new_130
-            except Exception as exc:
-                logger.warning("130point supplement failed (continuing): %s", exc)
 
         # 2b. For long time windows with sparse data, supplement with TCGPlayer
         #     even when PC/eBay returned some results — PriceCharting's visible

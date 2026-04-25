@@ -29,10 +29,26 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 
-# ---- Shared requests.Session for HTTP keep-alive -----------------------------
-# Delegates to pokequant.http so api/ and scraper code share one pool across
-# warm Vercel instances. Saves TCP+TLS handshake (~100–300ms) per outbound call.
-from pokequant.http import session as _http_session  # noqa: E402
+# ---- Module-level requests.Session for HTTP keep-alive -----------------------
+# Reused across invocations on warm Vercel instances. Saves TCP+TLS handshake
+# (~100–300ms) per outbound call to pokemontcg.io / PokeAPI etc.
+_HTTP_SESSION = None
+_HTTP_SESSION_LOCK = threading.Lock()
+
+
+def _http_session():
+    global _HTTP_SESSION
+    if _HTTP_SESSION is None:
+        with _HTTP_SESSION_LOCK:
+            if _HTTP_SESSION is None:
+                import requests as _requests
+                from requests.adapters import HTTPAdapter
+                s = _requests.Session()
+                adapter = HTTPAdapter(pool_connections=16, pool_maxsize=32, max_retries=0)
+                s.mount("https://", adapter)
+                s.mount("http://", adapter)
+                _HTTP_SESSION = s
+    return _HTTP_SESSION
 
 
 # ---- Tiny in-process memo for movers (survives warm invocations) -------------
@@ -63,37 +79,14 @@ _CACHE_HEADERS = {
     "sales":   "public, max-age=180, s-maxage=600, stale-while-revalidate=3600",
     "signal":  "public, max-age=180, s-maxage=600, stale-while-revalidate=1800",
     "price":   "public, max-age=180, s-maxage=600, stale-while-revalidate=1800",
-    "health":  "public, max-age=30, s-maxage=30",
-    "meta_signal": "public, max-age=300, s-maxage=900, stale-while-revalidate=3600",
 }
 _DEFAULT_CACHE = "s-maxage=300, stale-while-revalidate=600"
-
-
-_PROD_ORIGINS = {
-    "https://www.handoffpack.com",
-    "https://handoffpack.com",
-}
-
-
-def _resolve_allowed_origin(request_origin: str) -> str | None:
-    if not request_origin:
-        return None
-    if request_origin in _PROD_ORIGINS:
-        return request_origin
-    if request_origin.endswith(".vercel.app") and "handoffpack-www" in request_origin:
-        return request_origin
-    if os.environ.get("VERCEL_ENV") != "production" and request_origin.startswith("http://localhost"):
-        return request_origin
-    return None
 
 
 def _json_response(handler, data: dict, status: int = 200, cache: str | None = None):
     handler.send_response(status)
     handler.send_header("Content-Type", "application/json")
-    origin = _resolve_allowed_origin(handler.headers.get("Origin", ""))
-    if origin:
-        handler.send_header("Access-Control-Allow-Origin", origin)
-        handler.send_header("Vary", "Origin")
+    handler.send_header("Access-Control-Allow-Origin", "*")
     handler.send_header("Cache-Control", cache or _DEFAULT_CACHE)
     handler.end_headers()
     handler.wfile.write(json.dumps(data, default=str).encode())
@@ -725,7 +718,6 @@ def _handle_flip(params: dict) -> dict:
         ),
         "sources": _extract_sources(sales),
         "grade": grade,
-        "reconciliation_audit": _current_audit(),
     }
 
 
@@ -927,7 +919,6 @@ def _handle_history(params: dict) -> dict:
         ),
         "sources": _extract_sources(sales),
         "meta": _lookup_card_meta(card),
-        "reconciliation_audit": _current_audit(),
     }
 
 
@@ -1015,33 +1006,9 @@ def _handle_grade_roi(params: dict) -> dict:
     }
     svc = services.get(service, services["psa_value"])
 
-    # Default heuristics; overridden by real PSA Pop Report data when available.
-    DEFAULT_P10 = 0.35
-    DEFAULT_P9 = 0.45
-    pop_source = "heuristic"
-    pop_data: dict = {}
-
-    # Try PSA pop data unless user explicitly overrode p10/p9.
-    if "p10" not in params and "p9" not in params:
-        try:
-            from pokequant.sources import registry as _registry
-            _registry.discover()
-            psa_adapter = _registry.get_adapter("psa_pop")
-            if psa_adapter and psa_adapter.is_configured():
-                pop_data = psa_adapter.fetch_pop(card) or {}
-                import config as _cfg
-                min_samples = getattr(_cfg, "PSA_POP_MIN_SAMPLES", 50)
-                total = pop_data.get("total", 0)
-                if total >= min_samples:
-                    DEFAULT_P10 = pop_data["pop10"] / total
-                    DEFAULT_P9 = pop_data["pop9"] / total
-                    pop_source = "psa_pop"
-        except Exception as exc:
-            print(f"[gradeit] psa_pop lookup failed: {exc}", file=sys.stderr)
-
-    p10 = _fl("p10", DEFAULT_P10)
-    p9  = _fl("p9",  DEFAULT_P9)
-    p_sub = _fl("p_sub", 1.0 - p10 - p9)
+    p10 = _fl("p10", 0.35)   # modern-era NM raw → PSA 10 rate is typically 30-40%
+    p9  = _fl("p9",  0.45)   # 40-50% land at PSA 9
+    p_sub = _fl("p_sub", 1.0 - p10 - p9)  # remainder come back sub-grade
     if p_sub < 0:
         p_sub = 0.0
 
@@ -1119,8 +1086,6 @@ def _handle_grade_roi(params: dict) -> dict:
             "p_sub": p_sub,
             "sell_fees": sell_fees,
             "shipping": shipping,
-            "pop_source": pop_source,
-            "pop_data": pop_data if pop_source == "psa_pop" else None,
         },
         "breakdown": {
             "expected_psa10_value": round(gross_10, 2),
@@ -1480,101 +1445,6 @@ def _handle_search(params: dict) -> dict:
     return payload
 
 
-def _handle_meta_signal(params: dict) -> dict:
-    """Tournament meta-signal roll-up — consumes the Limitless adapter.
-
-    Returns `{signals: [...], source: "limitless", enabled: bool}`.
-    While the Limitless adapter is a stub, signals is empty and enabled
-    is False — the endpoint exists so frontend work can develop against
-    a stable shape. Flesh this out as part of H-1.3 (tournament meta-
-    shift signal).
-    """
-    card = params.get("card", [""])[0]
-    if not card:
-        return {"error": "Missing 'card' parameter"}
-
-    from pokequant.sources import registry as _registry
-    _registry.discover()
-    limitless = _registry.get_adapter("limitless")
-    enabled = bool(limitless and limitless.is_configured())
-
-    if not enabled:
-        return {
-            "card": card,
-            "source": "limitless",
-            "enabled": False,
-            "signals": [],
-            "note": "Limitless adapter not yet enabled — H-1.3 will activate tournament meta-signals.",
-        }
-
-    # Active path: fetch meta-signal records via the adapter. fetch() returns
-    # NormalizedSale records with source_type="meta_signal".
-    try:
-        records = list(limitless.fetch(card, days=30, grade="raw"))
-    except Exception as exc:
-        return {"card": card, "source": "limitless", "enabled": True,
-                "signals": [], "error": str(exc)[:200]}
-
-    signals = [r.extra for r in records if r.source_type == "meta_signal"]
-    return {
-        "card": card,
-        "source": "limitless",
-        "enabled": True,
-        "signals": signals,
-    }
-
-
-def _current_audit() -> dict | None:
-    """Return the reconciliation audit dict from the last fetch_sales() call,
-    if it went through the registry path. None when the legacy path served
-    the request (HOLO_USE_REGISTRY=0 or adapter fallback)."""
-    try:
-        from pokequant.sources import LAST_AUDIT
-        audit = LAST_AUDIT.get()
-    except Exception:
-        return None
-    if audit is None:
-        return None
-    return audit.to_dict()
-
-
-def _handle_health(params):
-    """Adapter health roll-up for /api?action=health.
-
-    Iterates the multi-source registry, calls health_check() on each
-    configured adapter, returns a grep-able status envelope.
-    """
-    from pokequant.sources import registry as _registry
-    _registry.discover()
-
-    adapters = []
-    for adapter in _registry.all_adapters():
-        configured = adapter.is_configured()
-        try:
-            hc = adapter.health_check() if configured else {
-                "ok": False, "latency_ms": 0.0, "error": "disabled"
-            }
-        except Exception as exc:
-            hc = {"ok": False, "latency_ms": 0.0, "error": f"health_check raised: {exc}"}
-        adapters.append({
-            "name": adapter.name,
-            "priority": adapter.priority,
-            "configured": configured,
-            "enabled_by_default": adapter.enabled_by_default,
-            **hc,
-        })
-
-    healthy = sum(1 for a in adapters if a.get("ok"))
-    return {
-        "adapters": adapters,
-        "summary": {
-            "total": len(adapters),
-            "configured": sum(1 for a in adapters if a["configured"]),
-            "healthy": healthy,
-        },
-    }
-
-
 _HANDLERS = {
     "price": _handle_price,
     "signal": _handle_signal,
@@ -1589,8 +1459,6 @@ _HANDLERS = {
     "movers": _handle_movers,
     "pokedex": _handle_pokedex,
     "search": _handle_search,
-    "health": _handle_health,
-    "meta_signal": _handle_meta_signal,
 }
 
 
@@ -1624,14 +1492,3 @@ class handler(BaseHTTPRequestHandler):
                 {"error": "Internal error", "trace_id": trace_id},
                 500,
             )
-
-    def do_OPTIONS(self):
-        origin = _resolve_allowed_origin(self.headers.get("Origin", ""))
-        self.send_response(204 if origin else 403)
-        if origin:
-            self.send_header("Access-Control-Allow-Origin", origin)
-            self.send_header("Vary", "Origin")
-            self.send_header("Access-Control-Allow-Methods", "GET, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type")
-            self.send_header("Access-Control-Max-Age", "86400")
-        self.end_headers()
