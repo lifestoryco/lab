@@ -40,15 +40,21 @@ Inspect `{{mode}}` (the user's input) and dispatch:
 | `score <id>` or `parse <id>` | `modes/score.md` |
 | `tailor <id>` or `resume <id>` | `modes/tailor.md` |
 | `pdf <id> [--recruiter\|--brief]` | invoke `scripts/render_pdf.py --role-id <id> [--recruiter]` |
+| `cover-letter <id>` or `cover <id>` | `modes/cover-letter.md` (separate cover letter generation) |
 | `audit <id>` or `audit` | `modes/audit.md` (truthfulness check on tailored JSON) |
 | `track <id> <status> [note]` or `applied <id>` etc. | `modes/track.md` |
 | `apply <id>` | `modes/apply.md` (live form fill — see `references/ats-patterns.md`) |
+| `network-scan <id>` or `network-scan <company>` | `modes/network-scan.md` (warm-intro discovery) |
+| `track-outreach <outreach_id> sent\|replied [--note]` | invoke `scripts/track_outreach.py` (mark a drafted DM as sent / a reply received) |
+| `track-outreach --list` | invoke `scripts/track_outreach.py --list` (open drafts) |
 | `status`, `dashboard`, `pipeline` | `modes/status.md` |
 | `followup` or `follow up` | `modes/followup.md` (cadence tracker — flag overdue applies) |
 | `patterns` or `rejection patterns` | `modes/patterns.md` (analyze rejection clusters) |
 | `interview-prep <id>` or `prep <id>` | `modes/interview-prep.md` |
 | `liveness` or `check liveness` | invoke `scripts/liveness_check.py` |
-| `setup` or first-run | follow `Setup Checklist` below |
+| `ofertas` or `offers` or `compare offers` | `modes/ofertas.md` (multi-offer math + negotiation brief) |
+| `setup` or `onboard` or `re-onboard` | `modes/onboarding.md` (executable 9-question profile setup) |
+| first-run with no DB | follow `Setup Checklist` below, then dispatch `modes/onboarding.md` |
 | `help` | print this file |
 
 If input is ambiguous, ask one clarifying question then dispatch.
@@ -90,13 +96,18 @@ Or pick a mode:
   /coin status                Pipeline dashboard
   /coin tailor <id>           Generate tailored resume JSON
   /coin pdf <id>              Render submission-ready PDF
+  /coin cover-letter <id>     Generate standalone cover letter PDF
   /coin audit <id>            Truthfulness check before submitting
   /coin track <id> <status>   Transition pipeline state
   /coin apply <id>            Live ATS form fill (Greenhouse / Lever)
+  /coin network-scan <id>     Find warm intros at target company
   /coin followup              Flag overdue applications
   /coin patterns              Analyze rejection clusters
   /coin interview-prep <id>   Generate prep brief for upcoming interview
   /coin liveness              Mark dead postings as closed
+  /coin ofertas               Compare 2+ offers + draft counters
+  /coin setup                 Re-run profile onboarding (7 questions)
+  /coin track-outreach <id>   Mark a drafted DM as sent / replied
 
 Lanes (4):
   mid-market-tpm · enterprise-sales-engineer · iot-solutions-architect · revenue-ops-operator
@@ -115,25 +126,16 @@ If `data/db/pipeline.db` is missing or `.venv/` doesn't exist:
 3. Install deps (`.venv/bin/pip install -r requirements.txt`)
 4. Confirm `brew list pango` (PDF rendering needs Pango)
 5. Initialize DB (`from careerops.pipeline import init_db; init_db()`)
-6. Smoke test: `.venv/bin/python scripts/discover.py --lane enterprise-sales-engineer --limit 3`
-7. Run the test suite: `.venv/bin/pytest tests/ -q`
-8. Print readiness banner with available commands.
+6. If `config.ONBOARDING_MARKER` (`data/onboarding/.completed`) is missing OR PROFILE['name'] is placeholder, dispatch `modes/onboarding.md` to capture identity + targeting before smoke test
+7. Smoke test: `.venv/bin/python scripts/discover.py --lane enterprise-sales-engineer --limit 3`
+8. Run the test suite: `.venv/bin/pytest tests/ -q`
+9. Print readiness banner with available commands.
 
 ---
 
-## Onboarding (for first-time users — adapted from job-scout)
+## Onboarding (first-time users)
 
-If `data/resumes/base.py` is the default placeholder OR Sean is changing direction, run conversational onboarding:
-
-1. **Resume input.** "Drop a resume file path, share a portfolio URL, or describe your background."
-2. **Target role(s).** Use AskUserQuestion with options derived from the resume (multi-select OK).
-3. **Locations.** Use AskUserQuestion with `multiSelect: true`. Defaults: Remote, current city, "open to relocation".
-4. **Company stage.** AskUserQuestion: Seed/A · Series B–D · Established · No preference.
-5. **Industry/domain.** AskUserQuestion with options derived from the resume.
-6. **Compensation floor.** Free text — capture base, total, equity expectations.
-7. **Pedigree constraint.** Be honest about CS-degree / FAANG-tour gaps that filter applications. Mark as `pedigree_constraint` in profile.yml so future scoring auto-quarantines out-of-league roles.
-8. **Save.** Write to `config/profile.yml`; update `data/resumes/base.py` with verified work history.
-9. **Smoke discovery.** Run `discover --limit 5` per lane to confirm pipeline produces in-league results.
+If the marker file at `config.ONBOARDING_MARKER` (`data/onboarding/.completed`) is missing OR `data/resumes/base.py` PROFILE['name'] is the placeholder string, dispatch to `modes/onboarding.md` immediately. The mode walks 7 deterministic AskUserQuestion blocks, then atomically writes `config/profile.yml` + the identity slice of `base.py`, then offers a smoke discovery. Re-onboarding is supported via `/coin setup` at any time.
 
 ---
 

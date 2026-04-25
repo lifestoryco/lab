@@ -1,5 +1,188 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-25, Session 5 — Deferred-followup batch 2)
+
+### COIN-NETWORK-LIVE-SCRAPE + COIN-OFERTAS-LEVELS-FYI + COIN-COVER-RECIPIENT-FROM-NETWORK ✅ COMPLETE
+
+**Tests:** 193 → **223 passing** (+30; 0 regressions). Verdict: PASS.
+
+**1. COIN-NETWORK-LIVE-SCRAPE** — wire the LinkedIn search-page fallback
+- `careerops/network_scrape.py` — `parse_linkedin_people_search(html, target_company)` (BeautifulSoup parser tolerant of LinkedIn's class-name churn, dedupes by URL, strips connection-degree suffixes "• 2nd", normalizes relative `/in/<slug>` to absolute https) + `upsert_scraped(rows, db_path)` (parameterized UPSERT with COALESCE preserving more-specific company strings from prior CSV imports)
+- `tests/fixtures/network/sample_search_page.html` — 5-card fixture covering valid cards, malformed cards (no profile URL, parser must skip), duplicate URLs (parser must dedupe), relative-vs-absolute href forms, connection-degree suffix stripping
+- `tests/test_network_scrape.py` (10 tests) — parser unit tests + upsert idempotency + the COALESCE-preserves-export-company contract test
+- `modes/network-scan.md` Step 3 rewritten: explicit browser MCP invocation (`Claude_in_Chrome` preferred, `Claude_Preview` fallback), HTML capture to `/tmp/linkedin_search.html` (not into project tree because LinkedIn HTML carries incidental sidebar PII), `parse_linkedin_people_search` → `upsert_scraped` pipeline, graceful degradation when LinkedIn re-skins the search HTML
+- No live LinkedIn auth scripted from Python (Sean's browser session belongs to him; Coin only consumes the rendered HTML he can already see)
+
+**2. COIN-OFERTAS-LEVELS-FYI** — market-comp anchor when only one real offer exists
+- `careerops.pipeline.insert_market_anchor(company, title, base_salary, *, rsu_total_value=0, ...)` — wraps `insert_offer` with `status='market_anchor'` so synthetic comps stay out of `list_offers(status='active')` (the Y1-best ranking in ofertas Step 3 stays clean) but join the comparison via `combined = list_offers(active) + list_market_anchors()`
+- `careerops.pipeline.list_market_anchors()`
+- `tests/test_market_anchor.py` (4 tests) — happy path, status segregation from active offers, required-field validation, combined-list pattern
+- `modes/ofertas.md` adds Step 5.5 — when 1 active offer + 0 anchors, prompt Sean to look up the same role/level on Levels.fyi and capture the P50 base + RSU + bonus; counter-brief then cites "Levels.fyi P50 for &lt;company&gt; &lt;title&gt;" instead of bluffing a competing offer. Skip path emits a soft counter ("Below market based on independent research") that still refuses to fabricate
+
+**3. COIN-COVER-RECIPIENT-FROM-NETWORK** — cover-letter recipient_name auto-population
+- `scripts/migrations/m004_outreach_role_tag.py` — adds `outreach.contact_role TEXT` + `outreach.target_role_id INTEGER` + `idx_outreach_contact_role`. Idempotent (PRAGMA-checked column adds, applied flag in schema_migrations). Self-bootstraps m003 inline if applied to a fresh DB
+- `careerops.pipeline.tag_outreach_role(outreach_id, contact_role, target_role_id=None)` — validates against `VALID_CONTACT_ROLES = ('hiring_manager', 'team_member', 'recruiter', 'exec_sponsor', 'alumni_intro')`
+- `careerops.pipeline.find_hiring_manager_for_role(role_id)` — joins `outreach × connections` filtered to `contact_role='hiring_manager'`; checks both `role_id` and `target_role_id` columns so the same contact can be tagged for a different role; returns most-recently-drafted match; tolerates missing tables / missing column on fresh DBs (returns None instead of raising)
+- `tests/test_hiring_manager_lookup.py` (11 tests) — m004 schema + idempotency + m003-bootstrap, tag validation, recursive lookup paths, ignores non-hiring-manager tags, picks most-recent on multi-tag, missing-schema graceful return, target_role_id branch
+- `modes/network-scan.md` Step 6.5 — optional hiring-manager tagging prompt after the brief; instructs the agent to call `tag_outreach_role` with the right enum value; documents all 5 valid contact roles
+- `modes/cover-letter.md` Step 1 — auto-lookup via `find_hiring_manager_for_role(<role_id>)`; `recipient_name = hm['full_name']` when present, null when not; explicit refusal to invent a hiring manager
+- `modes/_shared.md` adds a new "Cross-mode helpers" section enumerating all the helpers + valid `contact_role` values (so future modes don't grep around)
+
+**Schema migrations applied to live DB:** m003 (already), m004 (this session). 002 + 003 + 004 all tracked in `schema_migrations`.
+
+**New tests (30):**
+- `test_network_scrape.py` (10): parser dedupe, malformed-card skip, URL normalization, tracking-param strip, target_company propagation, seniority classification, empty-HTML handling, fresh-DB schema bootstrap, upsert idempotency, COALESCE preserves CSV-export company over scraper target
+- `test_market_anchor.py` (4): happy path, status segregation, required-field validation, combined-list pattern
+- `test_hiring_manager_lookup.py` (11): m004 schema/idempotency/bootstrap, tag validation, lookup paths
+- `test_cover_letter_mode.py` extended (1): recipient_name lookup documented + anti-fabrication guard
+- `test_network_scan_mode.py` extended (2): live-scrape pipeline documented + hiring-manager tagging documented with all 5 valid roles
+- `test_ofertas_mode.py` extended (2): Step 5.5 documented + market-anchor truthfulness gate
+
+**Files touched:** 13 (4 mode .md, _shared.md, 1 new careerops module, 1 pipeline.py extension, 1 new migration, 1 new HTML fixture, 4 new test files + 3 extended test files, this state doc).
+
+**Decisions:**
+- Live-scrape stays parser-only (no Python-driven LinkedIn auth) — keeps Sean's session uncompromised and avoids TOS exposure on auth-script paths.
+- Market anchors live in the same `offers` table with `status='market_anchor'` instead of a separate table — same math (`year_one_tc`, `three_year_tc`) applies, ofertas comparison code stays trivial.
+- Hiring-manager tagging on `outreach` rather than a new table — `outreach` already has the role↔connection link; one column add is cleaner than a junction table.
+
+---
+
+## What Was Just Done (2026-04-25, Session 5 — Code-review --fix EVERYTHING)
+
+### All review findings resolved (CRITICAL → HIGH → MEDIUM → LOW + pre-existing) ✅ COMPLETE
+
+**Tests:** 170 → **193 passing** (23 net new, 0 regressions). Verdict: PASS.
+
+**HIGH (6) — all fixed:**
+- `import_linkedin_connections.py` rows_inserted/rows_updated counter — replaced ON-CONFLICT-rowcount-hack with explicit pre-SELECT existence check; per-row insert/update accounting now accurate (test: `test_inserted_vs_updated_counts_are_accurate`)
+- `offer_math.py` STATE_TAX_RATES + ANNUAL_BASE_BUMP + DEFAULT_VEST_SCHEDULE moved to `config.py`; offer_math now imports them
+- `import_linkedin_connections.py` DEFAULT_CSV reads `config.LINKEDIN_CONNECTIONS_CSV`
+- `cover-letter.md` Greenhouse field 5 → 6 (was wrong; field 5 is Resume); Lever 7 → 10 (was wrong; field 7 is Current company)
+- `network-scan.md` `/coin track-outreach` reference now backed by a real `scripts/track_outreach.py` helper (8 tests in `test_track_outreach.py`); SKILL.md routes `track-outreach <id> sent|replied [--note]` and `track-outreach --list`
+
+**MEDIUM (9) — all fixed:**
+- `three_year_tc` Y2/Y3 RSU growth exponents: was `**2` / `**3` (one year too many on each); now `**1` / `**2` so Y2 vest sits 1 year past grant FMV and Y3 sits 2 years past. Test `test_three_year_tc_y3_growth_uses_squared_exponent` locks in the math (Y3 @ +10% = 25k × 1.21 = 30,250 exactly)
+- `vest_curve` ZeroDivisionError when `rsu_vest_years=0` — `_safe_vest_years` helper coerces to default 4. Test `test_zero_vest_years_does_not_crash`
+- `connections` + `outreach` schema now in `scripts/migrations/m003_connections_outreach.py`; importer keeps `ensure_schema()` for fresh-DB compat. 3 tests in `test_migrations_m003.py`
+- Migrations renamed: `001_archetypes_5_to_4.py` → `m001_…`, `002_offers_table.py` → `m002_…`, plus new `m003_…`. All importable as Python modules now. Test loader updated.
+- `render_pdf.py` + `render_cover_letter.py` `base_url` anchored to `ROOT` (script's project) instead of `Path.cwd()` — invariant under shell cwd, fixes a parity defect that was pre-existing in `render_pdf.py` since session 3
+- `render_cover_letter.py` `--out` and `--input` constrained to `data/resumes/generated/` via `_validate_under_generated`; refuses path traversal
+- `onboarding.md` question-count: header / steps / summary now consistently say 7 (was 9 / 7 / 8); SKILL.md Onboarding section follows. Test `test_question_count_consistent`
+- SKILL.md Discovery menu adds `/coin setup` and `/coin track-outreach <id>`
+- `import_linkedin_connections.py::import_csv` now mkdir-s the DB parent inside the function (not just in `main()`) — works when called from tests / non-CLI
+
+**LOW (13) — all fixed:**
+- `render_cover_letter.py` defers Jinja2 + WeasyPrint imports into `_build_env()` / `render()` so the no-op CLI path is fast; prints `Selected cover JSON: <path>` so Sean sees which lane was picked
+- `pipeline.insert_offer` raises `ValueError` listing missing required keys instead of low-context `IntegrityError`. Bonus fix discovered: also stops emitting NULL for unset columns so DDL DEFAULTs (status='active', signing_bonus=0, etc.) actually apply. Test `test_insert_offer_writes_row` + `test_insert_offer_missing_required_raises`
+- `vest_curve` strips per-element whitespace ("25 / 25 / 25 / 25" parses identically to "25/25/25/25"). Test `test_whitespace_in_schedule_parses`
+- `delta_table` returns a proper `TypedDict(DeltaRow)` shape. Test `test_delta_table_returns_typed_dict_shape`
+- `m002_offers_table.main()` consolidated through `apply()` so connection lifecycle is guarded by try/finally on every path
+- `import_linkedin_connections.py::main` validates `--db` is under `data/db/` (rejects writes outside the project)
+- `network-scan.md` Step 2 + Step 7 SQL examples gain "NEVER f-string into SQL" comments + use parameterized `?` bindings explicitly
+- `network-scan.md` Step 5 clarifies that `seniority='recruiter'` is a *scan-time* concept — the import classifier emits leadership/senior_ic/peer only; recruiter override is title-pattern matching at scan time
+- `network-scan.md` refusal table gains: "Citing a metric not in PROFILE.positions in any draft DM" — parity with cover-letter.md
+- `onboarding.md` raw resume now staged via `tempfile.mkstemp` and unlinked after Step 9 success (PII off disk once profile is written)
+- `onboarding.md` Step 7 surfaces $160K/$200K Sean default + warns on lower fat-finger
+- `cover-letter.md` audit subset now uses audit.md's exact check labels (Check 1 Education / 2 Pedigree / 3 Cox attribution / 4 Vague-flex / 5 Metric provenance) — drops the "verb authenticity" mismatch that wasn't a numbered check
+- `ofertas.md` adds explicit Step 0 "Load the AskUserQuestion tool" (mirrors onboarding); Step 2 references the load instead of conditional
+- `auto-pipeline.md` lane list now reads from `config.LANES.keys()` instead of hardcoded literal; `update_lane()` and `update_role_notes()` helpers are now invoked instead of raw SQL (TODOs were stale — helpers exist)
+- `cover_letter_template.html` recipient block: `{% if recipient_name %}{{ recipient_name }}{% else %}Hiring Team — {{ company }}{% endif %}` (was double-printing both)
+- `config.py` adds `ONBOARDING_MARKER`, `ONBOARDING_DIR`, `ONBOARDING_RAW_RESUME`, `LINKEDIN_CONNECTIONS_CSV`, `NETWORK_DATA_DIR` constants — all path duplications now route through one source
+
+**PRE-EXISTING (2) — also fixed:**
+- `CLAUDE.md` refreshed: 5 archetypes → 4 (with Removed-lanes note); comp floor `$180K base / $250K total` → `$160K base / $200K total`; new Rule #7 codifies the truthfulness gates from `_shared.md` Operating Principle #3; date stamp 2026-04-24 → 2026-04-25
+- `render_pdf.py` `base_url` defect (cwd-dependent) fixed at the same time as `render_cover_letter.py` for parity
+
+**New tests added (23):**
+- `test_track_outreach.py` (8): update sent/replied paths, note attachment, invalid action, unknown id, list_open semantics, role filter, missing-table error
+- `test_migrations_m003.py` (3): tables created, idempotency, indexes
+- `test_pipeline_offers.py` (3): insert_offer happy path, missing-keys ValueError, list_offers default-active filter
+- `test_offer_math.py` extended (5): Y3 growth squared exponent locked in, STATE_TAX_RATES from config, zero-vest crash guard, whitespace parsing, TypedDict shape
+- `test_import_linkedin_connections.py` extended (3): accurate inserted/updated split on re-import, parent-dir mkdir, DEFAULT_CSV from config
+- `test_cover_letter_mode.py` updated (1): audit subset uses audit.md's actual check labels
+- `test_ofertas_mode.py` updated (no count change): m002 import via package path, not file path
+
+**Files touched:** 26 (4 mode files, SKILL.md, CLAUDE.md, 4 careerops/scripts files, 3 migration files, 1 template, 13 test files including 3 new). One commit per logical group below.
+
+---
+
+## What Was Just Done (2026-04-25, Session 5 — Follow-up batch)
+
+### All four deferred follow-ups landed in one session ✅ COMPLETE
+
+**Tests:** 98 → **170 passing** (72 net new, 0 regressions).
+
+**1. COIN-OFERTAS — multi-offer comparison + negotiation brief** (santifer port)
+- `modes/ofertas.md` (7-step decision-support flow with 5 hard refusals;
+  "Coin does NOT recommend a specific offer" — surfaces math + trade-offs only)
+- `careerops/offer_math.py` — pure functions: `vest_share_y1`, `vest_curve`,
+  `year_one_tc`, `three_year_tc` with ±growth sensitivity, `historical_hit_rate`,
+  `state_tax_rate` (top-marginal approximation), `delta_table`
+- `scripts/migrations/002_offers_table.py` (idempotent, tracked)
+- `careerops.pipeline.insert_offer` + `list_offers` helpers
+- 24 new tests (offer math + mode structure + migration smoke)
+
+**2. COIN-COVER-LETTER — separate cover letter generation** (proficiently port)
+- `modes/cover-letter.md` (7-step flow; 280-word hard cap; story-parity +
+  JD-keyword-parity checks against tailored resume; reuses audit checks 1-5
+  for truthfulness — skips orthogonality/lane checks; 7 hard refusals)
+- `scripts/render_cover_letter.py` — refuses on `audit_passes != true`,
+  Jinja autoescape on, base_url scoped to `data/` (security parity with
+  render_pdf.py)
+- `data/cover_letter_template.html` (single-page Letter, Georgia serif)
+- `config.COVER_TEMPLATE_PATH`
+- Auto-pipeline integration (Step 6): cover-letter is additive — resume
+  still ships if cover audit fails
+- Apply mode integration: Greenhouse field 6 + Lever field 10 wire the
+  cover artifact (cover.pdf for upload, paragraphs.hook for textarea)
+- 13 new tests
+
+**3. COIN-NETWORK-SCAN — LinkedIn warm-intro discovery** (proficiently port)
+- `modes/network-scan.md` (7-step discovery+drafting flow; 6 hard refusals;
+  warmth = 40% recency + 35% seniority + 25% relevance; recruiter override
+  scores 90; truthfulness gate via `_shared.md` Operating Principle #3)
+- `.claude/skills/coin/references/network-patterns.md` — CSV schema,
+  recency tiers, seniority classifier, relevance signals, 4 outreach
+  templates by recency tier (hot/warm/cold/recruiter), forbidden behaviors
+- `scripts/import_linkedin_connections.py` — idempotent CSV ingest from
+  LinkedIn's "Get a copy of your data" export; creates `connections` +
+  `outreach` tables; company normalization collapses Inc./LLC/punctuation
+  variants; preamble-tolerant CSV reader for LinkedIn's variable header
+- 17 new tests (mode structure + reference content + schema + idempotency
+  + company normalization + dry-run)
+- Coin does NOT auto-send DMs and does NOT scrape with logged-in cookies
+
+**4. COIN-ONBOARDING-EXECUTABLE — convert SKILL.md prose to executable mode**
+  (job-scout pattern)
+- `modes/onboarding.md` (9 deterministic AskUserQuestion blocks; Step 0
+  loads AskUserQuestion via ToolSearch; Step 1 safety gate for existing
+  profile with Re-onboard / Update specific fields / Cancel branches;
+  Step 8 pedigree-constraint question explicitly load-bearing; Step 9
+  atomic write via staging file + yaml.safe_load round-trip; identity
+  slice only — never touches positions/education/skills_grid)
+- SKILL.md: deleted the 9-step prose Onboarding section; replaced with
+  pointer at modes/onboarding.md; routing table adds
+  `setup`/`onboard`/`re-onboard`; First-Run Setup Checklist now dispatches
+  onboarding between init-DB and smoke-test
+- 18 new tests including SKILL.md regression (deleted prose markers must
+  not reappear; First-Run Checklist must dispatch onboarding)
+- 5 hard refusals (no silent overwrite, no inferred pedigree, identity-slice
+  only, no question-skipping, no >5 smoke discovery)
+
+**Cross-cutting infrastructure:**
+- `.gitignore`: added `data/network/`, `data/onboarding/`
+- `_shared.md` mode catalog: 4 new rows (ofertas, cover-letter,
+  network-scan, onboarding)
+- SKILL.md: 4 new routing entries + 3 new Discovery menu lines
+- `scripts/migrations/__init__.py` for importable migration package
+
+**Open follow-ups (after this batch — none from the original four):**
+- ~~COIN-NETWORK-LIVE-SCRAPE~~ ✅ landed in Session 5 batch 2
+- ~~COIN-OFERTAS-LEVELS-FYI~~ ✅ landed in Session 5 batch 2
+- ~~COIN-COVER-RECIPIENT-FROM-NETWORK~~ ✅ landed in Session 5 batch 2
+
+---
+
 ## What Was Just Done (2026-04-25, Session 4 — Part 5)
 
 ### /code-review --fix pass: ALL severities resolved ✅ COMPLETE
@@ -67,10 +250,10 @@
 - New python-engineer.md agent (coin-stack-specific)
 
 **Open follow-ups (deferred, low priority):**
-- COIN-NETWORK-SCAN: port proficiently network-scan skill (LinkedIn warm-intro discovery)
-- COIN-OFERTAS: port santifer multi-offer comparison mode
-- COIN-COVER-LETTER: port proficiently cover-letter as separate mode (currently folded into tailor)
-- COIN-AUTO-PIPELINE-EXECUTABLE: convert SKILL.md narrative onboarding to actual AskUserQuestion blocks
+- ~~COIN-NETWORK-SCAN~~ ✅ landed in Session 5
+- ~~COIN-OFERTAS~~ ✅ landed in Session 5
+- ~~COIN-COVER-LETTER~~ ✅ landed in Session 5
+- ~~COIN-AUTO-PIPELINE-EXECUTABLE / COIN-ONBOARDING-EXECUTABLE~~ ✅ landed in Session 5
 
 ---
 

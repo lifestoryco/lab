@@ -225,6 +225,184 @@ def update_jd_raw(role_id: int, jd: str) -> None:
         )
 
 
+def insert_offer(offer: dict) -> int:
+    """Insert a row into offers (created by migration m002).
+
+    Required keys: company, title, base_salary. received_at defaults to today.
+    Raises ValueError with a concrete field list if anything required is missing.
+    Returns the new offer id.
+    """
+    required = ("company", "title", "base_salary")
+    missing = [k for k in required if not offer.get(k)]
+    if missing:
+        raise ValueError(f"insert_offer missing required keys: {missing}")
+    all_cols = [
+        "role_id", "company", "title", "received_at", "expires_at",
+        "base_salary", "signing_bonus", "annual_bonus_target_pct",
+        "annual_bonus_paid_history", "rsu_total_value", "rsu_vesting_schedule",
+        "rsu_vest_years", "rsu_cliff_months", "equity_refresh_expected",
+        "benefits_delta", "pto_days", "remote_pct", "state_tax",
+        "growth_signal", "notes", "status",
+    ]
+    payload = dict(offer)
+    if not payload.get("received_at"):
+        payload["received_at"] = datetime.now(timezone.utc).date().isoformat()
+    # Only insert columns the caller actually set so the schema's DEFAULT
+    # values (status='active', signing_bonus=0, rsu_vest_years=4, etc.) apply.
+    cols = [c for c in all_cols if payload.get(c) is not None]
+    vals = [payload[c] for c in cols]
+    placeholders = ",".join("?" * len(cols))
+    with _conn() as conn:
+        cur = conn.execute(
+            f"INSERT INTO offers ({','.join(cols)}) VALUES ({placeholders})",
+            vals,
+        )
+        return cur.lastrowid
+
+
+def list_offers(status: str | None = "active") -> list[dict]:
+    """List offers (default active). Returns dicts (sqlite Row → dict)."""
+    with _conn() as conn:
+        if status:
+            rows = conn.execute(
+                "SELECT * FROM offers WHERE status = ? ORDER BY received_at DESC",
+                (status,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM offers ORDER BY received_at DESC"
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def insert_market_anchor(
+    company: str,
+    title: str,
+    base_salary: int,
+    *,
+    rsu_total_value: int = 0,
+    annual_bonus_target_pct: float = 0.0,
+    state_tax: str = "UT",
+    source: str = "Levels.fyi",
+    notes: str | None = None,
+) -> int:
+    """Insert a synthetic 'market_anchor' offer for ofertas comparison.
+
+    When Sean has only one real offer, he can capture a market-comp band
+    (typically from Levels.fyi for the same company + role + level) as a
+    synthetic offer and use it as the negotiation anchor. The
+    `status='market_anchor'` value keeps these out of `list_offers()`'s
+    default `'active'` filter so they don't pollute the real-offer set.
+
+    Required: company, title, base_salary (the median or P50 from the
+    market source). RSU + bonus default to 0 because Levels.fyi reports
+    are usually for established companies where RSU is a moving target;
+    Sean can fill them in later if useful.
+    """
+    if not company or not title or not base_salary:
+        raise ValueError("insert_market_anchor requires company, title, base_salary")
+    full_notes = f"market_anchor source={source}"
+    if notes:
+        full_notes += f" | {notes}"
+    return insert_offer({
+        "company": company,
+        "title": title,
+        "base_salary": int(base_salary),
+        "rsu_total_value": int(rsu_total_value),
+        "annual_bonus_target_pct": float(annual_bonus_target_pct),
+        "rsu_vesting_schedule": "25/25/25/25",
+        "rsu_vest_years": 4,
+        "rsu_cliff_months": 12,
+        "state_tax": state_tax,
+        "growth_signal": f"market_anchor:{source}",
+        "notes": full_notes,
+        "status": "market_anchor",
+    })
+
+
+def list_market_anchors() -> list[dict]:
+    """List synthetic market-anchor offers (Levels.fyi etc.)."""
+    return list_offers(status="market_anchor")
+
+
+# ── Outreach + connections helpers (added by m004) ───────────────────────────
+
+VALID_CONTACT_ROLES = (
+    "hiring_manager",
+    "team_member",
+    "recruiter",
+    "exec_sponsor",
+    "alumni_intro",
+)
+
+
+def tag_outreach_role(
+    outreach_id: int,
+    contact_role: str,
+    target_role_id: int | None = None,
+) -> None:
+    """Mark an outreach row's relationship to its target role.
+
+    `contact_role` must be one of VALID_CONTACT_ROLES. Used by network-scan
+    to record (when Sean confirms) that a contact is the hiring manager
+    for the role we're scanning for; cover-letter mode reads this tag to
+    auto-populate `recipient_name`.
+    """
+    if contact_role not in VALID_CONTACT_ROLES:
+        raise ValueError(
+            f"contact_role must be one of {VALID_CONTACT_ROLES}; got {contact_role!r}"
+        )
+    with _conn() as conn:
+        if target_role_id is not None:
+            conn.execute(
+                "UPDATE outreach SET contact_role = ?, target_role_id = ? WHERE id = ?",
+                (contact_role, target_role_id, outreach_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE outreach SET contact_role = ? WHERE id = ?",
+                (contact_role, outreach_id),
+            )
+
+
+def find_hiring_manager_for_role(role_id: int) -> dict | None:
+    """Return the connection row tagged as the role's hiring_manager, or None.
+
+    Joins outreach (filtered to contact_role='hiring_manager' for the
+    role) with connections. If multiple matches exist (Sean tagged more
+    than one), returns the most recently drafted outreach's connection.
+    """
+    with _conn() as conn:
+        # Confirm both tables exist (outreach + the m004 contact_role column)
+        # before querying — surfaces a clear error instead of a sqlite syntax one.
+        tables = {
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        if "outreach" not in tables or "connections" not in tables:
+            return None
+        outreach_cols = {
+            r[1] for r in conn.execute("PRAGMA table_info(outreach)").fetchall()
+        }
+        if "contact_role" not in outreach_cols:
+            return None
+        row = conn.execute(
+            """
+            SELECT c.*, o.contact_role AS contact_role_tag
+            FROM outreach o
+            JOIN connections c ON c.id = o.connection_id
+            WHERE (o.role_id = ? OR o.target_role_id = ?)
+              AND o.contact_role = 'hiring_manager'
+            ORDER BY o.drafted_at DESC
+            LIMIT 1
+            """,
+            (role_id, role_id),
+        ).fetchone()
+    return dict(row) if row else None
+
+
 def summary() -> dict:
     with _conn() as conn:
         rows = conn.execute(

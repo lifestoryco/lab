@@ -1,0 +1,9 @@
+Notes:
+"When exporting your data, the following columns are included for connections:"
+""
+First Name,Last Name,URL,Email Address,Company,Position,Connected On
+Jane,Doe,https://www.linkedin.com/in/janedoe,jane@example.com,"Cox Communications, Inc.",VP Engineering,12 Mar 2021
+John,Smith,https://www.linkedin.com/in/johnsmith,,Cox Inc,Senior Product Manager,03 Aug 2019
+Alice,Wong,https://www.linkedin.com/in/alicewong,,Filevine,Senior Solutions Engineer,15 Jan 2024
+Bob,Garcia,https://www.linkedin.com/in/bobgarcia,bob@x.com,Verkada,Talent Acquisition Lead,22 Sep 2023
+Carla,Mendes,https://www.linkedin.com/in/carlamendes,,cox communications inc,Engineer II,01 Feb 2017

@@ -70,17 +70,21 @@ The `fetch_jd.py` script populates `jd_raw`, `jd_parsed`, `company`, `title`, `l
 **Lane assignment** (both branches):
 After ingest, score title against all 4 lanes:
 ```python
+# Source of truth: modes/_shared.md "The 4 archetypes" + config.LANES.
+# If _shared.md changes the canonical lane set, update both here AND
+# config.LANES — they must stay in sync.
 from careerops.score import score_title
-scores = {lane: score_title(role['title'], lane) for lane in ['mid-market-tpm', 'enterprise-sales-engineer', 'iot-solutions-architect', 'revenue-ops-operator']}
+from config import LANES
+scores = {lane: score_title(role['title'], lane) for lane in LANES.keys()}
 best = max(scores, key=scores.get)
 ```
 If `scores[best] >= 55`, set lane to `best`. If tied between two lanes, ask Sean. If all 4 score below 55, assign `mid-market-tpm` (default) and warn that lane fit is weak.
 
-Update lane via SQL (no helper exists yet — TODO add `update_lane()` to careerops/pipeline.py):
+Update lane via the helper:
 ```bash
 .venv/bin/python -c "
-import sqlite3
-sqlite3.connect('data/db/pipeline.db').execute('UPDATE roles SET lane=? WHERE id=?', ('<lane>', <id>)).connection.commit()
+from careerops.pipeline import update_lane
+update_lane(<id>, '<lane>')
 "
 ```
 
@@ -169,20 +173,24 @@ If Sean says no: STOP. Print: *"Manual revision required. Edit `<json path>` and
 
 Verify the PDF was written (check `data/resumes/generated/<id:04d>_*_recruiter.pdf` exists with size > 30KB). If render fails, the most common cause is missing `pango` — surface to Sean: *"PDF render failed. Check: `brew list pango`."*
 
+After the resume PDF lands, dispatch to `modes/cover-letter.md` for this same role to generate the standalone cover letter. The cover letter is **additive, not blocking**: if its truthfulness audit fails, log the failure to the report (Step 8) but do NOT stop the pipeline — the resume PDF still ships. Treat it the same way:
+
+```bash
+# Inside cover-letter mode dispatch — produces cover.json + cover.pdf
+.venv/bin/python scripts/render_cover_letter.py --role-id <id>
+```
+
+If `cover_letter_audit_passes` is false, set `cover_status = "audit-failed"` for the report; if the render works, set `cover_status = "shipped"`; if no cover was attempted, `cover_status = "skipped"`.
+
 ## Step 7 — TRACK
 
 Status was already set to `resume_generated` in Step 4. Now record the audit verdict in `notes`:
 
 ```python
-import sqlite3
+from careerops.pipeline import update_role_notes
 note = f"audit:{verdict}; high_issues:{len(high_issues)}; auto_pipeline:{date}"
-sqlite3.connect('data/db/pipeline.db').execute(
-    'UPDATE roles SET notes=?, updated_at=datetime("now") WHERE id=?',
-    (note, role_id)
-).connection.commit()
+update_role_notes(role_id, note, append=True)
 ```
-
-(TODO add `update_role_notes()` helper to `careerops/pipeline.py`.)
 
 ## Step 8 — REPORT
 
@@ -211,8 +219,10 @@ AUDIT VERDICT: <CLEAN | NEEDS REVISION | BLOCK>
 <if HIGH issues, list up to 3 with quote + fix>
 
 ARTIFACTS
-  JSON: data/resumes/generated/<id:04d>_<lane>_<date>.json
-  PDF:  data/resumes/generated/<id:04d>_<lane>_<date>_recruiter.pdf
+  JSON:  data/resumes/generated/<id:04d>_<lane>_<date>.json
+  PDF:   data/resumes/generated/<id:04d>_<lane>_<date>_recruiter.pdf
+  COVER: <cover_status — shipped | audit-failed | skipped>
+         (if shipped) data/resumes/generated/<id:04d>_<lane>_<date>_cover.pdf
 
 NEXT STEP
   → Review the PDF (open it now)

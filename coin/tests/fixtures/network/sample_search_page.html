@@ -1,0 +1,60 @@
+<!doctype html>
+<html><body>
+<main>
+<ul class="reusable-search__entity-result-list">
+  <li class="reusable-search__result-container">
+    <div class="entity-result">
+      <span class="entity-result__title-text">
+        <a href="https://www.linkedin.com/in/jane-doe-cox?refUrl=foo" class="app-aware-link">
+          <span aria-hidden="true">Jane Doe</span>
+          <span class="visually-hidden">View Jane Doe&#x2019;s profile</span>
+        </a>
+        &nbsp;&middot;&nbsp;2nd
+      </span>
+      <div class="entity-result__primary-subtitle">VP Engineering at Cox</div>
+      <div class="entity-result__secondary-subtitle">Salt Lake City, UT</div>
+    </div>
+  </li>
+  <li class="reusable-search__result-container">
+    <div class="entity-result">
+      <span class="entity-result__title-text">
+        <a href="/in/john-smith-cox" class="app-aware-link">
+          <span aria-hidden="true">John Smith</span>
+        </a>
+      </span>
+      <div class="entity-result__primary-subtitle">Senior Product Manager</div>
+    </div>
+  </li>
+  <li class="reusable-search__result-container">
+    <div class="entity-result">
+      <span class="entity-result__title-text">
+        <a href="https://www.linkedin.com/in/alice-recruiter">
+          <span aria-hidden="true">Alice Wong</span>
+        </a>
+      </span>
+      <div class="entity-result__primary-subtitle">Talent Acquisition Lead</div>
+    </div>
+  </li>
+  <li class="reusable-search__result-container">
+    <!-- malformed card: no profile URL — parser must skip cleanly -->
+    <div class="entity-result">
+      <span class="entity-result__title-text">
+        <span aria-hidden="true">Unknown Person</span>
+      </span>
+      <div class="entity-result__primary-subtitle">Engineer</div>
+    </div>
+  </li>
+  <li class="reusable-search__result-container">
+    <!-- duplicate URL — parser must dedupe -->
+    <div class="entity-result">
+      <span class="entity-result__title-text">
+        <a href="/in/jane-doe-cox">
+          <span aria-hidden="true">Jane D.</span>
+        </a>
+      </span>
+      <div class="entity-result__primary-subtitle">Different title shown</div>
+    </div>
+  </li>
+</ul>
+</main>
+</body></html>

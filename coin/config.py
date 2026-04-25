@@ -197,4 +197,41 @@ PROFILE_YAML_PATH = "config/profile.yml"
 GENERATED_RESUMES_DIR = "data/resumes/generated"
 RESUME_TEMPLATE_PATH = "data/resume_template.html"
 RECRUITER_TEMPLATE_PATH = "data/resume_template_recruiter.html"
+COVER_TEMPLATE_PATH = "data/cover_letter_template.html"
 TEMPLATE_DIR = "data"  # base for Jinja2 FileSystemLoader; also the Weasyprint base_url scope
+
+# Network-scan + onboarding paths
+LINKEDIN_CONNECTIONS_CSV = "data/network/linkedin_connections.csv"
+NETWORK_DATA_DIR = "data/network"
+ONBOARDING_DIR = "data/onboarding"
+ONBOARDING_MARKER = "data/onboarding/.completed"
+ONBOARDING_RAW_RESUME = "data/onboarding/raw_resume.txt"
+
+# ── Offer-math economic constants (consumed by careerops/offer_math.py) ──────
+# Annual base-bump assumption for 3-yr TC projections — industry mid-tenure norm.
+ANNUAL_BASE_BUMP = 1.04
+# Default vesting schedule when an offer row leaves rsu_vesting_schedule blank.
+DEFAULT_VEST_SCHEDULE = "25/25/25/25"
+# Top-marginal / flat-equivalent state income tax (approximation, NOT advice).
+# Sean confirms with a CPA on real numbers — surfaced as such in modes/ofertas.md.
+STATE_TAX_RATES = {
+    "CA": 0.093,
+    "NY": 0.0685,
+    "OR": 0.099,
+    "MN": 0.0985,
+    "NJ": 0.0897,
+    "MA": 0.05,
+    "CO": 0.0444,
+    "UT": 0.0465,
+    "ID": 0.058,
+    "AZ": 0.025,
+    "WA": 0.0,
+    "TX": 0.0,
+    "FL": 0.0,
+    "NV": 0.0,
+    "TN": 0.0,
+    "WY": 0.0,
+    "SD": 0.0,
+    "AK": 0.0,
+    "NH": 0.0,
+}

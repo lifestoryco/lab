@@ -81,7 +81,7 @@ Fill in the documented order. For every field, follow the protocol in Step 5.
 | 3 | Email | `PROFILE.email` (use `sean@lifestory.co` for job search, NOT employer email) |
 | 4 | Phone | `PROFILE.phone` |
 | 5 | Resume/CV (file upload) | `data/resumes/generated/<id:04d>_*_recruiter.pdf` |
-| 6 | Cover Letter (file upload) | Skip if not generated |
+| 6 | Cover Letter (file upload) | Upload `data/resumes/generated/<id:04d>_*_cover.pdf` if it exists; else skip. Produced by `/coin cover-letter <id>` or auto-pipeline. |
 | 7 | Location (City) | `PROFILE.city` (city only, no state) |
 | 8 | Country Code (dropdown) | "United States" |
 | 9 | LinkedIn Profile | `PROFILE.linkedin` (full URL: `https://linkedin.com/in/seanivins`) |
@@ -104,7 +104,7 @@ Fill in the documented order. For every field, follow the protocol in Step 5.
 | 7 | Current company | `PROFILE.positions[0].company` (CA Engineering) |
 | 8 | LinkedIn URL | `PROFILE.linkedin` |
 | 9 | Twitter / GitHub / Portfolio | Fill if PROFILE has them; else surface as missing |
-| 10 | Additional Information textarea | Paste tailored JSON's `cover_letter_hook` |
+| 10 | Additional Information textarea | Paste the cover-letter JSON's `paragraphs.hook` (`data/resumes/generated/<id:04d>_*_cover.json`) if it exists; else fall back to tailored JSON's `cover_letter_hook`. Hook only — never paste the full letter. |
 | 11 | Custom company sections | **SKIP** — surface |
 | 12 | EEO survey | **SKIP** — surface |
 | 13 | **STOP at Submit button** | NEVER auto-click |

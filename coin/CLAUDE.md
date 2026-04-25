@@ -1,6 +1,6 @@
 # Coin — Career Ops Engine
 
-**Updated:** 2026-04-24 | **Status:** Phase 1 MVP — modal skill architecture
+**Updated:** 2026-04-25 | **Status:** Phase 1 MVP — modal skill architecture
 
 > **Session Start:** Always read `docs/state/project-state.md` first.
 > **Context Budget:** Load CLAUDE.md + `.claude/skills/coin/SKILL.md` at startup.
@@ -11,7 +11,7 @@
 ## What This Project Is
 
 Coin is an agentic job-hunting pipeline for Sean Ivins (PMP, MBA). It
-scrapes high-comp roles across five target archetypes, scores fit, and
+scrapes high-comp roles across **four** target archetypes, scores fit, and
 generates lane-tailored resumes — **all inside Sean's Claude Code
 subscription session**. There is no Anthropic API key. Python handles
 I/O (scraping, SQLite, file saves); Claude (the host session) handles
@@ -43,15 +43,20 @@ live in `config/profile.yml`.
 
 ---
 
-## The five archetypes
+## The four archetypes (current — refreshed 2026-04-25)
 
 | ID | Label |
 |---|---|
-| `cox-style-tpm` | High-Tier TPM (Cox / True-Local-Labs lineage) |
-| `titanx-style-pm` | AI / SaaS Product Manager with operator chops |
-| `enterprise-sales-engineer` | Enterprise Technical Sales / Solutions Engineer |
-| `revenue-ops-transformation` | Transformation / Revenue Ops Leader |
-| `global-eng-orchestrator` | Global Engineering / Platform TPM |
+| `mid-market-tpm` | Mid-Market TPM (Series B–D, IoT/hardware/wireless/B2B SaaS) |
+| `enterprise-sales-engineer` | Enterprise SE / Solutions Architect (IoT, wireless, industrial SaaS) |
+| `iot-solutions-architect` | IoT / Wireless Solutions Architect (technical pre-sales + delivery) |
+| `revenue-ops-operator` | RevOps / BizOps Operator (Series B–D, Utah-friendly) |
+
+> **Removed lanes (do NOT use):** `cox-style-tpm` → renamed `mid-market-tpm`;
+> `titanx-style-pm` → quarantined as `out_of_band` (FAANG-flavored PM —
+> pedigree-filtered); `global-eng-orchestrator` → folded into
+> `iot-solutions-architect`; `revenue-ops-transformation` → renamed
+> `revenue-ops-operator`. See `modes/_shared.md` for the canonical reference.
 
 ---
 
@@ -61,10 +66,11 @@ live in `config/profile.yml`.
 |---|---|
 | 1 | Never fabricate metrics — source of truth is `data/resumes/base.py` + `config/profile.yml` |
 | 2 | Never write a resume without a target archetype — output is always lane-specific |
-| 3 | Comp floor: $180K base / $250K total. Lower roles hidden unless Sean overrides |
+| 3 | Comp floor: **$160K base / $200K total** (refreshed 2026-04-25; Sean is at $99K and $160K is the realistic 60%+ jump). Lower roles hidden unless Sean overrides |
 | 4 | Never auto-submit applications — `applied` transition requires explicit "yes" |
 | 5 | Never commit `data/db/pipeline.db`, `data/resumes/generated/`, or `.env` |
 | 6 | **No Anthropic API calls.** Coin runs inside Claude Code; LLM work is the host session |
+| 7 | Truthfulness gates (per `modes/_shared.md` Operating Principle #3): never claim Cox/TitanX/Safeguard outcomes as direct employment (Hydrant engagements only); no "Fortune 500" / "seven-figure" / "world-class" without a verifiable named account; no CS/engineering degree (Sean has BA History + MBA WGU + PMP) |
 
 ---
 
