@@ -53,7 +53,7 @@ Inspect `{{mode}}` (the user's input) and dispatch:
 | `interview-prep <id>` or `prep <id>` | `modes/interview-prep.md` |
 | `liveness` or `check liveness` | invoke `scripts/liveness_check.py` |
 | `ofertas` or `offers` or `compare offers` | `modes/ofertas.md` (multi-offer math + negotiation brief) |
-| `setup` or `onboard` or `re-onboard` | `modes/onboarding.md` (executable 9-question profile setup) |
+| `setup` or `onboard` or `re-onboard` | `modes/onboarding.md` (executable 7-question profile setup) |
 | first-run with no DB | follow `Setup Checklist` below, then dispatch `modes/onboarding.md` |
 | `help` | print this file |
 
