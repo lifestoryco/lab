@@ -40,6 +40,7 @@ Inspect `{{mode}}` (the user's input) and dispatch:
 | `score <id>` or `parse <id>` | `modes/score.md` |
 | `tailor <id>` or `resume <id>` | `modes/tailor.md` |
 | `pdf <id> [--recruiter\|--brief]` | invoke `scripts/render_pdf.py --role-id <id> [--recruiter]` |
+| `cover-letter <id>` or `cover <id>` | `modes/cover-letter.md` (separate cover letter generation) |
 | `audit <id>` or `audit` | `modes/audit.md` (truthfulness check on tailored JSON) |
 | `track <id> <status> [note]` or `applied <id>` etc. | `modes/track.md` |
 | `apply <id>` | `modes/apply.md` (live form fill — see `references/ats-patterns.md`) |
@@ -91,6 +92,7 @@ Or pick a mode:
   /coin status                Pipeline dashboard
   /coin tailor <id>           Generate tailored resume JSON
   /coin pdf <id>              Render submission-ready PDF
+  /coin cover-letter <id>     Generate standalone cover letter PDF
   /coin audit <id>            Truthfulness check before submitting
   /coin track <id> <status>   Transition pipeline state
   /coin apply <id>            Live ATS form fill (Greenhouse / Lever)

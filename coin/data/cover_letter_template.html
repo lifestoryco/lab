@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>{{ profile.name }} — Cover Letter — {{ company }}</title>
+  <style>
+    @page { size: Letter; margin: 1in; }
+    body { font-family: Georgia, "Times New Roman", serif; font-size: 11pt; line-height: 1.45; color: #222; }
+    .header { margin-bottom: 1.2em; }
+    .header .name { font-size: 14pt; font-weight: bold; letter-spacing: 0.02em; }
+    .header .contact { color: #555; font-size: 10pt; margin-top: 0.2em; }
+    .date { margin: 1.2em 0 0.6em; color: #555; }
+    .recipient { margin-bottom: 1.2em; }
+    p { margin: 0 0 0.9em; }
+    .signoff { margin-top: 1.5em; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="name">{{ profile.name }}</div>
+    <div class="contact">
+      {{ profile.email }} · {{ profile.phone }} · {{ profile.city }}{% if profile.state %}, {{ profile.state }}{% endif %}{% if profile.linkedin %} · {{ profile.linkedin }}{% endif %}
+    </div>
+  </div>
+  <div class="date">{{ today }}</div>
+  <div class="recipient">
+    {% if recipient_name %}{{ recipient_name }}<br>{% endif %}
+    Hiring Team — {{ company }}<br>
+    Re: {{ title }}
+  </div>
+  <p>{{ paragraphs.hook }}</p>
+  <p>{{ paragraphs.proof }}</p>
+  <p>{{ paragraphs.fit }}</p>
+  <div class="signoff">
+    Best,<br>
+    {{ profile.name }}
+  </div>
+</body>
+</html>

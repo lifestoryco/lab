@@ -197,4 +197,5 @@ PROFILE_YAML_PATH = "config/profile.yml"
 GENERATED_RESUMES_DIR = "data/resumes/generated"
 RESUME_TEMPLATE_PATH = "data/resume_template.html"
 RECRUITER_TEMPLATE_PATH = "data/resume_template_recruiter.html"
+COVER_TEMPLATE_PATH = "data/cover_letter_template.html"
 TEMPLATE_DIR = "data"  # base for Jinja2 FileSystemLoader; also the Weasyprint base_url scope

@@ -169,6 +169,15 @@ If Sean says no: STOP. Print: *"Manual revision required. Edit `<json path>` and
 
 Verify the PDF was written (check `data/resumes/generated/<id:04d>_*_recruiter.pdf` exists with size > 30KB). If render fails, the most common cause is missing `pango` — surface to Sean: *"PDF render failed. Check: `brew list pango`."*
 
+After the resume PDF lands, dispatch to `modes/cover-letter.md` for this same role to generate the standalone cover letter. The cover letter is **additive, not blocking**: if its truthfulness audit fails, log the failure to the report (Step 8) but do NOT stop the pipeline — the resume PDF still ships. Treat it the same way:
+
+```bash
+# Inside cover-letter mode dispatch — produces cover.json + cover.pdf
+.venv/bin/python scripts/render_cover_letter.py --role-id <id>
+```
+
+If `cover_letter_audit_passes` is false, set `cover_status = "audit-failed"` for the report; if the render works, set `cover_status = "shipped"`; if no cover was attempted, `cover_status = "skipped"`.
+
 ## Step 7 — TRACK
 
 Status was already set to `resume_generated` in Step 4. Now record the audit verdict in `notes`:
@@ -211,8 +220,10 @@ AUDIT VERDICT: <CLEAN | NEEDS REVISION | BLOCK>
 <if HIGH issues, list up to 3 with quote + fix>
 
 ARTIFACTS
-  JSON: data/resumes/generated/<id:04d>_<lane>_<date>.json
-  PDF:  data/resumes/generated/<id:04d>_<lane>_<date>_recruiter.pdf
+  JSON:  data/resumes/generated/<id:04d>_<lane>_<date>.json
+  PDF:   data/resumes/generated/<id:04d>_<lane>_<date>_recruiter.pdf
+  COVER: <cover_status — shipped | audit-failed | skipped>
+         (if shipped) data/resumes/generated/<id:04d>_<lane>_<date>_cover.pdf
 
 NEXT STEP
   → Review the PDF (open it now)
