@@ -6,6 +6,8 @@ import { nextStepTowardEdge } from './enclosure'
 import { blockKey } from '../utils/isoMath'
 
 export interface MonsterState {
+  id: number                  // stable identifier so React keys are reliable
+  rule: CageRule              // each monster owns its rule (multi-monster levels mix)
   col: number
   row: number
   // For 'bounce': current direction vector. Resets on block collision.
@@ -16,12 +18,20 @@ export interface MonsterState {
   echoRow: number | null
 }
 
-export function spawnMonster(startCol: number, startRow: number): MonsterState {
+export function spawnMonster(
+  id: number,
+  rule: CageRule,
+  startCol: number,
+  startRow: number,
+  initialDir: { col: number; row: number } = { col: 1, row: 0 },
+): MonsterState {
   return {
+    id,
+    rule,
     col: startCol,
     row: startRow,
-    dirCol: 1, // default drift right on first move
-    dirRow: 0,
+    dirCol: initialDir.col,
+    dirRow: initialDir.row,
     echoCol: null,
     echoRow: null,
   }
@@ -35,15 +45,16 @@ export interface StepResult {
   row: number
 }
 
-// Execute one step per the rule. Returns the new position and whether it escaped.
+// Execute one step per the monster's rule. Returns the new position and
+// whether it escaped. Multi-monster levels call this once per active monster
+// per beat, treating other monsters' cells as walls.
 export function stepMonster(
   m: MonsterState,
   blocks: Map<string, unknown>,
   cols: number,
   rows: number,
-  rule: CageRule,
 ): StepResult {
-  switch (rule) {
+  switch (m.rule) {
     case 'static':
     case 'silence':
       return { next: m, escaped: false, row: m.row }

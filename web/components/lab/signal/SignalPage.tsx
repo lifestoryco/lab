@@ -148,7 +148,11 @@ export default function SignalPage() {
       cageStartFired.current = worldIndex
       track('signal_cage_started', {
         world_index: worldIndex,
-        rule: cageLevel.rule,
+        rules: cageLevel.monsters.map(m => m.rule).join(','),
+        monster_count: cageLevel.monsters.length,
+        block_budget: cageLevel.blockBudget,
+        par: cageLevel.parBlocks,
+        beat_locked: cageLevel.beatLocked,
         bpm: useGameStore.getState().bpm,
       })
     }

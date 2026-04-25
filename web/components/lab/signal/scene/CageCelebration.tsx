@@ -62,8 +62,12 @@ export default function CageCelebration() {
     if (mode !== 'cage') return
     if (!lastResult?.solved) return
     const s = getGameState()
-    if (!s.monster) return
-    const [x, , z] = gridToWorld(s.monster.col, s.monster.row)
+    if (s.monsters.length === 0) return
+    // Centroid of the monster cluster — celebration sits at the centre of
+    // the caged group so multi-monster solves feel collective.
+    const cx = s.monsters.reduce((a, m) => a + m.col, 0) / s.monsters.length
+    const cy = s.monsters.reduce((a, m) => a + m.row, 0) / s.monsters.length
+    const [x, , z] = gridToWorld(cx, cy)
     setBurst({ x, z, worldIndex: s.worldIndex, at: performance.now() })
     if (clearTimer.current) clearTimeout(clearTimer.current)
     clearTimer.current = setTimeout(() => setBurst(null), LIFE_MS)

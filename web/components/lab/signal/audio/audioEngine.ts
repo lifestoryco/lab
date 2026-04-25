@@ -46,6 +46,18 @@ export function getCurrentBeat(): number {
   return beatCounter
 }
 
+// Beat-locked placement check: returns true iff the next monster step is
+// imminent (within the placement window). Window opens at the beat
+// immediately preceding the step. For static / silence levels (Infinity),
+// returns true unconditionally.
+export function isPlacementBeat(beatsPerStep: number): boolean {
+  if (!isFinite(beatsPerStep)) return true
+  // Step fires when beatCounter % beatsPerStep === 0. The "pre-step beat"
+  // is exactly the beat right before that — i.e. (beatCounter + 1) % bps === 0.
+  // We give a 1-beat window (just the pre-step beat).
+  return (beatCounter + 1) % beatsPerStep === 0
+}
+
 // Whether the monster motif should loop this session (set by cage hook).
 let motifActive = false
 export function setMotifActive(active: boolean) {

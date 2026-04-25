@@ -6,7 +6,7 @@ import type { MonsterState } from '../cage/monster'
 import { spawnMonster } from '../cage/monster'
 import { cageLevelAt, CAGE_LEVELS, type CageLevel } from '../cage/levels'
 import { specialForWorld, REVEAL_DURATION_MS, STUN_DURATION_BEATS } from '../cage/specials'
-import { getCurrentBeat } from '../audio/audioEngine'
+import { getCurrentBeat, isPlacementBeat } from '../audio/audioEngine'
 
 // --- Types ---
 
@@ -95,13 +95,16 @@ interface GameState {
   // --- Cage Mode ---------------------------------------------------------
   cageLevelIndex: number        // 0..14 — which of the 15 cage levels
   cageLevel: CageLevel | null
-  monster: MonsterState | null
+  monsters: MonsterState[]      // multi-monster: 1+ monsters, all must be caged
   cageAttempts: number          // across the session
   cageLevelsCleared: number     // bitmask by biome (0..4) — one bit = biome fully solved
   cageSubLevelsCleared: number  // bitmask by level index (0..14) — granular completion
+  cageStarsThisRun: number      // bitmask of starred levels (par or better)
   cageTapsThisLevel: number     // reset on level start
+  cageBlocksUsedThisLevel: number  // counts player placements only (excludes seeds)
   cageLevelStartedAt: number | null
-  cageLastResult: { solved: boolean; at: number } | null
+  cageLastResult: { solved: boolean; at: number; starred: boolean } | null
+  cageLastTapMissed: { at: number; reason: 'budget' | 'beat' | 'occupied' } | null
   // Per-world special item — 1 charge per cage level on worlds 2-5 (worldIndex 1..4).
   specialChargesRemaining: number   // 0 or 1
   monsterStunUntilBeat: number | null   // beat index after which monster resumes
@@ -125,7 +128,7 @@ interface GameState {
   setMode: (m: PlayMode) => void
   // Cage Mode actions
   startCageLevel: (levelIndex: number) => void
-  setMonster: (m: MonsterState | null) => void
+  setMonsters: (ms: MonsterState[]) => void
   solveCageLevel: () => void
   failCageLevel: () => void
   retryCageLevel: () => void
@@ -172,13 +175,16 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   cageLevelIndex: 0,
   cageLevel: null,
-  monster: null,
+  monsters: [],
   cageAttempts: 0,
   cageLevelsCleared: 0,
   cageSubLevelsCleared: 0,
+  cageStarsThisRun: 0,
   cageTapsThisLevel: 0,
+  cageBlocksUsedThisLevel: 0,
   cageLevelStartedAt: null,
   cageLastResult: null,
+  cageLastTapMissed: null,
   specialChargesRemaining: 0,
   monsterStunUntilBeat: null,
   revealActiveUntil: null,
@@ -188,7 +194,28 @@ export const useGameStore = create<GameState>((set, get) => ({
     const state = get()
     if (state.gamePhase !== 'playing') return
     const key = blockKey(col, row)
-    if (state.blocks.has(key)) return // already occupied
+
+    if (state.blocks.has(key)) {
+      // Visual feedback only — already-occupied tap is just a no-op.
+      if (state.mode === 'cage') {
+        set({ cageLastTapMissed: { at: performance.now(), reason: 'occupied' } })
+      }
+      return
+    }
+
+    // --- Cage-mode gates: budget + beat-lock ---------------------------------
+    if (state.mode === 'cage' && state.cageLevel) {
+      const remaining = state.cageLevel.blockBudget - state.cageBlocksUsedThisLevel
+      if (remaining <= 0) {
+        set({ cageLastTapMissed: { at: performance.now(), reason: 'budget' } })
+        return
+      }
+      if (state.cageLevel.beatLocked && !isPlacementBeat(state.cageLevel.beatsPerStep)) {
+        set({ cageLastTapMissed: { at: performance.now(), reason: 'beat' } })
+        return
+      }
+    }
+    // -----------------------------------------------------------------------
 
     const block: PlacedBlock = {
       col,
@@ -213,6 +240,8 @@ export const useGameStore = create<GameState>((set, get) => ({
       lastPlacedCell: { col, row },
       sessionBlocks: [...state.sessionBlocks, { biome: state.worldIndex, col, row }],
       cageTapsThisLevel: state.mode === 'cage' ? state.cageTapsThisLevel + 1 : state.cageTapsThisLevel,
+      cageBlocksUsedThisLevel: state.mode === 'cage' ? state.cageBlocksUsedThisLevel + 1 : state.cageBlocksUsedThisLevel,
+      cageLastTapMissed: null,
     })
   },
 
@@ -268,7 +297,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           isPlaying: false,
           sessionBiomesCleared: state.cageLevelsCleared,
           cageLevel: null,
-          monster: null,
+          monsters: [],
         })
         return
       }
@@ -286,9 +315,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         gamePhase: 'complete',
         isPlaying: false,
         sessionBiomesCleared: clearedMask,
-        // Cage: preserve cageLevelsCleared for the share payload, drop in-flight monster.
+        // Cage: preserve cageLevelsCleared for the share payload, drop in-flight monsters.
         cageLevel: null,
-        monster: null,
+        monsters: [],
       })
       return
     }
@@ -309,10 +338,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       hasTriggeredChain: false,
       lastChain: null,
       sessionBiomesCleared: clearedMask,
-      // Cage: drop the finished monster, retain cleared-levels bitmask.
+      // Cage: drop the finished monsters, retain cleared-levels bitmask.
       cageLevel: null,
-      monster: null,
+      monsters: [],
       cageTapsThisLevel: 0,
+      cageBlocksUsedThisLevel: 0,
       cageLevelStartedAt: null,
     })
   },
@@ -372,7 +402,17 @@ export const useGameStore = create<GameState>((set, get) => ({
       worldIndex: level.worldIndex,
       biome,
       bpm: level.bpm,
-      monster: spawnMonster(level.startCol, level.startRow),
+      monsters: level.monsters.map((spec, idx) =>
+        spawnMonster(
+          idx,
+          spec.rule,
+          spec.col,
+          spec.row,
+          spec.dirCol !== undefined && spec.dirRow !== undefined
+            ? { col: spec.dirCol, row: spec.dirRow }
+            : { col: 1, row: 0 },
+        ),
+      ),
       blocks: nextBlocks,
       blockAnimations: new Map(),
       pulsingBlocks: new Set(),
@@ -383,9 +423,11 @@ export const useGameStore = create<GameState>((set, get) => ({
       lastChain: null,
       lastPlacedCell: null,
       cageTapsThisLevel: 0,
+      cageBlocksUsedThisLevel: 0,
       cageLevelStartedAt: performance.now(),
       cageAttempts: get().cageAttempts + 1,
       cageLastResult: null,
+      cageLastTapMissed: null,
       // 1 charge for any world that has a special (worlds 2-5 → worldIndex 1..4).
       specialChargesRemaining: specialForWorld(level.worldIndex) ? 1 : 0,
       monsterStunUntilBeat: null,
@@ -394,31 +436,33 @@ export const useGameStore = create<GameState>((set, get) => ({
     })
   },
 
-  setMonster: (m) => set({ monster: m }),
+  setMonsters: (ms) => set({ monsters: ms }),
 
   solveCageLevel: () => {
     const state = get()
     const biomeBit = 1 << state.worldIndex
-    // Mark biome fully cleared only when the LAST level of the biome is solved
-    // (levels 2, 5, 8, 11, 14 are the last-in-biome, but more robustly:
-    //  the next level either doesn't exist or moves to a new worldIndex).
     const nextIdx = state.cageLevelIndex + 1
     const isBiomeBoundary =
       nextIdx >= CAGE_LEVELS.length ||
       CAGE_LEVELS[nextIdx].worldIndex !== state.worldIndex
+    const par = state.cageLevel?.parBlocks ?? Infinity
+    const starred = state.cageBlocksUsedThisLevel <= par
     set({
       cageSubLevelsCleared: state.cageSubLevelsCleared | (1 << state.cageLevelIndex),
       cageLevelsCleared: isBiomeBoundary
         ? state.cageLevelsCleared | biomeBit
         : state.cageLevelsCleared,
-      cageLastResult: { solved: true, at: performance.now() },
+      cageStarsThisRun: starred
+        ? state.cageStarsThisRun | (1 << state.cageLevelIndex)
+        : state.cageStarsThisRun,
+      cageLastResult: { solved: true, at: performance.now(), starred },
       hasTriggeredChain: true,
     })
   },
 
   failCageLevel: () => {
     set({
-      cageLastResult: { solved: false, at: performance.now() },
+      cageLastResult: { solved: false, at: performance.now(), starred: false },
       gamePhase: 'gameover',
       isPlaying: false,
     })
@@ -445,11 +489,23 @@ export const useGameStore = create<GameState>((set, get) => ({
       hasTriggeredChain: false,
       lastChain: null,
       lastPlacedCell: null,
-      monster: spawnMonster(level.startCol, level.startRow),
+      monsters: level.monsters.map((spec, midx) =>
+        spawnMonster(
+          midx,
+          spec.rule,
+          spec.col,
+          spec.row,
+          spec.dirCol !== undefined && spec.dirRow !== undefined
+            ? { col: spec.dirCol, row: spec.dirRow }
+            : { col: 1, row: 0 },
+        ),
+      ),
       cageTapsThisLevel: 0,
+      cageBlocksUsedThisLevel: 0,
       cageLevelStartedAt: performance.now(),
       cageAttempts: get().cageAttempts + 1,
       cageLastResult: null,
+      cageLastTapMissed: null,
       gamePhase: 'playing',
       isPlaying: true,
       specialChargesRemaining: specialForWorld(level.worldIndex) ? 1 : 0,
@@ -470,7 +526,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         gamePhase: 'complete',
         isPlaying: false,
         sessionBiomesCleared: state.cageLevelsCleared,
-        monster: null,
+        monsters: [],
         cageLevel: null,
       })
       return
@@ -488,12 +544,13 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   // Per-world special — fires the world's unique ability if a charge remains.
+  // Multi-monster: applies to ALL monsters of the matching kind.
   useSpecial: () => {
     const s = get()
     if (s.gamePhase !== 'playing') return
     if (s.mode !== 'cage') return
     if (s.specialChargesRemaining <= 0) return
-    if (!s.cageLevel || !s.monster) return
+    if (!s.cageLevel || s.monsters.length === 0) return
     const meta = specialForWorld(s.cageLevel.worldIndex)
     if (!meta) return
 
@@ -501,7 +558,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
     switch (meta.kind) {
       case 'stun': {
-        // Halt monster for STUN_DURATION_BEATS transport beats.
+        // Halt every monster for STUN_DURATION_BEATS transport beats.
         set({
           monsterStunUntilBeat: getCurrentBeat() + STUN_DURATION_BEATS,
           specialChargesRemaining: 0,
@@ -510,22 +567,23 @@ export const useGameStore = create<GameState>((set, get) => ({
         return
       }
       case 'reverse': {
-        // Flip the bounce-rule monster's heading. Bounce monsters always have
-        // a non-zero dir vector (spawned with dirCol=1, dirRow=0; updated by
-        // stepMonster on every move), so a simple negation is sufficient and
-        // visibly reverses the next step.
-        const m = s.monster
+        // Flip every bounce monster's heading. Drift / split / static / silence
+        // monsters are unaffected (they don't use dir vectors meaningfully here).
         set({
-          monster: { ...m, dirCol: -m.dirCol, dirRow: -m.dirRow },
+          monsters: s.monsters.map((m) =>
+            m.rule === 'bounce'
+              ? { ...m, dirCol: -m.dirCol, dirRow: -m.dirRow }
+              : m,
+          ),
           specialChargesRemaining: 0,
           lastSpecialFiredAt: firedAt,
         })
         return
       }
       case 'banish': {
-        // Strip the echo pawn.
+        // Strip every echo pawn.
         set({
-          monster: { ...s.monster, echoCol: null, echoRow: null },
+          monsters: s.monsters.map((m) => ({ ...m, echoCol: null, echoRow: null })),
           specialChargesRemaining: 0,
           lastSpecialFiredAt: firedAt,
         })
@@ -574,13 +632,16 @@ export const useGameStore = create<GameState>((set, get) => ({
     sessionTotalChains: 0,
     cageLevelIndex: 0,
     cageLevel: null,
-    monster: null,
+    monsters: [],
     cageAttempts: 0,
     cageLevelsCleared: 0,
     cageSubLevelsCleared: 0,
+    cageStarsThisRun: 0,
     cageTapsThisLevel: 0,
+    cageBlocksUsedThisLevel: 0,
     cageLevelStartedAt: null,
     cageLastResult: null,
+    cageLastTapMissed: null,
     specialChargesRemaining: 0,
     monsterStunUntilBeat: null,
     revealActiveUntil: null,
@@ -590,3 +651,9 @@ export const useGameStore = create<GameState>((set, get) => ({
 
 // Non-reactive getters for use in useFrame / audio callbacks
 export const getGameState = useGameStore.getState
+
+// Dev-only: expose to window for E2E probes (preview server, harness checks).
+if (typeof window !== 'undefined' && process.env.NODE_ENV !== 'production') {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ;(window as any).__signalStore = useGameStore
+}

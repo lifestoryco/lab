@@ -18,6 +18,7 @@ export default function LevelCompleteOverlay() {
   const cageLevel       = useGameStore(s => s.cageLevel)
   const cageLevelIndex  = useGameStore(s => s.cageLevelIndex)
   const cageResult      = useGameStore(s => s.cageLastResult)
+  const blocksUsed      = useGameStore(s => s.cageBlocksUsedThisLevel)
   const biome           = useGameStore(s => s.biome)
   const nextCageLevel   = useGameStore(s => s.nextCageLevel)
 
@@ -65,6 +66,11 @@ export default function LevelCompleteOverlay() {
 
   const accent = biome.palette.hasAccent ? biome.palette.bright : '#cccccc'
   const levelId = cageLevel?.id ?? `${cageLevelIndex + 1}`
+  const par = cageLevel?.parBlocks ?? 0
+  const starred = !!cageResult?.starred
+  const parCopy = starred
+    ? `★ par ${par} · solved in ${blocksUsed}`
+    : `par ${par} · solved in ${blocksUsed}`
 
   return (
     <button
@@ -109,11 +115,25 @@ export default function LevelCompleteOverlay() {
           fontWeight: 300,
           letterSpacing: '0.2em',
           color: '#ffffff',
-          marginBottom: 28,
+          marginBottom: 14,
           textShadow: `0 0 30px ${accent}`,
         }}
       >
         Caged.
+      </div>
+      <div
+        aria-hidden="true"
+        style={{
+          fontFamily: SERIF,
+          fontStyle: starred ? 'normal' : 'italic',
+          fontSize: 'clamp(0.95rem, 2vw, 1.2rem)',
+          color: starred ? accent : '#aaaaaa',
+          letterSpacing: '0.18em',
+          marginBottom: 24,
+          textShadow: starred ? `0 0 14px ${accent}88` : 'none',
+        }}
+      >
+        {parCopy}
       </div>
       <div
         aria-hidden="true"

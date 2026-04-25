@@ -104,6 +104,35 @@ export function nextStepTowardEdge(
   return null
 }
 
+// Multi-monster: a level is "solved" only when EVERY monster's BFS reaches
+// no edge. Treats other monsters' current cells as walls so they can't pass
+// through each other's positions.
+export function areAllEnclosed(
+  monsters: Array<{ col: number; row: number }>,
+  blocks: Map<string, unknown>,
+  cols: number,
+  rows: number,
+): { allTrapped: boolean; perMonster: EnclosureResult[] } {
+  // Build augmented block set including every other monster's cell.
+  const occupied = new Set<string>()
+  for (const m of monsters) occupied.add(blockKey(m.col, m.row))
+
+  const perMonster: EnclosureResult[] = monsters.map((m) => {
+    // Treat all OTHER monsters as walls for this one's flood-fill.
+    const augmented = new Map(blocks)
+    for (const k of occupied) {
+      if (k === blockKey(m.col, m.row)) continue
+      augmented.set(k, true)
+    }
+    return isEnclosed(m, augmented, cols, rows)
+  })
+
+  return {
+    allTrapped: perMonster.every((r) => r.trapped),
+    perMonster,
+  }
+}
+
 // Predict the monster's next N steps along the shortest path to an edge.
 // Used by PathHintVisualizer to glow the cells ahead of it.
 export function predictPath(
