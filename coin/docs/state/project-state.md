@@ -1,5 +1,87 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-25, Session 5 — Follow-up batch)
+
+### All four deferred follow-ups landed in one session ✅ COMPLETE
+
+**Tests:** 98 → **170 passing** (72 net new, 0 regressions).
+
+**1. COIN-OFERTAS — multi-offer comparison + negotiation brief** (santifer port)
+- `modes/ofertas.md` (7-step decision-support flow with 5 hard refusals;
+  "Coin does NOT recommend a specific offer" — surfaces math + trade-offs only)
+- `careerops/offer_math.py` — pure functions: `vest_share_y1`, `vest_curve`,
+  `year_one_tc`, `three_year_tc` with ±growth sensitivity, `historical_hit_rate`,
+  `state_tax_rate` (top-marginal approximation), `delta_table`
+- `scripts/migrations/002_offers_table.py` (idempotent, tracked)
+- `careerops.pipeline.insert_offer` + `list_offers` helpers
+- 24 new tests (offer math + mode structure + migration smoke)
+
+**2. COIN-COVER-LETTER — separate cover letter generation** (proficiently port)
+- `modes/cover-letter.md` (7-step flow; 280-word hard cap; story-parity +
+  JD-keyword-parity checks against tailored resume; reuses audit checks 1-5
+  for truthfulness — skips orthogonality/lane checks; 7 hard refusals)
+- `scripts/render_cover_letter.py` — refuses on `audit_passes != true`,
+  Jinja autoescape on, base_url scoped to `data/` (security parity with
+  render_pdf.py)
+- `data/cover_letter_template.html` (single-page Letter, Georgia serif)
+- `config.COVER_TEMPLATE_PATH`
+- Auto-pipeline integration (Step 6): cover-letter is additive — resume
+  still ships if cover audit fails
+- Apply mode integration: Greenhouse field 6 + Lever field 10 wire the
+  cover artifact (cover.pdf for upload, paragraphs.hook for textarea)
+- 13 new tests
+
+**3. COIN-NETWORK-SCAN — LinkedIn warm-intro discovery** (proficiently port)
+- `modes/network-scan.md` (7-step discovery+drafting flow; 6 hard refusals;
+  warmth = 40% recency + 35% seniority + 25% relevance; recruiter override
+  scores 90; truthfulness gate via `_shared.md` Operating Principle #3)
+- `.claude/skills/coin/references/network-patterns.md` — CSV schema,
+  recency tiers, seniority classifier, relevance signals, 4 outreach
+  templates by recency tier (hot/warm/cold/recruiter), forbidden behaviors
+- `scripts/import_linkedin_connections.py` — idempotent CSV ingest from
+  LinkedIn's "Get a copy of your data" export; creates `connections` +
+  `outreach` tables; company normalization collapses Inc./LLC/punctuation
+  variants; preamble-tolerant CSV reader for LinkedIn's variable header
+- 17 new tests (mode structure + reference content + schema + idempotency
+  + company normalization + dry-run)
+- Coin does NOT auto-send DMs and does NOT scrape with logged-in cookies
+
+**4. COIN-ONBOARDING-EXECUTABLE — convert SKILL.md prose to executable mode**
+  (job-scout pattern)
+- `modes/onboarding.md` (9 deterministic AskUserQuestion blocks; Step 0
+  loads AskUserQuestion via ToolSearch; Step 1 safety gate for existing
+  profile with Re-onboard / Update specific fields / Cancel branches;
+  Step 8 pedigree-constraint question explicitly load-bearing; Step 9
+  atomic write via staging file + yaml.safe_load round-trip; identity
+  slice only — never touches positions/education/skills_grid)
+- SKILL.md: deleted the 9-step prose Onboarding section; replaced with
+  pointer at modes/onboarding.md; routing table adds
+  `setup`/`onboard`/`re-onboard`; First-Run Setup Checklist now dispatches
+  onboarding between init-DB and smoke-test
+- 18 new tests including SKILL.md regression (deleted prose markers must
+  not reappear; First-Run Checklist must dispatch onboarding)
+- 5 hard refusals (no silent overwrite, no inferred pedigree, identity-slice
+  only, no question-skipping, no >5 smoke discovery)
+
+**Cross-cutting infrastructure:**
+- `.gitignore`: added `data/network/`, `data/onboarding/`
+- `_shared.md` mode catalog: 4 new rows (ofertas, cover-letter,
+  network-scan, onboarding)
+- SKILL.md: 4 new routing entries + 3 new Discovery menu lines
+- `scripts/migrations/__init__.py` for importable migration package
+
+**Open follow-ups (after this batch — none from the original four):**
+- COIN-NETWORK-LIVE-SCRAPE: implement the live LinkedIn search fallback
+  (currently the mode describes it; awaiting browser MCP plumbing)
+- COIN-OFERTAS-LEVELS-FYI: cross-reference Levels.fyi for market-comp
+  anchor when only one offer exists (counter-brief currently STOPs in
+  that case)
+- COIN-COVER-RECIPIENT-FROM-NETWORK: when network-scan surfaces a
+  hiring-manager match, populate cover-letter `recipient_name`
+  automatically
+
+---
+
 ## What Was Just Done (2026-04-25, Session 4 — Part 5)
 
 ### /code-review --fix pass: ALL severities resolved ✅ COMPLETE
@@ -67,10 +149,10 @@
 - New python-engineer.md agent (coin-stack-specific)
 
 **Open follow-ups (deferred, low priority):**
-- COIN-NETWORK-SCAN: port proficiently network-scan skill (LinkedIn warm-intro discovery)
-- COIN-OFERTAS: port santifer multi-offer comparison mode
-- COIN-COVER-LETTER: port proficiently cover-letter as separate mode (currently folded into tailor)
-- COIN-AUTO-PIPELINE-EXECUTABLE: convert SKILL.md narrative onboarding to actual AskUserQuestion blocks
+- ~~COIN-NETWORK-SCAN~~ ✅ landed in Session 5
+- ~~COIN-OFERTAS~~ ✅ landed in Session 5
+- ~~COIN-COVER-LETTER~~ ✅ landed in Session 5
+- ~~COIN-AUTO-PIPELINE-EXECUTABLE / COIN-ONBOARDING-EXECUTABLE~~ ✅ landed in Session 5
 
 ---
 
