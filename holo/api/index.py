@@ -892,6 +892,31 @@ def _handle_history(params: dict) -> dict:
     change = round(last - first_price, 2)
     change_pct = round((last / first_price - 1) * 100, 2) if first_price > 0 else 0.0
 
+    # Average price across the whole window — mean of every individual sale
+    # above the 15% outlier floor and within the requested window. This is
+    # what users actually mean by "average price"; previously the UI showed
+    # `summary.current` (the last day's daily-median), which can be one
+    # outlier-skewed data point. We keep `current` for backward compat but
+    # the frontend now leads with `average`.
+    in_window_prices: list[float] = []
+    for s in sales:
+        try:
+            d = str(s["date"])[:10]
+            p = float(s["price"])
+        except (KeyError, ValueError, TypeError):
+            continue
+        if p < outlier_floor:
+            continue
+        try:
+            if date.fromisoformat(d) < cutoff:
+                continue
+        except (ValueError, TypeError):
+            continue
+        in_window_prices.append(p)
+
+    average = round(statistics.mean(in_window_prices), 2) if in_window_prices else 0.0
+    in_window_count = len(in_window_prices)
+
     # Data-quality flags — expose ratio of market-estimate records (TCGPlayer
     # averages, PC static snapshots, pokemontcg.io synth) vs completed sales
     # so the UI can show a caveat when the chart is mostly estimates.
@@ -904,7 +929,9 @@ def _handle_history(params: dict) -> dict:
         "days": days,
         "points": points,
         "summary": {
-            "current": last,
+            "average": average,                    # primary display — mean of in-window sales above outlier floor
+            "in_window_count": in_window_count,   # count actually averaged (post outlier-floor)
+            "current": last,                       # legacy: last day's daily-median (kept for backward compat)
             "first": first_price,
             "high": high,
             "low": low,
