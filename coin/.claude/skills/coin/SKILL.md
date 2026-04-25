@@ -48,6 +48,7 @@ Inspect `{{mode}}` (the user's input) and dispatch:
 | `patterns` or `rejection patterns` | `modes/patterns.md` (analyze rejection clusters) |
 | `interview-prep <id>` or `prep <id>` | `modes/interview-prep.md` |
 | `liveness` or `check liveness` | invoke `scripts/liveness_check.py` |
+| `ofertas` or `offers` or `compare offers` | `modes/ofertas.md` (multi-offer math + negotiation brief) |
 | `setup` or first-run | follow `Setup Checklist` below |
 | `help` | print this file |
 
@@ -97,6 +98,7 @@ Or pick a mode:
   /coin patterns              Analyze rejection clusters
   /coin interview-prep <id>   Generate prep brief for upcoming interview
   /coin liveness              Mark dead postings as closed
+  /coin ofertas               Compare 2+ offers + draft counters
 
 Lanes (4):
   mid-market-tpm · enterprise-sales-engineer · iot-solutions-architect · revenue-ops-operator

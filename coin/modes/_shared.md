@@ -136,6 +136,7 @@ Use `scripts/update_role.py --id N --status S` to transition. **Human gate requi
 | `track` | Transition state | `modes/track.md` |
 | `status` | Pipeline dashboard | `modes/status.md` |
 | `url` | Ingest one URL | `modes/url.md` |
+| `ofertas` | Compare offers + negotiation counter-brief | `modes/ofertas.md` |
 
 ## How to invoke Python (always via Bash tool)
 

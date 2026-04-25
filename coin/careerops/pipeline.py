@@ -225,6 +225,47 @@ def update_jd_raw(role_id: int, jd: str) -> None:
         )
 
 
+def insert_offer(offer: dict) -> int:
+    """Insert a row into offers (created by migration 002).
+
+    Required keys: company, title, base_salary. received_at defaults to today.
+    Returns the new offer id.
+    """
+    cols = [
+        "role_id", "company", "title", "received_at", "expires_at",
+        "base_salary", "signing_bonus", "annual_bonus_target_pct",
+        "annual_bonus_paid_history", "rsu_total_value", "rsu_vesting_schedule",
+        "rsu_vest_years", "rsu_cliff_months", "equity_refresh_expected",
+        "benefits_delta", "pto_days", "remote_pct", "state_tax",
+        "growth_signal", "notes", "status",
+    ]
+    vals = [offer.get(c) for c in cols]
+    if not offer.get("received_at"):
+        vals[cols.index("received_at")] = datetime.now(timezone.utc).date().isoformat()
+    placeholders = ",".join("?" * len(cols))
+    with _conn() as conn:
+        cur = conn.execute(
+            f"INSERT INTO offers ({','.join(cols)}) VALUES ({placeholders})",
+            vals,
+        )
+        return cur.lastrowid
+
+
+def list_offers(status: str | None = "active") -> list[dict]:
+    """List offers (default active). Returns dicts (sqlite Row → dict)."""
+    with _conn() as conn:
+        if status:
+            rows = conn.execute(
+                "SELECT * FROM offers WHERE status = ? ORDER BY received_at DESC",
+                (status,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM offers ORDER BY received_at DESC"
+            ).fetchall()
+    return [dict(r) for r in rows]
+
+
 def summary() -> dict:
     with _conn() as conn:
         rows = conn.execute(
