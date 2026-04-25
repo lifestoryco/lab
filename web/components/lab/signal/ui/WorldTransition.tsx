@@ -47,8 +47,20 @@ export default function WorldTransition() {
   const isLastWorld    = useRef(false)
   const prevGamePhase  = useRef<string>('')
 
+  // Schedule timers must outlive the effect that started them — `nextWorld()`
+  // changes gamePhase mid-sequence, which would otherwise re-run this effect
+  // and cancel the still-pending fade-out timers (the overlay then froze).
+  // We park them on a ref instead, and only the unmount cleanup clears them.
+  const timersRef = useRef<ReturnType<typeof setTimeout>[]>([])
+
   useEffect(() => {
-    if (gamePhase !== 'transition' || prevGamePhase.current === 'transition' || sequenceActive.current) {
+    // Only react to entering 'transition'. Subsequent phase changes inside
+    // the schedule (nextWorld → 'playing'/'title') must not interrupt it.
+    if (gamePhase !== 'transition') {
+      prevGamePhase.current = gamePhase
+      return
+    }
+    if (prevGamePhase.current === 'transition' || sequenceActive.current) {
       prevGamePhase.current = gamePhase
       return
     }
@@ -57,9 +69,8 @@ export default function WorldTransition() {
     fragment.current    = STORY_FRAGMENTS[worldIndex] ?? ''
     isLastWorld.current = worldIndex === STORY_FRAGMENTS.length - 1
 
-    const timers: ReturnType<typeof setTimeout>[] = []
     const schedule = (fn: () => void, delay: number) => {
-      timers.push(setTimeout(fn, delay))
+      timersRef.current.push(setTimeout(fn, delay))
     }
 
     setBlocking(true)
@@ -89,10 +100,15 @@ export default function WorldTransition() {
     }
 
     prevGamePhase.current = gamePhase
-
-    return () => { timers.forEach(clearTimeout) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gamePhase])
+
+  // Only clear timers when the component truly unmounts (not on every
+  // gamePhase change inside a running sequence).
+  useEffect(() => () => {
+    timersRef.current.forEach(clearTimeout)
+    timersRef.current = []
+  }, [])
 
   return (
     <div
