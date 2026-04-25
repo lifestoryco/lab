@@ -43,6 +43,22 @@ If no tailored resume JSON exists for the role, STOP — print:
 
 > *"Cover letter requires a tailored resume first. Run `/coin tailor <id>` then re-run `/coin cover-letter <id>`."*
 
+**Hiring-manager lookup (auto-populates recipient_name):** check whether
+`/coin network-scan` tagged a contact as the role's hiring manager:
+
+```bash
+.venv/bin/python -c "
+from careerops.pipeline import find_hiring_manager_for_role
+hm = find_hiring_manager_for_role(<role_id>)
+import json; print(json.dumps(hm, indent=2) if hm else 'none')
+"
+```
+
+If a row comes back, set `recipient_name = hm['full_name']` for Step 4's
+JSON write. If none, leave `recipient_name = null` and the template will
+render "Hiring Team — &lt;company&gt;" instead. Never invent a hiring
+manager — if the lookup is empty, leave the field null.
+
 ---
 
 ## Step 2 — Truthfulness gate (mandatory before drafting)

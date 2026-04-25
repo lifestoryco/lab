@@ -184,9 +184,68 @@ Best alternative: walk to <Anchor Company> — cleaner remote, larger Y1 TC.
   `data/resumes/base.py` PROFILE before drafting).
 - Never claim Cox/TitanX/Safeguard outcomes as direct employment — Sean was
   Hydrant's PM/COO on those engagements.
-- If only one offer exists, print: *"Need another offer or a market-comp
-  citation as anchor before drafting a counter — Coin will not bluff."* and
-  STOP the counter step.
+- If only one **real** offer exists (no market anchor either), STOP and run
+  Step 5.5 below before continuing the counter draft.
+
+---
+
+## Step 5.5 — Levels.fyi / market-comp anchor (only when 1 real offer)
+
+`careerops.list_offers(status='active')` returns Sean's actual offers.
+`careerops.list_market_anchors()` returns synthetic comps (Levels.fyi P50,
+H1B disclosure data, friend-of-Sean confirmation, etc.) inserted via the
+`insert_market_anchor` helper. The anchor row joins the comparison and
+lets Step 5 draft a counter without bluffing — we cite a real market band,
+not a competing offer Sean doesn't have.
+
+If `list_offers(status='active')` returns 1 row AND `list_market_anchors()`
+returns 0, prompt Sean (free-text):
+
+> *"Only one real offer in pipeline. Want to add a Levels.fyi market band
+> as the negotiation anchor? Look up the same role+level on
+> https://levels.fyi/companies/&lt;company&gt; for the company you're
+> countering. Reply with: company, title (with level), base P50 in USD,
+> RSU 4-yr P50 in USD (or 0 if private/illiquid), bonus target % (or 0).
+> Or 'skip' to draft a soft counter without anchor."*
+
+Parse the reply, then:
+
+```bash
+.venv/bin/python -c "
+from careerops.pipeline import insert_market_anchor
+oid = insert_market_anchor(
+    company='<company>', title='<title incl level>',
+    base_salary=<base_p50>,
+    rsu_total_value=<rsu_p50>,
+    annual_bonus_target_pct=<pct>,
+    state_tax='UT',
+    source='Levels.fyi',
+    notes='<URL or freshness note Sean provided>',
+)
+print('inserted market anchor offer id', oid)
+"
+```
+
+`status='market_anchor'` keeps it out of the default `active` list but
+visible to ofertas via a one-off:
+
+```python
+from careerops.pipeline import list_offers, list_market_anchors
+combined = list_offers(status='active') + list_market_anchors()
+```
+
+Re-run Step 3's comparison table with `combined` so the anchor sits next to
+the real offer. Step 5's counter-brief now has a real market band to
+quote instead of bluffing. The counter language MUST clearly cite
+"Levels.fyi P50 for &lt;company&gt; &lt;title&gt;" or whatever source —
+never present a market anchor as a competing offer.
+
+If Sean replies "skip", proceed to Step 5 with a soft counter:
+
+> *"Counter without anchor — language must say 'Below market based on
+> independent research' rather than 'I have a competing offer at X'."*
+
+Coin still refuses to fabricate a competing offer.
 
 ---
 

@@ -77,6 +77,27 @@ def test_truthfulness_gate_referenced(mode_text):
     assert "Operating Principle" in mode_text
 
 
+def test_live_scrape_documented_with_browser_mcp(mode_text):
+    """Step 3 must reference the browser MCP tool and the
+    parse_linkedin_people_search → upsert_scraped pipeline."""
+    assert "parse_linkedin_people_search" in mode_text
+    assert "upsert_scraped" in mode_text
+    # Browser MCP options
+    assert "Claude_in_Chrome" in mode_text or "browser MCP" in mode_text
+    # Refusal still in place — no auto-login, no scripted auth
+    assert "Sean's logged-in session" in mode_text or "login wall" in mode_text
+
+
+def test_hiring_manager_tagging_documented(mode_text):
+    """Step 6.5 must expose tag_outreach_role + the 5 valid contact_role values
+    so cover-letter mode can read them. Regression for COIN-COVER-RECIPIENT-FROM-NETWORK."""
+    assert "tag_outreach_role" in mode_text
+    assert "hiring_manager" in mode_text
+    # All 5 valid roles enumerated
+    for role in ("hiring_manager", "team_member", "recruiter", "exec_sponsor", "alumni_intro"):
+        assert role in mode_text, f"missing valid contact_role: {role}"
+
+
 def test_schema_creates_required_tables(tmp_path):
     """Run import script's schema-creation against a temp DB."""
     import sys

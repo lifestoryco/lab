@@ -86,19 +86,55 @@ string (Cox Communications vs Cox Inc.). If still 0, fall through to Step 3.
 
 ## Step 3 — Live-scrape fallback (optional)
 
-Only if the browser MCP tool is connected AND Sean confirms (*"Live-scrape
-LinkedIn for additional connections at <company>? Risk: low; we hit the
-public 1st-degree people-search page only. (y/n)"*):
+Only if the browser MCP tool (`Claude in Chrome` or `Claude Preview`) is
+connected AND Sean confirms (*"Live-scrape LinkedIn for additional
+connections at &lt;company&gt;? Risk: low; we hit the public 1st-degree
+people-search page only, no auth scripted, no DMs sent. (y/n)"*):
 
-Navigate to:
+**3a. Navigate via the browser MCP tool.** Use whichever browser MCP is
+available — both `mcp__Claude_in_Chrome__navigate` and
+`mcp__Claude_Preview__preview_start` work; Claude in Chrome is preferred
+for real LinkedIn pages because Claude Preview has CSP restrictions.
+
+URL:
 ```
-https://www.linkedin.com/search/results/people/?company=<URL-encoded>&network=%5B%22F%22%5D
+https://www.linkedin.com/search/results/people/?company=<URL-encoded-company>&network=%5B%22F%22%5D
 ```
 
-Read the first page (max 10 cards). Parse name + title + profile URL into the
-`connections` table for future runs. Surface the count to Sean before scoring.
+After navigation, read the rendered HTML — `mcp__Claude_in_Chrome__get_page_text`
+or `mcp__Claude_Preview__preview_snapshot` — and capture the first page
+(LinkedIn paginates at 10 cards/page; one page is enough for typical mid-market
+companies).
 
-If Sean declines, proceed with whatever the export gave us (even 0).
+**3b. Parse + upsert via Python.** Pipe the captured HTML to the parser:
+
+```bash
+.venv/bin/python -c "
+from careerops.network_scrape import parse_linkedin_people_search, upsert_scraped
+from config import DB_PATH
+import pathlib
+html = pathlib.Path('/tmp/linkedin_search.html').read_text()
+rows = parse_linkedin_people_search(html, target_company='<company>')
+print(f'parsed {len(rows)} cards')
+result = upsert_scraped(rows, DB_PATH)
+print(result)
+"
+```
+
+Save the captured HTML to `/tmp/linkedin_search.html` first (the browser MCP
+output goes there, NOT into the project tree — LinkedIn HTML may contain
+incidental PII from sidebar widgets).
+
+**3c. Surface the result.** Tell Sean: *"Live-scrape added N new connections
+at &lt;company&gt; (M already in your export). Continuing to ranking..."*.
+
+If 0 cards parsed (LinkedIn HTML changed structure, login wall hit, etc.),
+print: *"Live-scrape returned 0 cards. LinkedIn likely re-skinned the people
+search again — paste an export instead, or skip live-scrape this run."* and
+proceed with whatever rows the export gave us.
+
+If Sean declines the live-scrape prompt, proceed with whatever the export
+gave us (even 0).
 
 ---
 
@@ -180,6 +216,35 @@ NEXT
   → If a reply comes in: /coin track <id> contact
     and: .venv/bin/python scripts/track_outreach.py --id <outreach_id> replied
 ```
+
+---
+
+## Step 6.5 — Tag hiring manager (optional, high-value)
+
+After Step 6's brief, ask Sean (free-text or AskUserQuestion):
+
+> *"Any of these contacts the actual hiring manager for this role? If yes,
+> reply with the bracketed number; if no, just say no. Tagging powers
+> auto-populated `recipient_name` on the cover letter."*
+
+If Sean names a contact, after that contact's row is inserted in Step 7 (or
+just-after, with the new outreach id in hand), tag it:
+
+```bash
+.venv/bin/python -c "
+from careerops.pipeline import tag_outreach_role
+tag_outreach_role(<outreach_id>, 'hiring_manager', target_role_id=<role_id>)
+"
+```
+
+Valid `contact_role` tags (one per outreach row):
+`hiring_manager`, `team_member`, `recruiter`, `exec_sponsor`, `alumni_intro`.
+Use `hiring_manager` for the role's actual hiring decision-maker; use
+`recruiter` only if the contact's title matches `/recruit|talent/i`.
+
+The `cover-letter` mode reads this tag to auto-populate the letter's
+`recipient_name`. No tag → cover letter falls back to "Hiring Team —
+&lt;company&gt;" (template handles the if/else).
 
 ---
 

@@ -62,6 +62,25 @@ def test_tax_disclaimer(mode_text):
     assert "CPA" in mode_text
 
 
+def test_market_anchor_step_documented(mode_text):
+    """Step 5.5 must replace the old 'STOP if only one offer' path with a
+    Levels.fyi market-anchor capture. Regression for COIN-OFERTAS-LEVELS-FYI."""
+    assert "## Step 5.5" in mode_text
+    assert "Levels.fyi" in mode_text
+    assert "insert_market_anchor" in mode_text
+    assert "list_market_anchors" in mode_text
+    # The old STOP-cold-when-one-offer language must be gone
+    assert "STOP the counter step" not in mode_text
+
+
+def test_market_anchor_truthfulness_gate(mode_text):
+    """Counter language MUST cite Levels.fyi explicitly — never present a
+    market anchor as a competing offer."""
+    assert "never present a market anchor as a competing offer" in mode_text
+    # The 'skip' branch must also refuse to fabricate a competing offer
+    assert "refuses to fabricate a competing offer" in mode_text
+
+
 def test_migration_creates_offers_table(tmp_path):
     """Run migration 002 against a temp DB; assert columns exist."""
     # The migration is named m002_offers_table (m-prefix so the filename

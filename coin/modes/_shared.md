@@ -157,6 +157,30 @@ python scripts/print_role.py --id 42
 
 Then parse the JSON and reason about it.
 
+## Cross-mode helpers
+
+When a mode needs to read state another mode wrote, prefer these helpers
+in `careerops.pipeline` over raw SQL one-liners:
+
+| Helper | Purpose | Used by |
+|---|---|---|
+| `update_lane(role_id, lane)` | transition a role's archetype | auto-pipeline |
+| `update_role_notes(role_id, note, append=True)` | append to role.notes | auto-pipeline |
+| `insert_offer(offer_dict)` | new active offer (raises ValueError on missing fields) | ofertas |
+| `list_offers(status='active')` | active offers (or any status) | ofertas |
+| `insert_market_anchor(...)` | synthetic Levels.fyi-style offer (status='market_anchor') | ofertas |
+| `list_market_anchors()` | only market_anchor offers | ofertas |
+| `tag_outreach_role(outreach_id, contact_role, target_role_id=None)` | mark a contact as hiring_manager / recruiter / team_member etc. | network-scan |
+| `find_hiring_manager_for_role(role_id)` | look up tagged hiring manager (or None) | cover-letter (auto recipient_name) |
+
+Valid `contact_role` values: `hiring_manager`, `team_member`, `recruiter`,
+`exec_sponsor`, `alumni_intro` (from `careerops.pipeline.VALID_CONTACT_ROLES`).
+
+LinkedIn live-scrape parser: `careerops.network_scrape.parse_linkedin_people_search`
++ `upsert_scraped` — used by network-scan Step 3 fallback.
+
+---
+
 ## Known issues / open follow-ups
 
 - **`COIN-QUARANTINE-RESURRECTION`** — `out_of_band` rows resurrect after batch re-score; needs early-return guard in `score_breakdown` OR migration to `status='quarantined'`.

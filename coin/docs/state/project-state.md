@@ -1,5 +1,52 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-25, Session 5 — Deferred-followup batch 2)
+
+### COIN-NETWORK-LIVE-SCRAPE + COIN-OFERTAS-LEVELS-FYI + COIN-COVER-RECIPIENT-FROM-NETWORK ✅ COMPLETE
+
+**Tests:** 193 → **223 passing** (+30; 0 regressions). Verdict: PASS.
+
+**1. COIN-NETWORK-LIVE-SCRAPE** — wire the LinkedIn search-page fallback
+- `careerops/network_scrape.py` — `parse_linkedin_people_search(html, target_company)` (BeautifulSoup parser tolerant of LinkedIn's class-name churn, dedupes by URL, strips connection-degree suffixes "• 2nd", normalizes relative `/in/<slug>` to absolute https) + `upsert_scraped(rows, db_path)` (parameterized UPSERT with COALESCE preserving more-specific company strings from prior CSV imports)
+- `tests/fixtures/network/sample_search_page.html` — 5-card fixture covering valid cards, malformed cards (no profile URL, parser must skip), duplicate URLs (parser must dedupe), relative-vs-absolute href forms, connection-degree suffix stripping
+- `tests/test_network_scrape.py` (10 tests) — parser unit tests + upsert idempotency + the COALESCE-preserves-export-company contract test
+- `modes/network-scan.md` Step 3 rewritten: explicit browser MCP invocation (`Claude_in_Chrome` preferred, `Claude_Preview` fallback), HTML capture to `/tmp/linkedin_search.html` (not into project tree because LinkedIn HTML carries incidental sidebar PII), `parse_linkedin_people_search` → `upsert_scraped` pipeline, graceful degradation when LinkedIn re-skins the search HTML
+- No live LinkedIn auth scripted from Python (Sean's browser session belongs to him; Coin only consumes the rendered HTML he can already see)
+
+**2. COIN-OFERTAS-LEVELS-FYI** — market-comp anchor when only one real offer exists
+- `careerops.pipeline.insert_market_anchor(company, title, base_salary, *, rsu_total_value=0, ...)` — wraps `insert_offer` with `status='market_anchor'` so synthetic comps stay out of `list_offers(status='active')` (the Y1-best ranking in ofertas Step 3 stays clean) but join the comparison via `combined = list_offers(active) + list_market_anchors()`
+- `careerops.pipeline.list_market_anchors()`
+- `tests/test_market_anchor.py` (4 tests) — happy path, status segregation from active offers, required-field validation, combined-list pattern
+- `modes/ofertas.md` adds Step 5.5 — when 1 active offer + 0 anchors, prompt Sean to look up the same role/level on Levels.fyi and capture the P50 base + RSU + bonus; counter-brief then cites "Levels.fyi P50 for &lt;company&gt; &lt;title&gt;" instead of bluffing a competing offer. Skip path emits a soft counter ("Below market based on independent research") that still refuses to fabricate
+
+**3. COIN-COVER-RECIPIENT-FROM-NETWORK** — cover-letter recipient_name auto-population
+- `scripts/migrations/m004_outreach_role_tag.py` — adds `outreach.contact_role TEXT` + `outreach.target_role_id INTEGER` + `idx_outreach_contact_role`. Idempotent (PRAGMA-checked column adds, applied flag in schema_migrations). Self-bootstraps m003 inline if applied to a fresh DB
+- `careerops.pipeline.tag_outreach_role(outreach_id, contact_role, target_role_id=None)` — validates against `VALID_CONTACT_ROLES = ('hiring_manager', 'team_member', 'recruiter', 'exec_sponsor', 'alumni_intro')`
+- `careerops.pipeline.find_hiring_manager_for_role(role_id)` — joins `outreach × connections` filtered to `contact_role='hiring_manager'`; checks both `role_id` and `target_role_id` columns so the same contact can be tagged for a different role; returns most-recently-drafted match; tolerates missing tables / missing column on fresh DBs (returns None instead of raising)
+- `tests/test_hiring_manager_lookup.py` (11 tests) — m004 schema + idempotency + m003-bootstrap, tag validation, recursive lookup paths, ignores non-hiring-manager tags, picks most-recent on multi-tag, missing-schema graceful return, target_role_id branch
+- `modes/network-scan.md` Step 6.5 — optional hiring-manager tagging prompt after the brief; instructs the agent to call `tag_outreach_role` with the right enum value; documents all 5 valid contact roles
+- `modes/cover-letter.md` Step 1 — auto-lookup via `find_hiring_manager_for_role(<role_id>)`; `recipient_name = hm['full_name']` when present, null when not; explicit refusal to invent a hiring manager
+- `modes/_shared.md` adds a new "Cross-mode helpers" section enumerating all the helpers + valid `contact_role` values (so future modes don't grep around)
+
+**Schema migrations applied to live DB:** m003 (already), m004 (this session). 002 + 003 + 004 all tracked in `schema_migrations`.
+
+**New tests (30):**
+- `test_network_scrape.py` (10): parser dedupe, malformed-card skip, URL normalization, tracking-param strip, target_company propagation, seniority classification, empty-HTML handling, fresh-DB schema bootstrap, upsert idempotency, COALESCE preserves CSV-export company over scraper target
+- `test_market_anchor.py` (4): happy path, status segregation, required-field validation, combined-list pattern
+- `test_hiring_manager_lookup.py` (11): m004 schema/idempotency/bootstrap, tag validation, lookup paths
+- `test_cover_letter_mode.py` extended (1): recipient_name lookup documented + anti-fabrication guard
+- `test_network_scan_mode.py` extended (2): live-scrape pipeline documented + hiring-manager tagging documented with all 5 valid roles
+- `test_ofertas_mode.py` extended (2): Step 5.5 documented + market-anchor truthfulness gate
+
+**Files touched:** 13 (4 mode .md, _shared.md, 1 new careerops module, 1 pipeline.py extension, 1 new migration, 1 new HTML fixture, 4 new test files + 3 extended test files, this state doc).
+
+**Decisions:**
+- Live-scrape stays parser-only (no Python-driven LinkedIn auth) — keeps Sean's session uncompromised and avoids TOS exposure on auth-script paths.
+- Market anchors live in the same `offers` table with `status='market_anchor'` instead of a separate table — same math (`year_one_tc`, `three_year_tc`) applies, ofertas comparison code stays trivial.
+- Hiring-manager tagging on `outreach` rather than a new table — `outreach` already has the role↔connection link; one column add is cleaner than a junction table.
+
+---
+
 ## What Was Just Done (2026-04-25, Session 5 — Code-review --fix EVERYTHING)
 
 ### All review findings resolved (CRITICAL → HIGH → MEDIUM → LOW + pre-existing) ✅ COMPLETE
@@ -130,14 +177,9 @@
 - `scripts/migrations/__init__.py` for importable migration package
 
 **Open follow-ups (after this batch — none from the original four):**
-- COIN-NETWORK-LIVE-SCRAPE: implement the live LinkedIn search fallback
-  (currently the mode describes it; awaiting browser MCP plumbing)
-- COIN-OFERTAS-LEVELS-FYI: cross-reference Levels.fyi for market-comp
-  anchor when only one offer exists (counter-brief currently STOPs in
-  that case)
-- COIN-COVER-RECIPIENT-FROM-NETWORK: when network-scan surfaces a
-  hiring-manager match, populate cover-letter `recipient_name`
-  automatically
+- ~~COIN-NETWORK-LIVE-SCRAPE~~ ✅ landed in Session 5 batch 2
+- ~~COIN-OFERTAS-LEVELS-FYI~~ ✅ landed in Session 5 batch 2
+- ~~COIN-COVER-RECIPIENT-FROM-NETWORK~~ ✅ landed in Session 5 batch 2
 
 ---
 

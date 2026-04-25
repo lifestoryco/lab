@@ -77,3 +77,14 @@ def test_audit_subset_documented(mode_text):
 
 def test_render_refuses_unaudited(mode_text):
     assert "refuse to render" in mode_text or "refuses to render" in mode_text
+
+
+def test_recipient_name_lookup_documented(mode_text):
+    """Cover-letter Step 1 must instruct the agent to look up the role's
+    tagged hiring manager via find_hiring_manager_for_role and populate
+    recipient_name. Regression for COIN-COVER-RECIPIENT-FROM-NETWORK."""
+    assert "find_hiring_manager_for_role" in mode_text
+    assert "recipient_name" in mode_text
+    # Anti-fabrication guard: never invent a hiring manager
+    assert "Never invent a hiring manager" in mode_text or \
+           "leave the field null" in mode_text
