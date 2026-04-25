@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import { useGameStore } from './engine/useGameStore'
 import { useChainReaction } from './engine/useChainReaction'
@@ -11,6 +11,7 @@ import ResultScreen from './ui/ResultScreen'
 import WorldTransition from './ui/WorldTransition'
 import NarrativeOverlays from './ui/NarrativeOverlays'
 import CageHud from './ui/CageHud'
+import SpecialButton from './ui/SpecialButton'
 import LevelCompleteOverlay from './ui/LevelCompleteOverlay'
 import CageFailOverlay from './ui/CageFailOverlay'
 import SceneErrorBoundary from './scene/SceneErrorBoundary'
@@ -43,7 +44,8 @@ export default function SignalPage() {
   const cageLevelsCleared    = useGameStore(s => s.cageLevelsCleared)
   const cageAttempts         = useGameStore(s => s.cageAttempts)
 
-  const sessionSummary: SharedSessionState = {
+  // Memoized so ResultScreen's encodeShareState memo doesn't bust every render.
+  const sessionSummary: SharedSessionState = useMemo(() => ({
     mode,
     completed: gamePhase === 'complete',
     biomeClearBits: sessionBiomesCleared | (gamePhase === 'complete' ? (1 << worldIndex) : 0),
@@ -51,7 +53,7 @@ export default function SignalPage() {
     totalChains: sessionTotalChains,
     finalWorld: worldIndex,
     cageLevelsCleared,
-  }
+  }), [mode, gamePhase, sessionBiomesCleared, worldIndex, sessionBlocks, sessionTotalChains, cageLevelsCleared])
 
   // Chain reaction cascade — BFS flood-fill from each placed block
   useChainReaction()
@@ -108,6 +110,14 @@ export default function SignalPage() {
         mode,
       })
     }
+    // Final biome never goes through 'title' → fire on 'complete' for last world.
+    if (gamePhase === 'complete' && worldIndex !== lastWorldFired.current) {
+      lastWorldFired.current = worldIndex
+      track('signal_biome_complete', {
+        world_index: worldIndex,
+        mode,
+      })
+    }
     if ((gamePhase === 'gameover' || gamePhase === 'complete') && !sessionEndFired.current) {
       sessionEndFired.current = true
       track('signal_session_end', {
@@ -150,6 +160,30 @@ export default function SignalPage() {
       })
     }
   }, [mode, gamePhase, worldIndex, cageLevel, cageLastResult])
+
+  // Lock body selection + scroll while playing — prevents Android browsers
+  // from scroll-hijacking the BPM hold gesture and stops accidental text selection.
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    if (gamePhase !== 'playing') return
+    const body = document.body
+    const prev = {
+      userSelect: body.style.userSelect,
+      webkitUserSelect: body.style.webkitUserSelect,
+      overscroll: body.style.overscrollBehavior,
+      touchAction: body.style.touchAction,
+    }
+    body.style.userSelect = 'none'
+    body.style.webkitUserSelect = 'none'
+    body.style.overscrollBehavior = 'none'
+    body.style.touchAction = 'none'
+    return () => {
+      body.style.userSelect = prev.userSelect
+      body.style.webkitUserSelect = prev.webkitUserSelect
+      body.style.overscrollBehavior = prev.overscroll
+      body.style.touchAction = prev.touchAction
+    }
+  }, [gamePhase])
 
   const handleFirstInteraction = useCallback(() => {
     // Fade title out after the opening tap
@@ -208,6 +242,9 @@ export default function SignalPage() {
 
       {/* Cage Mode HUD — timer bar, rule hint, fail whisper, level tag */}
       <CageHud />
+
+      {/* Per-world special-item button (worlds 2-5, one charge per cage level) */}
+      <SpecialButton />
 
       {/* Full-screen tap-to-continue after cage-solve */}
       <LevelCompleteOverlay />

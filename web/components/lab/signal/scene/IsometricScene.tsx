@@ -15,6 +15,7 @@ import BackgroundLayers from './BackgroundLayers'
 import MonsterPawn from './MonsterPawn'
 import PathHintVisualizer from './PathHintVisualizer'
 import CageCelebration from './CageCelebration'
+import RevealMarker from './RevealMarker'
 import PostFXPipeline from '../postprocessing/PostFXPipeline'
 import { useGameStore, getGameState } from '../engine/useGameStore'
 import { initAudio, startTransport, stopTransport, triggerPlacementNote, isInitialized } from '../audio/audioEngine'
@@ -224,6 +225,7 @@ export default function IsometricScene({ onFirstInteraction }: IsometricScenePro
       <PathHintVisualizer />
       <MonsterPawn />
       <CageCelebration />
+      <RevealMarker />
       <Portal />
       <Monster />
       <Particles />

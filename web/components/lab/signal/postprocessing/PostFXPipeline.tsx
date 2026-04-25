@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import { EffectComposer, Bloom, Vignette, ChromaticAberration, Noise } from '@react-three/postprocessing'
 import { BlendFunction } from 'postprocessing'
@@ -21,6 +21,18 @@ function EffectUpdater({
   const lastChainAt = useRef(0)
   const bloomBumpStart = useRef(0)
   const bloomBumpStrength = useRef(0)
+  const reducedMotionRef = useRef(false)
+
+  // Hoist matchMedia subscription out of the render loop — was allocating a
+  // new MediaQueryList every frame.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mql = window.matchMedia('(prefers-reduced-motion: reduce)')
+    reducedMotionRef.current = mql.matches
+    const handler = (e: MediaQueryListEvent) => { reducedMotionRef.current = e.matches }
+    mql.addEventListener('change', handler)
+    return () => mql.removeEventListener('change', handler)
+  }, [])
 
   useFrame(() => {
     if (!caRef.current) return
@@ -37,11 +49,8 @@ function EffectUpdater({
     if (lastChain && lastChain.at !== lastChainAt.current && lastChain.length >= 3) {
       lastChainAt.current = lastChain.at
       bloomBumpStart.current = performance.now()
-      // Respect reduced-motion: dampen the flash to 20% of spec.
-      const reduced = typeof window !== 'undefined'
-        && window.matchMedia('(prefers-reduced-motion: reduce)').matches
       const base = Math.min(0.6, lastChain.length * 0.1)
-      bloomBumpStrength.current = reduced ? base * 0.2 : base
+      bloomBumpStrength.current = reducedMotionRef.current ? base * 0.2 : base
     }
 
     if (bloomRef.current) {
