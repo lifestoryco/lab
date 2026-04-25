@@ -4,8 +4,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── Compensation floors ───────────────────────────────────────────────────────
-MIN_BASE_SALARY = int(os.getenv("COIN_MIN_BASE", "180000"))
-MIN_TOTAL_COMP = int(os.getenv("COIN_MIN_TC", "250000"))
+# Sean is at $99K; targeting a 60-100% jump to a real product company or SE seat.
+# $160K base / $200K TC is the realistic floor — anything below isn't worth a tailor pass.
+MIN_BASE_SALARY = int(os.getenv("COIN_MIN_BASE", "160000"))
+MIN_TOTAL_COMP = int(os.getenv("COIN_MIN_TC", "200000"))
 
 # ── Scraper behavior ──────────────────────────────────────────────────────────
 REQUEST_DELAY_SECONDS = 2.0
@@ -23,71 +25,71 @@ SCRAPE_CACHE_TTL_HOURS = 24
 # list points to story ids in data/resumes/base.py; `north_star` is editable in
 # config/profile.yml (Sean's one-line pitch).
 LANES = {
-    "cox-style-tpm": {
-        "label": "High-Tier TPM (Cox/True-Local-Labs lineage)",
+    "mid-market-tpm": {
+        "label": "Mid-Market TPM (Series B–D, IoT/hardware/wireless/B2B SaaS)",
         "title_keywords": [
-            "technical program manager", "senior tpm", "staff tpm",
-            "principal tpm", "director of tpm", "head of program management",
+            "technical program manager", "senior technical program manager",
+            "director of program management", "director, technical program management",
+            "head of program management", "senior tpm", "lead tpm", "program manager",
         ],
         "skill_keywords": [
             "program management", "cross-functional", "pmp", "agile",
-            "roadmap", "stakeholder", "hardware", "iot", "platform",
+            "roadmap", "stakeholder", "hardware", "iot", "wireless",
+            "b2b saas", "client-facing", "delivery",
         ],
-        "emphasis": ["cox_true_local_labs", "global_engineering_orchestration"],
-        "exclude_titles": ["junior", "associate", "coordinator", "intern"],
-    },
-    "titanx-style-pm": {
-        "label": "AI / SaaS Product Manager with operator chops",
-        "title_keywords": [
-            "product manager", "senior pm", "group pm", "principal pm",
-            "director of product", "ai product", "head of product",
+        "emphasis": ["cox_true_local_labs", "global_engineering_orchestration", "arr_growth_6m_to_13m"],
+        "exclude_titles": [
+            "junior", "associate", "coordinator", "intern",
+            "staff technical program manager",  # FAANG-tier — Sean is filtered out
+            "principal technical program manager",
         ],
-        "skill_keywords": [
-            "product strategy", "go-to-market", "saas", "ai", "llm",
-            "roadmap", "kpi", "product-led growth", "b2b", "platform",
-        ],
-        "emphasis": ["titanx_fractional_coo", "cox_true_local_labs"],
-        "exclude_titles": ["junior", "associate", "intern", "apm"],
     },
     "enterprise-sales-engineer": {
-        "label": "Enterprise Technical Sales / Solutions Engineer",
+        "label": "Enterprise SE / Solutions Architect (IoT, wireless, industrial SaaS)",
         "title_keywords": [
             "sales engineer", "solutions engineer", "solutions architect",
-            "technical sales", "enterprise ae", "field cto", "forward deployed",
+            "senior sales engineer", "principal solutions engineer",
+            "technical sales", "field cto", "forward deployed engineer",
+            "pre-sales engineer", "presales solutions",
         ],
         "skill_keywords": [
             "arr", "enterprise", "b2b", "saas", "technical sales",
             "rfp", "demo", "discovery", "rf", "iot", "wireless",
+            "presales", "post-sales", "customer success", "implementation",
         ],
-        "emphasis": ["arr_growth_6m_to_13m", "titanx_fractional_coo", "utah_broadband_acquisition"],
-        "exclude_titles": ["sdr", "bdr", "inside sales", "junior"],
+        "emphasis": ["arr_growth_6m_to_13m", "utah_broadband_acquisition", "titanx_fractional_coo"],
+        "exclude_titles": ["sdr", "bdr", "inside sales", "junior", "intern"],
     },
-    "revenue-ops-transformation": {
-        "label": "Transformation / Revenue Ops Leader",
+    "iot-solutions-architect": {
+        "label": "IoT / Wireless Solutions Architect (technical pre-sales + delivery)",
         "title_keywords": [
-            "head of revenue operations", "director of revenue ops",
-            "vp operations", "chief of staff", "head of operations",
-            "transformation lead", "business operations", "coo", "fractional coo",
+            "solutions architect", "iot architect", "wireless architect",
+            "principal architect", "senior solutions architect",
+            "technical architect", "platform architect", "field architect",
+        ],
+        "skill_keywords": [
+            "iot", "wireless", "rf", "wi-fi", "ble", "z-wave", "lora",
+            "cellular", "5g", "lte", "embedded", "edge", "aws iot",
+            "azure iot", "industrial iot", "firmware", "hardware integration",
+        ],
+        "emphasis": ["global_engineering_orchestration", "utah_broadband_acquisition", "cox_true_local_labs"],
+        "exclude_titles": ["junior", "intern", "associate"],
+    },
+    "revenue-ops-operator": {
+        "label": "RevOps / BizOps Operator (Series B–D, Utah-friendly)",
+        "title_keywords": [
+            "head of revenue operations", "director of revenue operations",
+            "director of operations", "vp operations", "chief of staff",
+            "head of operations", "business operations lead",
+            "director, business operations", "head of bizops",
         ],
         "skill_keywords": [
             "revenue operations", "forecasting", "operational cadence",
-            "cross-functional", "p&l", "m&a", "integration", "gtm",
+            "cross-functional", "p&l", "gtm", "salesforce", "hubspot",
+            "process design", "scaling operations",
         ],
         "emphasis": ["utah_broadband_acquisition", "titanx_fractional_coo", "arr_growth_6m_to_13m"],
-        "exclude_titles": ["analyst", "junior", "associate"],
-    },
-    "global-eng-orchestrator": {
-        "label": "Global Engineering / Platform TPM",
-        "title_keywords": [
-            "technical program manager", "platform tpm", "infrastructure tpm",
-            "senior tpm", "staff tpm", "principal tpm", "director engineering programs",
-        ],
-        "skill_keywords": [
-            "distributed teams", "global", "platform", "infrastructure",
-            "wireless", "aerospace", "defense", "5g", "lte", "rf", "iot",
-        ],
-        "emphasis": ["global_engineering_orchestration", "cox_true_local_labs"],
-        "exclude_titles": ["junior", "associate", "coordinator"],
+        "exclude_titles": ["analyst", "junior", "associate", "coordinator"],
     },
 }
 
@@ -114,46 +116,69 @@ BOARDS = {
 DB_PATH = os.getenv("COIN_DB_PATH", "data/db/pipeline.db")
 
 # ── Company tier list (for company_tier scoring dimension) ───────────────────
-# Tier 1: FAANG+ and equivalents — benchmark pay, brand recognition
-# Tier 2: Well-funded unicorns / high-growth public / Series C+
-# Tier 3 (default): everyone else
+# IMPORTANT: tier scoring is INVERTED for Sean's reality.
+# FAANG roles screen Sean out at recruiter step #1 (no CS degree, no big-tech tour).
+# Sean's sweet spot is Series B–D mid-market product cos and Utah tech.
+# Tier 1 (best): in-league mid-market product cos and Utah tech ecosystem
+# Tier 2: recognized brands where Sean is a stretch but not auto-rejected
+# Tier 3 (default): unknown small co — fine, just less leverage
+# Tier 4 (penalized): FAANG/big-tech where pedigree filter kills the application
 COMPANY_TIERS = {
     "tier1": {
         "score": 100.0,
-        "label": "FAANG+",
+        "label": "In-league mid-market / Utah tech",
         "companies": [
-            "netflix", "google", "meta", "apple", "amazon", "microsoft",
-            "stripe", "openai", "anthropic", "deepmind", "nvidia", "tesla",
-            "linkedin", "salesforce", "uber", "airbnb", "palantir", "snowflake",
-            "databricks", "figma", "notion", "vercel", "github", "shopify",
-            "twilio", "square", "block",
+            # Utah tech ecosystem (Sean lives here, easy onsite/hybrid)
+            "qualtrics", "pluralsight", "domo", "lucid", "weave", "pattern",
+            "bamboohr", "podium", "ancestry", "mx", "health catalyst", "recursion",
+            "owlet", "vivint", "smartrent", "veritone", "divvy", "bill.com",
+            "press ganey", "instructure", "canopy", "entrata", "younique",
+            "route", "filevine", "neighbor", "homie", "alianza", "cotopaxi",
+            # Mid-market IoT / wireless / industrial that match his domain
+            "particle", "samsara", "verkada", "memfault", "blues wireless",
+            "soracom", "swift navigation", "augury", "tulip", "fictiv",
+            "fortive", "rockwell", "honeywell", "emerson", "schneider electric",
+            # Series B-D B2B SaaS in his sweet spot
+            "gong", "outreach", "salesloft", "drift", "lattice", "deel",
+            "rippling", "vanta", "secureframe", "drata", "ironclad",
         ],
     },
     "tier2": {
         "score": 75.0,
-        "label": "High-growth / Series C+",
+        "label": "Recognized brand / Sean is a stretch",
         "companies": [
-            "roku", "datadog", "elastic", "cloudflare", "hubspot", "zendesk",
-            "workday", "servicenow", "okta", "crowdstrike", "zscaler",
-            "asana", "coupa", "docusign", "splunk", "hashicorp", "rippling",
-            "acorns", "harvest", "hayden ai", "brex", "ramp", "retool",
-            "linear", "notion", "intercom", "segment", "amplitude",
+            "hubspot", "zendesk", "workday", "servicenow", "okta",
+            "crowdstrike", "zscaler", "datadog", "cloudflare", "elastic",
+            "asana", "coupa", "docusign", "splunk", "hashicorp",
+            "twilio", "segment", "amplitude", "intercom", "linear", "notion",
+            "brex", "ramp", "retool",
+        ],
+    },
+    "tier4_pedigree_filter": {
+        "score": 25.0,
+        "label": "FAANG / big-tech (pedigree filter — Sean screened out)",
+        "companies": [
+            "netflix", "google", "meta", "apple", "amazon", "microsoft",
+            "stripe", "openai", "anthropic", "deepmind", "nvidia", "tesla",
+            "linkedin", "salesforce", "uber", "airbnb", "palantir", "snowflake",
+            "databricks", "figma", "vercel", "github", "shopify",
+            "square", "block", "roku",
         ],
     },
 }
-COMPANY_TIER_DEFAULT_SCORE = 45.0  # unknown / small co
+COMPANY_TIER_DEFAULT_SCORE = 65.0  # unknown / small co — neutral, no penalty
 
 # ── Fit scoring weights — 8 dimensions, sum = 1.0 ────────────────────────────
 # Comp stays the dominant signal (CRO verdict). Company tier is new — FAANG
 # pays 2× and it's correlated with role quality. Effort matters because a
 # 20-field Taleo portal has a real opportunity cost.
 FIT_SCORE_WEIGHTS = {
-    "comp":               0.30,
-    "company_tier":       0.15,
+    "comp":               0.28,  # still dominant, but FAANG-tier comp now correlates with pedigree-filter loss
+    "company_tier":       0.20,  # bumped — in-league vs out-of-league is the #1 hidden signal
     "skill_match":        0.22,
     "title_match":        0.12,
-    "remote":             0.08,
-    "application_effort": 0.05,
+    "remote":             0.06,
+    "application_effort": 0.04,
     "seniority_fit":      0.05,
     "culture_fit":        0.03,
 }
@@ -171,3 +196,5 @@ SCORE_GRADE_THRESHOLDS = [
 PROFILE_YAML_PATH = "config/profile.yml"
 GENERATED_RESUMES_DIR = "data/resumes/generated"
 RESUME_TEMPLATE_PATH = "data/resume_template.html"
+RECRUITER_TEMPLATE_PATH = "data/resume_template_recruiter.html"
+TEMPLATE_DIR = "data"  # base for Jinja2 FileSystemLoader; also the Weasyprint base_url scope

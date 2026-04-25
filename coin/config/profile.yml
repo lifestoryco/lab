@@ -1,87 +1,91 @@
 # Coin — Sean Ivins North Star Profile
 #
-# Each archetype represents a target role family grounded in Sean's real
-# experience. `north_star` is the one-line pitch used at the top of resumes
-# and cover letters. `proof_points` are the stories weighted highest for that
-# archetype (IDs match data/resumes/base.py PROFILE["stories"]).
-#
-# Edit `north_star` freely — it's the voice of your resume for that lane.
+# 4 archetypes, all grounded in Sean's real operator history (no fantasy lanes).
+# `north_star` is the one-line pitch used at the top of resumes and cover letters.
+# `proof_points` are the stories weighted highest for that archetype.
 
 identity:
   name: Sean Ivins
   credentials: [PMP, MBA]
   current_title: Senior Technical Program Manager
+  current_comp_total: 99000
   years_experience: 15
   email: sean@lifestory.co
-  domains: [wireless infrastructure, IoT systems, B2B SaaS, aerospace/defense, RF]
+  domains: [wireless infrastructure, IoT systems, B2B SaaS, RF, industrial]
   target_comp:
-    min_base: 180000
-    min_total: 250000
-  target_locations: [Remote, Salt Lake City, San Francisco, New York, Austin]
+    min_base: 160000
+    min_total: 200000
+    target_base: 180000
+    target_total: 230000
+  target_locations: [Remote, Salt Lake City, Utah, Lehi, Draper, Provo]
+  pedigree_constraint: >
+    BA (History, U of Utah) + MBA (WGU) + PMP. Career at small Utah firms — no
+    big-tech tour. Rule out roles requiring CS/EE degree or "ex-FAANG TPM"
+    pattern; recruiter screen filters Sean out before any tailoring helps.
 
 archetypes:
 
-  cox-style-tpm:
-    label: High-Tier TPM (Cox / True-Local-Labs lineage)
+  mid-market-tpm:
+    label: Mid-Market TPM (Series B–D, IoT/hardware/wireless/B2B SaaS)
+    rank: 1
+    realistic_comp: $160K–210K base
     north_star: >
-      I took a telecom concept to $1M Year 1 revenue, twelve months ahead of
-      schedule, at Cox True Local Labs. I run programs where engineering,
-      product, and go-to-market ship as one.
-    proof_points: [cox_true_local_labs, global_engineering_orchestration]
+      I orchestrate hardware + firmware + RF + go-to-market teams to ship
+      real products on aggressive timelines. PMP, MBA, 15 years, and an
+      operator's instinct for what actually moves a release date.
+    proof_points: [cox_true_local_labs, global_engineering_orchestration, safeguard_global_cms]
     keyword_emphasis:
       - program execution
       - cross-functional leadership
       - hardware + software delivery
-      - revenue-producing launches
-
-  titanx-style-pm:
-    label: AI / SaaS Product Manager with operator chops
-    north_star: >
-      I was fractional COO at TitanX — operator-grade PM who drove a $27M
-      Series A in under two years. I know how product, product-led growth,
-      and revenue engineering compound together.
-    proof_points: [titanx_fractional_coo, cox_true_local_labs]
-    keyword_emphasis:
-      - product strategy
-      - go-to-market design
-      - B2B SaaS scaling
-      - investor-grade metrics
+      - RF / wireless / IoT
+      - PRD authorship
 
   enterprise-sales-engineer:
-    label: Enterprise Technical Sales / Solutions Engineer
+    label: Enterprise SE / Solutions Architect (IoT, wireless, industrial SaaS)
+    rank: 2
+    realistic_comp: $160K–230K base / $220K–320K OTE
     north_star: >
-      I took an enterprise book from $6M to $13M ARR while owning the
-      technical credibility in the room. RF, IoT, SaaS — I've sold and
-      deployed all three at seven-figure deal sizes.
-    proof_points: [arr_growth_6m_to_13m, titanx_fractional_coo, utah_broadband_acquisition]
+      I take an enterprise book from $6M to $13M ARR while being the
+      technical credibility in the room. RF, IoT, and B2B SaaS — I've
+      sold and deployed all three at seven-figure deal sizes.
+    proof_points: [arr_growth_6m_to_13m, utah_broadband_acquisition, titanx_fractional_coo]
     keyword_emphasis:
       - ARR growth
       - enterprise discovery
       - technical deal credibility
-      - RF / IoT / SaaS domain
+      - RF / IoT / SaaS domain depth
+      - SOW + PRD authorship
 
-  revenue-ops-transformation:
-    label: Transformation / Revenue Ops Leader
+  iot-solutions-architect:
+    label: IoT / Wireless Solutions Architect (technical pre-sales + delivery)
+    rank: 3
+    realistic_comp: $170K–220K base
     north_star: >
-      I drove Utah Broadband's revenue growth to a $27M acquisition by
-      Boston Omaha. I turn messy operations into repeatable revenue and
-      exit-ready businesses.
+      I architect IoT and wireless deployments end-to-end — Wi-Fi, BLE,
+      Z-Wave, cellular, RF site planning, embedded firmware integration.
+      I've shipped these for aerospace OEMs, industrial sensor networks,
+      and Fortune 500 energy clients.
+    proof_points: [global_engineering_orchestration, utah_broadband_acquisition, cox_true_local_labs]
+    keyword_emphasis:
+      - IoT architecture
+      - wireless / RF / BLE / Z-Wave
+      - embedded systems integration
+      - industrial deployments
+      - hardware + firmware coordination
+
+  revenue-ops-operator:
+    label: RevOps / BizOps Operator (Series B–D, Utah-friendly)
+    rank: 4
+    realistic_comp: $170K–220K base
+    north_star: >
+      I drove Utah Broadband to a $27M Boston Omaha acquisition and ran
+      ops for TitanX through a $27M Series A. I turn messy revenue
+      operations into repeatable cadence and exit-ready businesses.
     proof_points: [utah_broadband_acquisition, titanx_fractional_coo, arr_growth_6m_to_13m]
     keyword_emphasis:
       - revenue operations
       - operational cadence
-      - M&A preparation
+      - GTM systems
       - cross-functional P&L
-
-  global-eng-orchestrator:
-    label: Global Engineering / Platform TPM
-    north_star: >
-      I orchestrate engineering across continents — aerospace/defense,
-      wireless infra, IoT — and I hold PMP + MBA behind it. Teams ship on
-      schedule because I architect how the work flows, not just what ships.
-    proof_points: [global_engineering_orchestration, cox_true_local_labs]
-    keyword_emphasis:
-      - distributed engineering
-      - platform delivery
-      - cross-timezone cadence
-      - aerospace / wireless / IoT domain
+      - Salesforce / HubSpot ops
