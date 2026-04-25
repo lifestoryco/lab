@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page {
+    size: letter;
+    margin: 0.5in 0.6in 0.5in 0.6in;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 9.8pt;
+    line-height: 1.38;
+    color: #1a1a1a;
+  }
+
+  /* ── Header ─────────────────────────────────────────────────────── */
+  .header { margin-bottom: 4pt; }
+  .header h1 {
+    font-size: 17pt;
+    font-weight: 800;
+    letter-spacing: -0.2pt;
+    color: #0a0a0a;
+    margin-bottom: 1pt;
+  }
+  .header h1 .creds {
+    font-weight: 500;
+    font-size: 12pt;
+    color: #555;
+    letter-spacing: 0.3pt;
+  }
+  .header .role {
+    font-size: 11pt;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 4pt;
+  }
+  .header .contact {
+    font-size: 9pt;
+    color: #555;
+  }
+  .header .contact span:not(:last-child)::after {
+    content: " · ";
+    color: #aaa;
+    margin: 0 4pt;
+  }
+
+  hr {
+    border: none;
+    border-top: 0.8pt solid #999;
+    margin: 6pt 0 8pt 0;
+  }
+
+  /* ── Section headings ────────────────────────────────────────────── */
+  h2 {
+    font-size: 9pt;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 1pt;
+    color: #0a0a0a;
+    margin-top: 11pt;
+    margin-bottom: 4pt;
+    padding-bottom: 2pt;
+    border-bottom: 0.5pt solid #ccc;
+  }
+
+  /* ── Summary ─────────────────────────────────────────────────────── */
+  .summary {
+    font-size: 9.8pt;
+    color: #1a1a1a;
+    text-align: justify;
+  }
+
+  /* ── Position blocks ─────────────────────────────────────────────── */
+  .position {
+    margin-bottom: 9pt;
+    page-break-inside: avoid;
+  }
+  .position-header {
+    display: table;
+    width: 100%;
+    margin-bottom: 1pt;
+  }
+  .position-title {
+    display: table-cell;
+    vertical-align: top;
+    font-weight: 700;
+    font-size: 10pt;
+    color: #0a0a0a;
+  }
+  .position-dates {
+    display: table-cell;
+    vertical-align: top;
+    text-align: right;
+    font-size: 9pt;
+    color: #555;
+    font-style: italic;
+    white-space: nowrap;
+  }
+  .position-company {
+    font-size: 9.5pt;
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 2pt;
+  }
+  .position-summary {
+    font-size: 9.3pt;
+    font-style: italic;
+    color: #444;
+    margin-bottom: 3pt;
+  }
+  ul.bullets {
+    list-style: none;
+    padding-left: 0;
+  }
+  ul.bullets li {
+    padding-left: 11pt;
+    position: relative;
+    margin-bottom: 2.5pt;
+    font-size: 9.5pt;
+    color: #1a1a1a;
+  }
+  ul.bullets li::before {
+    content: "▪";
+    position: absolute;
+    left: 0;
+    color: #555;
+    font-size: 8pt;
+    top: 1pt;
+  }
+
+  /* ── Selected Achievements (lead-in tailored highlights) ──────────── */
+  .achievements {
+    background: #fafafa;
+    border-left: 2.5pt solid #444;
+    padding: 5pt 9pt 5pt 11pt;
+    margin-bottom: 4pt;
+  }
+  .achievements ul.bullets li {
+    font-size: 9.5pt;
+    color: #1a1a1a;
+  }
+
+  /* ── Skills grid (3-col, mirrors Ford resume) ────────────────────── */
+  .skills-grid {
+    display: table;
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 6pt 0;
+  }
+  .skills-col {
+    display: table-cell;
+    width: 33.3%;
+    vertical-align: top;
+    font-size: 9pt;
+  }
+  .skills-col .label {
+    font-weight: 700;
+    font-size: 8.3pt;
+    text-transform: uppercase;
+    letter-spacing: 0.6pt;
+    color: #444;
+    margin-bottom: 2pt;
+  }
+  .skills-col ul {
+    list-style: none;
+    padding: 0;
+  }
+  .skills-col li {
+    font-size: 9pt;
+    color: #1a1a1a;
+    padding: 0.5pt 0;
+  }
+  .skills-col li::before {
+    content: "• ";
+    color: #888;
+  }
+
+  /* ── Education + Certs ───────────────────────────────────────────── */
+  .education-block { font-size: 9.3pt; margin-bottom: 4pt; }
+  .education-block .degree { font-weight: 700; color: #0a0a0a; }
+  .education-block .institution { color: #444; }
+  .education-block .meta { color: #666; font-style: italic; font-size: 8.8pt; }
+
+  .cert-block {
+    font-size: 9.3pt;
+    margin-bottom: 3pt;
+  }
+  .cert-block .name { font-weight: 700; color: #0a0a0a; }
+  .cert-block .meta { color: #555; font-size: 8.8pt; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>{{ profile.name }}{% if profile.credentials %}, <span class="creds">{{ profile.credentials | join(", ") }}</span>{% endif %}</h1>
+  <div class="role">{{ header_role or profile.title }}</div>
+  <div class="contact">
+    {% if profile.city %}<span>{{ profile.city }}</span>{% endif %}
+    {% if profile.phone %}<span>{{ profile.phone }}</span>{% endif %}
+    {% if profile.email %}<span>{{ profile.email }}</span>{% endif %}
+    {% if profile.linkedin %}<span>{{ profile.linkedin }}</span>{% endif %}
+  </div>
+</div>
+
+<hr>
+
+<h2>Executive Summary</h2>
+<p class="summary">{{ resume.executive_summary or profile.default_summary }}</p>
+
+{% if resume.top_bullets %}
+<h2>Selected Achievements</h2>
+<div class="achievements">
+  <ul class="bullets">
+    {% for bullet in resume.top_bullets %}
+    <li>{{ bullet }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<h2>Professional Experience</h2>
+{% for pos in profile.positions %}
+<div class="position">
+  <div class="position-header">
+    <span class="position-title">{{ pos.title }}</span>
+    <span class="position-dates">{{ pos.start }} – {{ pos.end }}</span>
+  </div>
+  <div class="position-company">{{ pos.company }} · {{ pos.location }}</div>
+  {% if pos.summary %}<div class="position-summary">{{ pos.summary }}</div>{% endif %}
+  <ul class="bullets">
+    {% for bullet in pos.bullets %}
+    <li>{{ bullet }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endfor %}
+
+<h2>Technical Skills</h2>
+<div class="skills-grid">
+  {% for label, items in profile.skills_grid.items() %}
+  <div class="skills-col">
+    <div class="label">{{ label }}</div>
+    <ul>
+      {% for item in items %}<li>{{ item }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endfor %}
+</div>
+
+<h2>Education &amp; Certifications</h2>
+{% for ed in profile.education %}
+<div class="education-block">
+  <span class="degree">{{ ed.degree }}{% if ed.field %} — {{ ed.field }}{% endif %}</span><br>
+  <span class="institution">{{ ed.institution }}</span>
+  {% if ed.graduated %}<span class="meta"> · Graduated: {{ ed.graduated }}</span>{% endif %}
+</div>
+{% endfor %}
+{% for cert in profile.certifications %}
+<div class="cert-block">
+  <span class="name">{{ cert.name }}</span>
+  {% if cert.id %}<span class="meta"> · {{ cert.id }}</span>{% endif %}
+  {% if cert.valid %}<span class="meta"> · Valid: {{ cert.valid }}</span>{% endif %}
+</div>
+{% endfor %}
+
+</body>
+</html>
