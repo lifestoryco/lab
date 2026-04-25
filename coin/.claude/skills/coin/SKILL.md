@@ -51,7 +51,8 @@ Inspect `{{mode}}` (the user's input) and dispatch:
 | `interview-prep <id>` or `prep <id>` | `modes/interview-prep.md` |
 | `liveness` or `check liveness` | invoke `scripts/liveness_check.py` |
 | `ofertas` or `offers` or `compare offers` | `modes/ofertas.md` (multi-offer math + negotiation brief) |
-| `setup` or first-run | follow `Setup Checklist` below |
+| `setup` or `onboard` or `re-onboard` | `modes/onboarding.md` (executable 9-question profile setup) |
+| first-run with no DB | follow `Setup Checklist` below, then dispatch `modes/onboarding.md` |
 | `help` | print this file |
 
 If input is ambiguous, ask one clarifying question then dispatch.
@@ -121,25 +122,16 @@ If `data/db/pipeline.db` is missing or `.venv/` doesn't exist:
 3. Install deps (`.venv/bin/pip install -r requirements.txt`)
 4. Confirm `brew list pango` (PDF rendering needs Pango)
 5. Initialize DB (`from careerops.pipeline import init_db; init_db()`)
-6. Smoke test: `.venv/bin/python scripts/discover.py --lane enterprise-sales-engineer --limit 3`
-7. Run the test suite: `.venv/bin/pytest tests/ -q`
-8. Print readiness banner with available commands.
+6. If `data/onboarding/.completed` is missing OR PROFILE['name'] is placeholder, dispatch `modes/onboarding.md` to capture identity + targeting before smoke test
+7. Smoke test: `.venv/bin/python scripts/discover.py --lane enterprise-sales-engineer --limit 3`
+8. Run the test suite: `.venv/bin/pytest tests/ -q`
+9. Print readiness banner with available commands.
 
 ---
 
-## Onboarding (for first-time users — adapted from job-scout)
+## Onboarding (first-time users)
 
-If `data/resumes/base.py` is the default placeholder OR Sean is changing direction, run conversational onboarding:
-
-1. **Resume input.** "Drop a resume file path, share a portfolio URL, or describe your background."
-2. **Target role(s).** Use AskUserQuestion with options derived from the resume (multi-select OK).
-3. **Locations.** Use AskUserQuestion with `multiSelect: true`. Defaults: Remote, current city, "open to relocation".
-4. **Company stage.** AskUserQuestion: Seed/A · Series B–D · Established · No preference.
-5. **Industry/domain.** AskUserQuestion with options derived from the resume.
-6. **Compensation floor.** Free text — capture base, total, equity expectations.
-7. **Pedigree constraint.** Be honest about CS-degree / FAANG-tour gaps that filter applications. Mark as `pedigree_constraint` in profile.yml so future scoring auto-quarantines out-of-league roles.
-8. **Save.** Write to `config/profile.yml`; update `data/resumes/base.py` with verified work history.
-9. **Smoke discovery.** Run `discover --limit 5` per lane to confirm pipeline produces in-league results.
+If `data/onboarding/.completed` is missing OR `data/resumes/base.py` PROFILE['name'] is the placeholder string, dispatch to `modes/onboarding.md` immediately. The mode walks 9 deterministic AskUserQuestion blocks, then atomically writes `config/profile.yml` + the identity slice of `base.py`, then offers a smoke discovery. Re-onboarding is supported via `/coin setup` at any time.
 
 ---
 
