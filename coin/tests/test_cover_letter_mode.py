@@ -60,8 +60,19 @@ def test_jd_keyword_parity_check_documented(mode_text):
 
 
 def test_audit_subset_documented(mode_text):
-    # Cover audit reuses checks 1-5 (truthfulness) but not orthogonality/lane
-    assert "checks 1, 2, 3, 4, 5" in mode_text
+    # Cover audit reuses audit.md's 5 CRITICAL truthfulness checks
+    # (Check 1 Education, 2 Pedigree, 3 Cox/TitanX/Safeguard, 4 Vague-flex,
+    # 5 Metric provenance); skips Checks 6-9 which are resume-specific.
+    for label in (
+        "Check 1 — Education truthfulness",
+        "Check 2 — Pedigree non-claim",
+        "Check 3 — Cox/TitanX/Safeguard attribution",
+        "Check 4 — Vague-flex qualifiers",
+        "Check 5 — Metric provenance",
+    ):
+        assert label in mode_text, f"audit-subset label missing: {label}"
+    # Confirm Checks 6-9 are explicitly skipped, not silently dropped
+    assert "Checks 6–9" in mode_text or "Checks 6-9" in mode_text
 
 
 def test_render_refuses_unaudited(mode_text):

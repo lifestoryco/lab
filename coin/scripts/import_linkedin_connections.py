@@ -29,9 +29,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from config import DB_PATH
+from config import DB_PATH, LINKEDIN_CONNECTIONS_CSV
 
-DEFAULT_CSV = "data/network/linkedin_connections.csv"
+DEFAULT_CSV = LINKEDIN_CONNECTIONS_CSV
 
 DDL_CONNECTIONS = """
 CREATE TABLE IF NOT EXISTS connections (
@@ -131,6 +131,7 @@ def import_csv(db_path: str | Path, csv_path: str | Path, dry_run: bool = False)
     if not csv_path.exists():
         raise FileNotFoundError(f"CSV not found: {csv_path}")
 
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     try:
         ensure_schema(conn)
@@ -178,7 +179,15 @@ def import_csv(db_path: str | Path, csv_path: str | Path, dry_run: bool = False)
                 if dry_run:
                     continue
 
-                cur = conn.execute(
+                # Pre-check existence: SQLite UPSERT (ON CONFLICT DO UPDATE)
+                # always returns rowcount=1 and a non-zero lastrowid, so the
+                # only reliable insert/update split is a SELECT before the
+                # write. linkedin_url is UNIQUE, so this is one indexed lookup.
+                existed = conn.execute(
+                    "SELECT 1 FROM connections WHERE linkedin_url = ?", (url,)
+                ).fetchone()
+
+                conn.execute(
                     """
                     INSERT INTO connections
                         (first_name, last_name, full_name, linkedin_url, email,
@@ -198,12 +207,10 @@ def import_csv(db_path: str | Path, csv_path: str | Path, dry_run: bool = False)
                     (first, last, full, url, email, company, company_norm,
                      position, connected_iso, seniority),
                 )
-                # changes() returns 1 for INSERT and 1 for UPDATE; track via lastrowid==0 hack
-                if cur.rowcount == 1 and cur.lastrowid:
-                    # Best-effort distinguish: lookup, see if existing prior to insert
-                    rows_inserted += 1
-                else:
+                if existed:
                     rows_updated += 1
+                else:
+                    rows_inserted += 1
         if not dry_run:
             conn.commit()
 
@@ -246,8 +253,12 @@ def main() -> int:
         )
         return 1
 
-    Path(args.db).parent.mkdir(parents=True, exist_ok=True)
-    summary = import_csv(args.db, csv_path, dry_run=args.dry_run)
+    db_path = Path(args.db).resolve()
+    allowed_db_root = (ROOT / "data" / "db").resolve()
+    if not str(db_path).startswith(str(allowed_db_root) + "/") and db_path.parent != allowed_db_root:
+        ap.error(f"--db must be under {allowed_db_root}")
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    summary = import_csv(db_path, csv_path, dry_run=args.dry_run)
 
     print(f"{'[DRY RUN] ' if summary['dry_run'] else ''}Connections import:")
     print(f"  Rows processed: {summary['rows_processed']}")

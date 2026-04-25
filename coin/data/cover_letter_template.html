@@ -24,8 +24,7 @@
   </div>
   <div class="date">{{ today }}</div>
   <div class="recipient">
-    {% if recipient_name %}{{ recipient_name }}<br>{% endif %}
-    Hiring Team — {{ company }}<br>
+    {% if recipient_name %}{{ recipient_name }}<br>{% else %}Hiring Team — {{ company }}<br>{% endif %}
     Re: {{ title }}
   </div>
   <p>{{ paragraphs.hook }}</p>

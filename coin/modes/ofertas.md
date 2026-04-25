@@ -23,6 +23,18 @@ This is a port of the `santifer/career-ops` ofertas pattern.
 
 ---
 
+## Step 0 — Load the AskUserQuestion tool
+
+`AskUserQuestion` is a deferred tool. At mode entry, run:
+
+```
+ToolSearch(query="select:AskUserQuestion", max_results=1)
+```
+
+Without this, none of the per-offer questions in Step 2 can fire.
+
+---
+
 ## Step 1 — Discover existing offers
 
 Run:
@@ -45,8 +57,7 @@ If no, exit cleanly.
 
 ## Step 2 — Capture offer details (per offer)
 
-Use AskUserQuestion blocks (load via `ToolSearch` with `select:AskUserQuestion`
-if not already in scope). For each offer, capture in this order:
+Use AskUserQuestion blocks (loaded in Step 0). For each offer, capture in this order:
 
 1. **Company + title** (free-text, or auto-fill from `roles` row if `--from-role <id>`)
 2. **Base salary** (free-text → integer USD, annualized)

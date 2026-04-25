@@ -24,6 +24,19 @@ def test_step_0_loads_askuserquestion(mode_text):
     assert "select:AskUserQuestion" in mode_text
 
 
+def test_question_count_consistent(mode_text):
+    """Header, walked steps, and summary line must all agree on the count.
+    Regression: previously said '9 deterministic' / 'all 8 answers' / 7
+    actual capture steps."""
+    # Normalize all whitespace runs to single spaces for prose-wrap tolerance
+    normalized = " ".join(mode_text.split())
+    assert "through 7 deterministic AskUserQuestion blocks" in normalized
+    assert "summary of all 7 captured answers" in normalized
+    # Old counts must be gone
+    assert "9 deterministic" not in normalized
+    assert "all 8 answers" not in normalized
+
+
 def test_safety_gate_at_top(mode_text):
     assert "## Step 1" in mode_text
     assert "Re-onboard from scratch" in mode_text

@@ -19,7 +19,8 @@ This is a **discovery + drafting** mode. Coin does NOT auto-send DMs.
 | Scraping with Sean's logged-in session cookies | Account ban risk + we have the export |
 | Surfacing connections at an `out_of_band` employer for tailoring purposes | Pedigree quarantine still applies |
 | Drafting outreach for a role with `fit_score < 55` (D/F grade) | Don't burn warm intros on bad fits |
-| Auto-setting `outreach.sent_at` or `outreach.replied_at` | Sending happens outside Coin — Sean updates manually |
+| Auto-setting `outreach.sent_at` or `outreach.replied_at` | Sending happens outside Coin — Sean updates manually via `/coin track-outreach` |
+| Citing a metric not in PROFILE.positions in any draft DM | Truthfulness gate (`_shared.md` Operating Principle #3); same rule as resume + cover letter |
 
 ---
 
@@ -54,13 +55,17 @@ Normalize the company string with the same rules as `scripts/import_linkedin_con
 ## Step 2 — Query connections
 
 ```bash
+# CRITICAL: pass values via the second arg tuple — NEVER f-string company
+# names into SQL. Substitute the literal `normalized` variable below; do not
+# inline the company string into the query text.
 .venv/bin/python -c "
 import sqlite3
 conn = sqlite3.connect('data/db/pipeline.db')
 conn.row_factory = sqlite3.Row
+normalized = '<normalized_company_str>'  # e.g. 'cox communications'
 rows = conn.execute(
     'SELECT * FROM connections WHERE company_normalized = ? OR company_normalized LIKE ?',
-    ('<normalized>', '%<normalized>%'),
+    (normalized, f'%{normalized}%'),
 ).fetchall()
 print('found', len(rows))
 for r in rows:
@@ -127,7 +132,7 @@ For each contact, pick the template by **recency tier** from
 - Hot reconnect (≤ 12 mo) — only if Sean has confirmed last interaction this session
 - Warm reconnect (12–36 mo)
 - Cold reconnect (> 36 mo)
-- Recruiter (any tier) — special-cased for `seniority='recruiter'` (title contains "recruit" / "talent")
+- Recruiter (any tier) — special-cased when the contact's `position` matches `/recruit|talent/i`. Note that `connections.seniority` will read `leadership` / `senior_ic` / `peer` at import time (never `'recruiter'`); the recruiter bucket and the `seniority_score = 90` override are computed at scan time from the raw position string.
 
 Each draft must include:
 1. Contact's first name
@@ -170,8 +175,10 @@ NEXT
   → Pick contacts to message
   → Send via LinkedIn manually (Coin will NOT send)
   → After sending, update outreach.sent_at:
-    /coin track-outreach <outreach_id> sent
+    .venv/bin/python scripts/track_outreach.py --id <outreach_id> sent
+    (or: /coin track-outreach <outreach_id> sent)
   → If a reply comes in: /coin track <id> contact
+    and: .venv/bin/python scripts/track_outreach.py --id <outreach_id> replied
 ```
 
 ---
@@ -181,13 +188,18 @@ NEXT
 Insert one row per surfaced contact into `outreach`:
 
 ```bash
+# CRITICAL: pass values via the second arg tuple — never f-string into SQL.
+# draft_message is LLM-generated and WILL contain quotes, apostrophes, and
+# multi-line content. Inlining it via f-string is a SQLi vector against the
+# local DB and will also corrupt the message itself.
 .venv/bin/python -c "
 import sqlite3
+role_id, conn_id, warmth, draft = <role_id>, <conn_id>, <warmth_float>, '''<draft_text>'''
 conn = sqlite3.connect('data/db/pipeline.db')
-conn.execute('''
-    INSERT INTO outreach (role_id, connection_id, warmth_score, draft_message)
-    VALUES (?, ?, ?, ?)
-''', (<role_id>, <conn_id>, <warmth>, <draft>))
+conn.execute(
+    'INSERT INTO outreach (role_id, connection_id, warmth_score, draft_message) VALUES (?, ?, ?, ?)',
+    (role_id, conn_id, warmth, draft),
+)
 conn.commit()
 "
 ```

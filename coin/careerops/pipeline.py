@@ -226,12 +226,17 @@ def update_jd_raw(role_id: int, jd: str) -> None:
 
 
 def insert_offer(offer: dict) -> int:
-    """Insert a row into offers (created by migration 002).
+    """Insert a row into offers (created by migration m002).
 
     Required keys: company, title, base_salary. received_at defaults to today.
+    Raises ValueError with a concrete field list if anything required is missing.
     Returns the new offer id.
     """
-    cols = [
+    required = ("company", "title", "base_salary")
+    missing = [k for k in required if not offer.get(k)]
+    if missing:
+        raise ValueError(f"insert_offer missing required keys: {missing}")
+    all_cols = [
         "role_id", "company", "title", "received_at", "expires_at",
         "base_salary", "signing_bonus", "annual_bonus_target_pct",
         "annual_bonus_paid_history", "rsu_total_value", "rsu_vesting_schedule",
@@ -239,9 +244,13 @@ def insert_offer(offer: dict) -> int:
         "benefits_delta", "pto_days", "remote_pct", "state_tax",
         "growth_signal", "notes", "status",
     ]
-    vals = [offer.get(c) for c in cols]
-    if not offer.get("received_at"):
-        vals[cols.index("received_at")] = datetime.now(timezone.utc).date().isoformat()
+    payload = dict(offer)
+    if not payload.get("received_at"):
+        payload["received_at"] = datetime.now(timezone.utc).date().isoformat()
+    # Only insert columns the caller actually set so the schema's DEFAULT
+    # values (status='active', signing_bonus=0, rsu_vest_years=4, etc.) apply.
+    cols = [c for c in all_cols if payload.get(c) is not None]
+    vals = [payload[c] for c in cols]
     placeholders = ",".join("?" * len(cols))
     with _conn() as conn:
         cur = conn.execute(

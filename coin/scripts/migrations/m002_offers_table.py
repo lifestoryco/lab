@@ -76,6 +76,7 @@ def _already_applied(conn: sqlite3.Connection) -> bool:
 
 def apply(db_path: str | Path) -> None:
     """Public entrypoint — also used by tests against a temp DB."""
+    Path(db_path).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db_path))
     try:
         _ensure_migrations_table(conn)
@@ -99,26 +100,20 @@ def main() -> int:
     db_path = ROOT / DB_PATH
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
-    conn = sqlite3.connect(str(db_path))
-    _ensure_migrations_table(conn)
-    if _already_applied(conn):
-        print(f"Migration {MIGRATION_ID} already applied. Skipping.")
-        conn.close()
-        return 0
-
     if args.dry_run:
-        print(f"[DRY RUN] Would apply DDL:\n{DDL}")
-        conn.close()
-        return 0
+        conn = sqlite3.connect(str(db_path))
+        try:
+            _ensure_migrations_table(conn)
+            if _already_applied(conn):
+                print(f"Migration {MIGRATION_ID} already applied — would skip.")
+                return 0
+            print(f"[DRY RUN] Would apply DDL:\n{DDL}")
+            return 0
+        finally:
+            conn.close()
 
-    conn.executescript(DDL)
-    conn.execute(
-        "INSERT INTO schema_migrations (id, applied_at) VALUES (?, datetime('now'))",
-        (MIGRATION_ID,),
-    )
-    conn.commit()
-    conn.close()
-    print(f"✅ Migration {MIGRATION_ID} applied.")
+    apply(db_path)
+    print(f"✅ Migration {MIGRATION_ID} applied (or already in place).")
     return 0
 
 

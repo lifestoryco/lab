@@ -124,3 +124,32 @@ def test_dry_run_does_not_write(tmp_path):
     n = conn.execute("SELECT COUNT(*) FROM connections").fetchone()[0]
     conn.close()
     assert n == 0
+
+
+def test_inserted_vs_updated_counts_are_accurate(tmp_path):
+    """Regression: ON CONFLICT DO UPDATE used to count every row as inserted.
+    First import → 5 inserted, 0 updated. Re-import → 0 inserted, 5 updated."""
+    db = tmp_path / "test.db"
+    first = import_csv(db, FIXTURE, dry_run=False)
+    assert first["rows_inserted"] == 5
+    assert first["rows_updated"] == 0
+
+    second = import_csv(db, FIXTURE, dry_run=False)
+    assert second["rows_inserted"] == 0
+    assert second["rows_updated"] == 5
+
+
+def test_import_csv_creates_parent_dir(tmp_path):
+    """import_csv() called directly (not via main) must mkdir its parent."""
+    db = tmp_path / "nested" / "subdir" / "test.db"
+    assert not db.parent.exists()
+    import_csv(db, FIXTURE, dry_run=False)
+    assert db.exists()
+
+
+def test_default_csv_pulls_from_config():
+    """Regression: DEFAULT_CSV must come from config.LINKEDIN_CONNECTIONS_CSV,
+    not a separate hardcoded constant."""
+    from scripts.import_linkedin_connections import DEFAULT_CSV
+    from config import LINKEDIN_CONNECTIONS_CSV
+    assert DEFAULT_CSV == LINKEDIN_CONNECTIONS_CSV

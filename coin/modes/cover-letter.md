@@ -130,13 +130,16 @@ Write to `data/resumes/generated/<id:04d>_<lane>_<date>_cover.json`:
 
 ## Step 5 — Audit hand-off
 
-Run a stripped-down audit pass on the cover JSON. Reuse `modes/audit.md` checks 1, 2, 3, 4, 5 (the truthfulness ones — skip orthogonality / lane checks which are resume-specific):
+Run a stripped-down audit pass on the cover JSON. Reuse `modes/audit.md`'s
+five CRITICAL truthfulness checks (numbering matches audit.md exactly —
+skip Checks 6–9 which are orthogonality / domain-overreach / lane-specific
+and don't apply to a single-page letter):
 
-1. Cox/TitanX/Safeguard framing (must show Hydrant context)
-2. No fabricated qualifiers (Fortune 500, seven-figure, world-class)
-3. No CS / engineering degree claims
-4. Verb authenticity (no "spearheaded multi-billion") — keep verbs honest
-5. All numeric claims trace to PROFILE.positions
+1. **Check 1 — Education truthfulness** — no CS / engineering degree claims; BA History + MBA WGU + PMP only
+2. **Check 2 — Pedigree non-claim** — no Fortune 500 / seven-figure / world-class qualifiers without a verifiable named account
+3. **Check 3 — Cox/TitanX/Safeguard attribution** — frame as Hydrant engagements (PM/COO/lead), not Sean-as-direct-employee
+4. **Check 4 — Vague-flex qualifiers** — no "spearheaded multi-billion", "hypergrowth", "mission-critical" without a real anchor; verbs stay honest
+5. **Check 5 — Metric provenance** — every numeric claim traces to a PROFILE.positions[*].achievements line
 
 If all pass, set `audit_passes: true` in the JSON and rewrite the file.
 If any fail, print the failures, leave `audit_passes: false`, and STOP — do NOT proceed to render.
@@ -190,10 +193,13 @@ not a blocker).
 ## Apply mode integration
 
 `modes/apply.md`:
-- **Greenhouse field 5 (Cover Letter file upload)** — uses the cover PDF if it
-  exists at the conventional path.
-- **Lever field 7 (Additional Information textarea)** — pastes the
-  `paragraphs.hook` value (NOT the whole letter — the textarea is a hook field).
+- **Greenhouse field 6 (Cover Letter file upload)** — uses the cover PDF if it
+  exists at the conventional path. (Field 5 is Resume/CV; field 6 is the
+  cover slot.)
+- **Lever field 10 (Additional Information textarea)** — pastes the
+  `paragraphs.hook` value (NOT the whole letter — the textarea is a hook
+  field; the cover PDF goes via field 1's resume slot if Lever exposes a
+  separate cover upload).
 
 ---
 

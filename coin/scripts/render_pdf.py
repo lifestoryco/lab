@@ -17,11 +17,12 @@ from __future__ import annotations
 
 import argparse
 import json
-import pathlib
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+# Project root pinned for base_url + sys.path. Stable regardless of shell cwd.
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 import yaml
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -52,7 +53,7 @@ def _build_env() -> Environment:
     """Jinja2 with autoescape on for HTML output. LLM bullets containing &, <,
     or </style> get escaped to entities — no layout breakage, no injection."""
     return Environment(
-        loader=FileSystemLoader(TEMPLATE_DIR),
+        loader=FileSystemLoader(str(ROOT / TEMPLATE_DIR)),
         autoescape=select_autoescape(enabled_extensions=("html",)),
     )
 
@@ -104,9 +105,10 @@ def render(role_id: int, resume_path: Path, out_path: Path, recruiter: bool = Fa
         target_locations=target_locations,
     )
 
-    # base_url scoped to data/ — file:// resolution can only reach assets here,
-    # not .env, .git, or other repo content.
-    base_url = str((Path.cwd() / TEMPLATE_DIR).resolve())
+    # base_url scoped to <project>/data/ — file:// resolution can only reach
+    # assets here, not .env, .git, or other repo content. Anchored to ROOT
+    # (script's project) so the scope is invariant under shell cwd.
+    base_url = str((ROOT / TEMPLATE_DIR).resolve())
     HTML(string=html_content, base_url=base_url).write_pdf(str(out_path))
     print(f"PDF written → {out_path}{' [recruiter mode]' if recruiter else ''}")
 

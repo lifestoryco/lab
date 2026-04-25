@@ -4,45 +4,49 @@ No I/O. Functions accept dicts (matching the `offers` table row shape) so
 they're callable from mode bash one-liners and easy to unit-test.
 
 Tax math is APPROXIMATION ONLY. Surface as such — never present as advice.
-Uses 2024 top marginal flat-equivalent rates for the most common states for
-remote workers. Sean confirms with a CPA on real numbers.
+Sean confirms with a CPA on real numbers.
+
+Economic constants live in `config.py`:
+  STATE_TAX_RATES    — top-marginal flat-equivalent state income tax
+  ANNUAL_BASE_BUMP   — assumed annual base-salary growth multiplier
+  DEFAULT_VEST_SCHEDULE — fallback when an offer leaves rsu_vesting_schedule blank
 """
 
 from __future__ import annotations
 
 import json
-from typing import Iterable
+from typing import Iterable, TypedDict
+
+from config import ANNUAL_BASE_BUMP, DEFAULT_VEST_SCHEDULE, STATE_TAX_RATES
 
 
-# State income tax (top marginal / flat-equivalent). Approximation.
-_STATE_TAX = {
-    "CA": 0.093,
-    "NY": 0.0685,
-    "OR": 0.099,
-    "MN": 0.0985,
-    "NJ": 0.0897,
-    "MA": 0.05,
-    "CO": 0.0444,
-    "UT": 0.0465,
-    "ID": 0.058,
-    "AZ": 0.025,
-    "WA": 0.0,
-    "TX": 0.0,
-    "FL": 0.0,
-    "NV": 0.0,
-    "TN": 0.0,
-    "WY": 0.0,
-    "SD": 0.0,
-    "AK": 0.0,
-    "NH": 0.0,
-}
+class DeltaRow(TypedDict):
+    """Shape of one row in the delta_table return value."""
+
+    company: str | None
+    title: str | None
+    baseline: bool
+    y1_total: int
+    y1_after_tax: int
+    y3_total: int
+    delta_y1_vs_baseline: int
 
 
 def state_tax_rate(state_code: str | None) -> float:
     """Return state income tax rate. Unknown / None → 0.0 (no error)."""
     if not state_code:
         return 0.0
-    return _STATE_TAX.get(state_code.upper().strip(), 0.0)
+    return STATE_TAX_RATES.get(state_code.upper().strip(), 0.0)
+
+
+def _safe_vest_years(offer: dict) -> int:
+    """Coerce rsu_vest_years to a sane positive integer (default 4)."""
+    raw = offer.get("rsu_vest_years")
+    try:
+        years = int(raw) if raw is not None else 4
+    except (TypeError, ValueError):
+        years = 4
+    return years if years >= 1 else 4
 
 
 def vest_share_y1(offer: dict) -> float:
@@ -61,16 +65,16 @@ def vest_share_y1(offer: dict) -> float:
         return 0.0
     schedule = (offer.get("rsu_vesting_schedule") or "").strip()
     if not schedule:
-        # Default to 25/25/25/25 with 12-month cliff
-        return 0.25
+        # Default schedule from config (e.g. 25/25/25/25)
+        schedule = DEFAULT_VEST_SCHEDULE
     if schedule.endswith("/q"):
         # Quarterly: '6.25/q' means 6.25% per quarter × 4 quarters
         try:
-            per_q = float(schedule[:-2])
+            per_q = float(schedule[:-2].strip())
             return round(per_q * 4 / 100.0, 4)
         except ValueError:
             return 0.25
-    parts = schedule.split("/")
+    parts = [p.strip() for p in schedule.split("/")]
     try:
         first = float(parts[0])
         return round(first / 100.0, 4)
@@ -81,24 +85,26 @@ def vest_share_y1(offer: dict) -> float:
 def vest_curve(offer: dict) -> list[float]:
     """Return list of per-year vest fractions matching the schedule.
 
-    Always length-padded to `rsu_vest_years` (default 4). Cliff > 12 zeros Y1
-    and adds the missed share to Y2 (graded post-cliff catch-up)."""
-    years = int(offer.get("rsu_vest_years") or 4)
+    Always length-padded to `rsu_vest_years` (minimum 1, default 4). Cliff > 12
+    zeros Y1 and adds the missed share to Y2 (graded post-cliff catch-up)."""
+    years = _safe_vest_years(offer)
     cliff = int(offer.get("rsu_cliff_months") or 0)
     schedule = (offer.get("rsu_vesting_schedule") or "").strip()
     if not schedule:
-        curve = [1.0 / years] * years
-    elif schedule.endswith("/q"):
+        schedule = DEFAULT_VEST_SCHEDULE
+    if schedule.endswith("/q"):
         try:
-            per_q = float(schedule[:-2]) / 100.0
+            per_q = float(schedule[:-2].strip()) / 100.0
         except ValueError:
             per_q = 0.0625
         curve = [per_q * 4] * years
     else:
         try:
-            curve = [float(p) / 100.0 for p in schedule.split("/")]
+            curve = [float(p.strip()) / 100.0 for p in schedule.split("/") if p.strip()]
         except ValueError:
             curve = [1.0 / years] * years
+    if not curve:
+        curve = [1.0 / years] * years
     # Pad / truncate to `years`
     if len(curve) < years:
         curve = curve + [0.0] * (years - len(curve))
@@ -163,8 +169,10 @@ def three_year_tc(offer: dict, rsu_growth_pct: float = 0.0) -> dict:
     """Compute 3-yr TC summed. `rsu_growth_pct` is sensitivity (0 = neutral,
     +10 = bullish, -20 = bearish) — applied to RSU vests Y2 and Y3.
 
-    Year-1 RSU is valued at grant FMV (no growth applied — too volatile to
-    project optimistically in Y1). Years 2 and 3 apply (1 + growth)^year.
+    Convention: Y1 RSU is valued at grant FMV (growth^0 — too volatile to
+    project optimistically in Y1). Y2 vest event sits one year past the grant
+    so applies (1 + growth)^1; Y3 vest sits two years past so (1 + growth)^2.
+    Base bumps follow ANNUAL_BASE_BUMP^y for y in {0, 1, 2} (Y1, Y2, Y3).
     """
     base = int(offer.get("base_salary") or 0)
     signing = int(offer.get("signing_bonus") or 0)
@@ -174,15 +182,20 @@ def three_year_tc(offer: dict, rsu_growth_pct: float = 0.0) -> dict:
     curve = vest_curve(offer)
     growth = rsu_growth_pct / 100.0
 
-    # 3-yr base — assume 4% annual base bumps (industry standard mid-tenure)
-    base_total = sum(int(round(base * (1.04 ** y))) for y in range(3))
+    base_total = sum(int(round(base * (ANNUAL_BASE_BUMP ** y))) for y in range(3))
     bonus_total = sum(
-        int(round(base * (1.04 ** y) * bonus_target_pct * hit_rate)) for y in range(3)
+        int(round(base * (ANNUAL_BASE_BUMP ** y) * bonus_target_pct * hit_rate))
+        for y in range(3)
     )
-    # RSU: Y1 at FMV, Y2/Y3 with sensitivity applied
+    # RSU growth exponents track years-since-grant for each vest event:
+    # Y1 vest = grant FMV (^0), Y2 vest = ^1, Y3 vest = ^2.
     rsu_y1_value = int(round(rsu_total * curve[0])) if len(curve) > 0 else 0
-    rsu_y2_value = int(round(rsu_total * curve[1] * (1 + growth) ** 2)) if len(curve) > 1 else 0
-    rsu_y3_value = int(round(rsu_total * curve[2] * (1 + growth) ** 3)) if len(curve) > 2 else 0
+    rsu_y2_value = (
+        int(round(rsu_total * curve[1] * (1 + growth) ** 1)) if len(curve) > 1 else 0
+    )
+    rsu_y3_value = (
+        int(round(rsu_total * curve[2] * (1 + growth) ** 2)) if len(curve) > 2 else 0
+    )
     rsu_total_3yr = rsu_y1_value + rsu_y2_value + rsu_y3_value
 
     total = base_total + signing + bonus_total + rsu_total_3yr
@@ -199,23 +212,23 @@ def three_year_tc(offer: dict, rsu_growth_pct: float = 0.0) -> dict:
     }
 
 
-def delta_table(offers: Iterable[dict]) -> list[dict]:
+def delta_table(offers: Iterable[dict]) -> list[DeltaRow]:
     """Pairwise deltas vs the first offer (baseline)."""
     rows = list(offers)
     if not rows:
         return []
     baseline = year_one_tc(rows[0])["total"]
-    out: list[dict] = []
+    out: list[DeltaRow] = []
     for i, o in enumerate(rows):
         y1 = year_one_tc(o)
         y3 = three_year_tc(o)
-        out.append({
-            "company": o.get("company"),
-            "title": o.get("title"),
-            "baseline": i == 0,
-            "y1_total": y1["total"],
-            "y1_after_tax": y1["effective_after_state_tax"],
-            "y3_total": y3["total"],
-            "delta_y1_vs_baseline": y1["total"] - baseline,
-        })
+        out.append(DeltaRow(
+            company=o.get("company"),
+            title=o.get("title"),
+            baseline=(i == 0),
+            y1_total=y1["total"],
+            y1_after_tax=y1["effective_after_state_tax"],
+            y3_total=y3["total"],
+            delta_y1_vs_baseline=y1["total"] - baseline,
+        ))
     return out

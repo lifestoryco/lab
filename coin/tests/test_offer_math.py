@@ -139,3 +139,59 @@ def test_delta_table_marks_baseline():
 
 def test_delta_table_empty_input():
     assert delta_table([]) == []
+
+
+def test_three_year_tc_y3_growth_uses_squared_exponent():
+    """Y3 RSU vest happens 2 yrs past grant (vs Y1 FMV), so growth^2 not ^3.
+
+    Locks in the 2026-04-25 fix: previously Y2 used (1+g)^2 and Y3 used
+    (1+g)^3, which compounded one too many years onto each. Now Y2 uses
+    ^1 and Y3 uses ^2.
+    """
+    # Equal vesting (25/25/25/25); test Y3 vs Y1 ratio under +10% growth.
+    # Y1 RSU = 100k * 0.25 * 1.0 = 25k
+    # Y3 RSU = 100k * 0.25 * (1.10)^2 = 25k * 1.21 = 30.25k
+    o = _o(
+        rsu_total_value=100_000,
+        rsu_vesting_schedule="25/25/25/25",
+        annual_bonus_target_pct=0,  # zero out other moving parts
+        signing_bonus=0,
+        base_salary=0,
+    )
+    y3 = three_year_tc(o, rsu_growth_pct=10)
+    # Total RSU 3-yr = Y1 + Y2 + Y3 = 25000 + 25000*1.10 + 25000*1.21 = 25000 + 27500 + 30250 = 82750
+    assert y3["rsu_total_3yr"] == 82_750
+
+
+def test_state_tax_rate_pulls_from_config():
+    """Regression: STATE_TAX_RATES must live in config.py, not hardcoded
+    inside offer_math.py."""
+    from config import STATE_TAX_RATES
+    assert STATE_TAX_RATES.get("UT") == 0.0465
+
+
+def test_zero_vest_years_does_not_crash():
+    """Edge case: rsu_vest_years=0 must NOT raise ZeroDivisionError; falls
+    back to the safe default of 4 years."""
+    curve = vest_curve(_o(rsu_vest_years=0, rsu_vesting_schedule=""))
+    assert len(curve) == 4
+    assert sum(curve) == pytest.approx(1.0)
+
+
+def test_whitespace_in_schedule_parses():
+    """'25 / 25 / 25 / 25' should parse identically to '25/25/25/25'."""
+    curve_raw = vest_curve(_o(rsu_vesting_schedule="25/25/25/25"))
+    curve_ws = vest_curve(_o(rsu_vesting_schedule="25 / 25 / 25 / 25"))
+    assert curve_raw == curve_ws
+
+
+def test_delta_table_returns_typed_dict_shape():
+    a = _o(company="A")
+    b = _o(company="B", base_salary=180_000)
+    rows = delta_table([a, b])
+    expected_keys = {
+        "company", "title", "baseline", "y1_total",
+        "y1_after_tax", "y3_total", "delta_y1_vs_baseline",
+    }
+    for r in rows:
+        assert set(r.keys()) == expected_keys

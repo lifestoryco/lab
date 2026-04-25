@@ -64,13 +64,9 @@ def test_tax_disclaimer(mode_text):
 
 def test_migration_creates_offers_table(tmp_path):
     """Run migration 002 against a temp DB; assert columns exist."""
-    # Import via file path since 002_ is not a valid module name
-    import importlib.util
-    spec = importlib.util.spec_from_file_location(
-        "_002_offers_table", ROOT / "scripts" / "migrations" / "002_offers_table.py"
-    )
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # The migration is named m002_offers_table (m-prefix so the filename
+    # is a valid Python module). Import normally rather than via file path.
+    from scripts.migrations import m002_offers_table as module
 
     db = tmp_path / "test.db"
     module.apply(db)

@@ -1,5 +1,64 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-25, Session 5 — Code-review --fix EVERYTHING)
+
+### All review findings resolved (CRITICAL → HIGH → MEDIUM → LOW + pre-existing) ✅ COMPLETE
+
+**Tests:** 170 → **193 passing** (23 net new, 0 regressions). Verdict: PASS.
+
+**HIGH (6) — all fixed:**
+- `import_linkedin_connections.py` rows_inserted/rows_updated counter — replaced ON-CONFLICT-rowcount-hack with explicit pre-SELECT existence check; per-row insert/update accounting now accurate (test: `test_inserted_vs_updated_counts_are_accurate`)
+- `offer_math.py` STATE_TAX_RATES + ANNUAL_BASE_BUMP + DEFAULT_VEST_SCHEDULE moved to `config.py`; offer_math now imports them
+- `import_linkedin_connections.py` DEFAULT_CSV reads `config.LINKEDIN_CONNECTIONS_CSV`
+- `cover-letter.md` Greenhouse field 5 → 6 (was wrong; field 5 is Resume); Lever 7 → 10 (was wrong; field 7 is Current company)
+- `network-scan.md` `/coin track-outreach` reference now backed by a real `scripts/track_outreach.py` helper (8 tests in `test_track_outreach.py`); SKILL.md routes `track-outreach <id> sent|replied [--note]` and `track-outreach --list`
+
+**MEDIUM (9) — all fixed:**
+- `three_year_tc` Y2/Y3 RSU growth exponents: was `**2` / `**3` (one year too many on each); now `**1` / `**2` so Y2 vest sits 1 year past grant FMV and Y3 sits 2 years past. Test `test_three_year_tc_y3_growth_uses_squared_exponent` locks in the math (Y3 @ +10% = 25k × 1.21 = 30,250 exactly)
+- `vest_curve` ZeroDivisionError when `rsu_vest_years=0` — `_safe_vest_years` helper coerces to default 4. Test `test_zero_vest_years_does_not_crash`
+- `connections` + `outreach` schema now in `scripts/migrations/m003_connections_outreach.py`; importer keeps `ensure_schema()` for fresh-DB compat. 3 tests in `test_migrations_m003.py`
+- Migrations renamed: `001_archetypes_5_to_4.py` → `m001_…`, `002_offers_table.py` → `m002_…`, plus new `m003_…`. All importable as Python modules now. Test loader updated.
+- `render_pdf.py` + `render_cover_letter.py` `base_url` anchored to `ROOT` (script's project) instead of `Path.cwd()` — invariant under shell cwd, fixes a parity defect that was pre-existing in `render_pdf.py` since session 3
+- `render_cover_letter.py` `--out` and `--input` constrained to `data/resumes/generated/` via `_validate_under_generated`; refuses path traversal
+- `onboarding.md` question-count: header / steps / summary now consistently say 7 (was 9 / 7 / 8); SKILL.md Onboarding section follows. Test `test_question_count_consistent`
+- SKILL.md Discovery menu adds `/coin setup` and `/coin track-outreach <id>`
+- `import_linkedin_connections.py::import_csv` now mkdir-s the DB parent inside the function (not just in `main()`) — works when called from tests / non-CLI
+
+**LOW (13) — all fixed:**
+- `render_cover_letter.py` defers Jinja2 + WeasyPrint imports into `_build_env()` / `render()` so the no-op CLI path is fast; prints `Selected cover JSON: <path>` so Sean sees which lane was picked
+- `pipeline.insert_offer` raises `ValueError` listing missing required keys instead of low-context `IntegrityError`. Bonus fix discovered: also stops emitting NULL for unset columns so DDL DEFAULTs (status='active', signing_bonus=0, etc.) actually apply. Test `test_insert_offer_writes_row` + `test_insert_offer_missing_required_raises`
+- `vest_curve` strips per-element whitespace ("25 / 25 / 25 / 25" parses identically to "25/25/25/25"). Test `test_whitespace_in_schedule_parses`
+- `delta_table` returns a proper `TypedDict(DeltaRow)` shape. Test `test_delta_table_returns_typed_dict_shape`
+- `m002_offers_table.main()` consolidated through `apply()` so connection lifecycle is guarded by try/finally on every path
+- `import_linkedin_connections.py::main` validates `--db` is under `data/db/` (rejects writes outside the project)
+- `network-scan.md` Step 2 + Step 7 SQL examples gain "NEVER f-string into SQL" comments + use parameterized `?` bindings explicitly
+- `network-scan.md` Step 5 clarifies that `seniority='recruiter'` is a *scan-time* concept — the import classifier emits leadership/senior_ic/peer only; recruiter override is title-pattern matching at scan time
+- `network-scan.md` refusal table gains: "Citing a metric not in PROFILE.positions in any draft DM" — parity with cover-letter.md
+- `onboarding.md` raw resume now staged via `tempfile.mkstemp` and unlinked after Step 9 success (PII off disk once profile is written)
+- `onboarding.md` Step 7 surfaces $160K/$200K Sean default + warns on lower fat-finger
+- `cover-letter.md` audit subset now uses audit.md's exact check labels (Check 1 Education / 2 Pedigree / 3 Cox attribution / 4 Vague-flex / 5 Metric provenance) — drops the "verb authenticity" mismatch that wasn't a numbered check
+- `ofertas.md` adds explicit Step 0 "Load the AskUserQuestion tool" (mirrors onboarding); Step 2 references the load instead of conditional
+- `auto-pipeline.md` lane list now reads from `config.LANES.keys()` instead of hardcoded literal; `update_lane()` and `update_role_notes()` helpers are now invoked instead of raw SQL (TODOs were stale — helpers exist)
+- `cover_letter_template.html` recipient block: `{% if recipient_name %}{{ recipient_name }}{% else %}Hiring Team — {{ company }}{% endif %}` (was double-printing both)
+- `config.py` adds `ONBOARDING_MARKER`, `ONBOARDING_DIR`, `ONBOARDING_RAW_RESUME`, `LINKEDIN_CONNECTIONS_CSV`, `NETWORK_DATA_DIR` constants — all path duplications now route through one source
+
+**PRE-EXISTING (2) — also fixed:**
+- `CLAUDE.md` refreshed: 5 archetypes → 4 (with Removed-lanes note); comp floor `$180K base / $250K total` → `$160K base / $200K total`; new Rule #7 codifies the truthfulness gates from `_shared.md` Operating Principle #3; date stamp 2026-04-24 → 2026-04-25
+- `render_pdf.py` `base_url` defect (cwd-dependent) fixed at the same time as `render_cover_letter.py` for parity
+
+**New tests added (23):**
+- `test_track_outreach.py` (8): update sent/replied paths, note attachment, invalid action, unknown id, list_open semantics, role filter, missing-table error
+- `test_migrations_m003.py` (3): tables created, idempotency, indexes
+- `test_pipeline_offers.py` (3): insert_offer happy path, missing-keys ValueError, list_offers default-active filter
+- `test_offer_math.py` extended (5): Y3 growth squared exponent locked in, STATE_TAX_RATES from config, zero-vest crash guard, whitespace parsing, TypedDict shape
+- `test_import_linkedin_connections.py` extended (3): accurate inserted/updated split on re-import, parent-dir mkdir, DEFAULT_CSV from config
+- `test_cover_letter_mode.py` updated (1): audit subset uses audit.md's actual check labels
+- `test_ofertas_mode.py` updated (no count change): m002 import via package path, not file path
+
+**Files touched:** 26 (4 mode files, SKILL.md, CLAUDE.md, 4 careerops/scripts files, 3 migration files, 1 template, 13 test files including 3 new). One commit per logical group below.
+
+---
+
 ## What Was Just Done (2026-04-25, Session 5 — Follow-up batch)
 
 ### All four deferred follow-ups landed in one session ✅ COMPLETE

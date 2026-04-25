@@ -45,6 +45,8 @@ Inspect `{{mode}}` (the user's input) and dispatch:
 | `track <id> <status> [note]` or `applied <id>` etc. | `modes/track.md` |
 | `apply <id>` | `modes/apply.md` (live form fill — see `references/ats-patterns.md`) |
 | `network-scan <id>` or `network-scan <company>` | `modes/network-scan.md` (warm-intro discovery) |
+| `track-outreach <outreach_id> sent\|replied [--note]` | invoke `scripts/track_outreach.py` (mark a drafted DM as sent / a reply received) |
+| `track-outreach --list` | invoke `scripts/track_outreach.py --list` (open drafts) |
 | `status`, `dashboard`, `pipeline` | `modes/status.md` |
 | `followup` or `follow up` | `modes/followup.md` (cadence tracker — flag overdue applies) |
 | `patterns` or `rejection patterns` | `modes/patterns.md` (analyze rejection clusters) |
@@ -104,6 +106,8 @@ Or pick a mode:
   /coin interview-prep <id>   Generate prep brief for upcoming interview
   /coin liveness              Mark dead postings as closed
   /coin ofertas               Compare 2+ offers + draft counters
+  /coin setup                 Re-run profile onboarding (7 questions)
+  /coin track-outreach <id>   Mark a drafted DM as sent / replied
 
 Lanes (4):
   mid-market-tpm · enterprise-sales-engineer · iot-solutions-architect · revenue-ops-operator
@@ -122,7 +126,7 @@ If `data/db/pipeline.db` is missing or `.venv/` doesn't exist:
 3. Install deps (`.venv/bin/pip install -r requirements.txt`)
 4. Confirm `brew list pango` (PDF rendering needs Pango)
 5. Initialize DB (`from careerops.pipeline import init_db; init_db()`)
-6. If `data/onboarding/.completed` is missing OR PROFILE['name'] is placeholder, dispatch `modes/onboarding.md` to capture identity + targeting before smoke test
+6. If `config.ONBOARDING_MARKER` (`data/onboarding/.completed`) is missing OR PROFILE['name'] is placeholder, dispatch `modes/onboarding.md` to capture identity + targeting before smoke test
 7. Smoke test: `.venv/bin/python scripts/discover.py --lane enterprise-sales-engineer --limit 3`
 8. Run the test suite: `.venv/bin/pytest tests/ -q`
 9. Print readiness banner with available commands.
@@ -131,7 +135,7 @@ If `data/db/pipeline.db` is missing or `.venv/` doesn't exist:
 
 ## Onboarding (first-time users)
 
-If `data/onboarding/.completed` is missing OR `data/resumes/base.py` PROFILE['name'] is the placeholder string, dispatch to `modes/onboarding.md` immediately. The mode walks 9 deterministic AskUserQuestion blocks, then atomically writes `config/profile.yml` + the identity slice of `base.py`, then offers a smoke discovery. Re-onboarding is supported via `/coin setup` at any time.
+If the marker file at `config.ONBOARDING_MARKER` (`data/onboarding/.completed`) is missing OR `data/resumes/base.py` PROFILE['name'] is the placeholder string, dispatch to `modes/onboarding.md` immediately. The mode walks 7 deterministic AskUserQuestion blocks, then atomically writes `config/profile.yml` + the identity slice of `base.py`, then offers a smoke discovery. Re-onboarding is supported via `/coin setup` at any time.
 
 ---
 

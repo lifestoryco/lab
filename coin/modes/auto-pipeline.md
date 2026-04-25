@@ -70,17 +70,21 @@ The `fetch_jd.py` script populates `jd_raw`, `jd_parsed`, `company`, `title`, `l
 **Lane assignment** (both branches):
 After ingest, score title against all 4 lanes:
 ```python
+# Source of truth: modes/_shared.md "The 4 archetypes" + config.LANES.
+# If _shared.md changes the canonical lane set, update both here AND
+# config.LANES — they must stay in sync.
 from careerops.score import score_title
-scores = {lane: score_title(role['title'], lane) for lane in ['mid-market-tpm', 'enterprise-sales-engineer', 'iot-solutions-architect', 'revenue-ops-operator']}
+from config import LANES
+scores = {lane: score_title(role['title'], lane) for lane in LANES.keys()}
 best = max(scores, key=scores.get)
 ```
 If `scores[best] >= 55`, set lane to `best`. If tied between two lanes, ask Sean. If all 4 score below 55, assign `mid-market-tpm` (default) and warn that lane fit is weak.
 
-Update lane via SQL (no helper exists yet — TODO add `update_lane()` to careerops/pipeline.py):
+Update lane via the helper:
 ```bash
 .venv/bin/python -c "
-import sqlite3
-sqlite3.connect('data/db/pipeline.db').execute('UPDATE roles SET lane=? WHERE id=?', ('<lane>', <id>)).connection.commit()
+from careerops.pipeline import update_lane
+update_lane(<id>, '<lane>')
 "
 ```
 
@@ -183,15 +187,10 @@ If `cover_letter_audit_passes` is false, set `cover_status = "audit-failed"` for
 Status was already set to `resume_generated` in Step 4. Now record the audit verdict in `notes`:
 
 ```python
-import sqlite3
+from careerops.pipeline import update_role_notes
 note = f"audit:{verdict}; high_issues:{len(high_issues)}; auto_pipeline:{date}"
-sqlite3.connect('data/db/pipeline.db').execute(
-    'UPDATE roles SET notes=?, updated_at=datetime("now") WHERE id=?',
-    (note, role_id)
-).connection.commit()
+update_role_notes(role_id, note, append=True)
 ```
-
-(TODO add `update_role_notes()` helper to `careerops/pipeline.py`.)
 
 ## Step 8 — REPORT
 
