@@ -9,3 +9,8 @@ __pycache__/
 *.egg-info/
 dist/
 build/
+
+# Per-user PII (resumes, LinkedIn exports, tailored applications)
+data/inputs/
+data/applications/
+data/interview-prep/

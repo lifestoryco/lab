@@ -1,5 +1,126 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-25, Session 4 — Part 5)
+
+### /code-review --fix pass: ALL severities resolved ✅ COMPLETE
+
+**Tests:** 98/98 pass (up from 83/91; 7 net new tests, 8 stale assertions corrected, 0 regressions).
+
+**Group A — Audit hardening (modes/audit.md):**
+- Check 3: positive-test rule (Cox/TitanX/Safeguard MUST contain Hydrant framing) + verb list expanded (ran/headed/spearheaded/architected/championed)
+- Check 4 escalated WARN→CRITICAL; trigger list +12 phrases (NASDAQ:, hypergrowth, mission-critical, multi-billion, etc.)
+- Check 5 broadened: numeric + spelled-out + collective-noun + team-shape + tenure all require source
+- Check 7 removed mid-market-tpm exemption — target_role now required for every lane
+- Orthogonality "trumps" rules added per check
+
+**Group B — Tailor mode aligned (modes/tailor.md):**
+- 5 → 4 archetypes
+- target_role required (with per-lane table)
+- Self-audit step 7 added
+- Audit-aware writing rules section (7 rules tracking the 9 checks)
+
+**Group C — 3 phantom modes built:**
+- modes/followup.md (cadence tracker, 7d/14d/21d windows)
+- modes/patterns.md (rejection cluster analysis with lane×tier×grade pivot)
+- modes/interview-prep.md (round-aware brief: recruiter/HM/technical/panel/final)
+
+**Group D — commands/coin.md regenerated** (4 archetypes, 16 modes, current routing).
+
+**Group E — Render hardening (scripts/render_pdf.py + config.py):**
+- Jinja2 `Environment(autoescape=select_autoescape(['html']))` replaces raw `Template()`
+- WeasyPrint `base_url` scoped to `data/` (was `cwd` → file:// could read .env)
+- RECRUITER_TEMPLATE_PATH moved to config.py
+- Dead branch in out_path collapsed to single line
+- Wrapped-JSON missing key now raises (was silent fallback)
+- target_role wired through template; recruiter HTML uses `header_role or profile.title`
+
+**Group F — Scoring fixes (careerops/score.py + careerops/pipeline.py):**
+- score_breakdown: early-return composite=0/grade=F when lane='out_of_band' OR lane not in LANES (kills resurrection bug part 1)
+- upsert_role: ON CONFLICT now uses CASE WHEN roles.lane='out_of_band' THEN 0 (kills resurrection bug part 2)
+- score_company_tier: bidirectional substring → one-direction word-boundary match
+- Added update_lane(), update_role_notes() helpers
+- Stale weights docstring updated
+
+**Group G — test_score.py inversion alignment:**
+- 8 stale assertions rewritten (FAANG=100 → FAANG=25, default=45 → default=65)
+- 4 new defensive tests added (out_of_band quarantine, unknown lane treated as quarantine, FAANG-LOWER-than-unknown inversion proof, substring safety)
+- All 44 score tests pass
+
+**Group H — Hygiene:**
+- .env.example floors updated 180K/250K → 160K/200K
+- target_locations dropped from base.py PROFILE; profile.yml is canonical (new get_target_locations() helper)
+- scripts/migrations/001_archetypes_5_to_4.py: idempotent, tracked in schema_migrations table, applied successfully
+
+**Group I — Audit fixture isolated:**
+- tests/fixtures/audit/0137_filevine_se_known_bad.json (frozen copy)
+- /coin pdf 137 in dev no longer overwrites the regression baseline
+
+**Group J — Auto-pipeline hardened:**
+- LinkedIn search-URL detection (rejects /jobs/search?keywords=... before wasting fetch_jd)
+- Per-ATS URL pattern table for the URL ingest step
+- Audit-fix oscillation diagnostic (detects ping-pong between competing checks; never runs 3rd iteration)
+
+**Group K — Operating infrastructure:**
+- .claude/settings.json with 30+ permission allowlist entries (Python venv calls, sqlite3 reads, git read-only, common file ops) + 8 deny rules (rm -rf, force-push, hard-reset, curl|sh)
+- Removed unused agents: frontend-engineer.md, devops-engineer.md (Python+SQLite stack)
+- Adapted db-architect.md from Postgres+RLS to SQLite + quarantine-aware
+- New python-engineer.md agent (coin-stack-specific)
+
+**Open follow-ups (deferred, low priority):**
+- COIN-NETWORK-SCAN: port proficiently network-scan skill (LinkedIn warm-intro discovery)
+- COIN-OFERTAS: port santifer multi-offer comparison mode
+- COIN-COVER-LETTER: port proficiently cover-letter as separate mode (currently folded into tailor)
+- COIN-AUTO-PIPELINE-EXECUTABLE: convert SKILL.md narrative onboarding to actual AskUserQuestion blocks
+
+---
+
+## What Was Just Done (2026-04-25, Session 4 — Part 4)
+
+### Mode build-out + _shared.md refresh ✅ COMPLETE
+
+**3 task prompts authored, executed, and shipped:**
+- `COIN-AUDIT` → `modes/audit.md` (159 lines, 9 truthfulness checks) + `tests/test_audit_mode.py` (10 passing)
+- `COIN-AUTOPIPELINE` → `modes/auto-pipeline.md` (200+ lines, 8 strict steps) + `tests/test_auto_pipeline.py` (14 passing)
+- `COIN-APPLY` → `modes/apply.md` (200+ lines, 6 hard refusals) + `tests/test_apply_mode.py` (19 passing)
+
+**modes/_shared.md refreshed:**
+- 5 archetypes → 4 (current truth)
+- Comp floor $180K/$250K → $160K/$200K
+- Company tier scoring documented as INVERTED (FAANG penalized for Sean)
+- Truthfulness gates promoted from implicit to explicit Operating Principle #3
+- Out-of-band quarantine + the known resurrection bug documented
+- Mode catalog cross-references all 9 active modes
+- Open-follow-ups list captures: SCORE-TESTS, QUARANTINE-RESURRECTION, PIPELINE-HELPERS, TAILOR-FORCE, EMAIL-CANONICAL
+
+**Tests:** 83 pass / 8 pre-existing failures (all in test_score.py, all from the company_tier
+inversion done earlier this session — covered by COIN-SCORE-TESTS follow-up).
+
+**Decisions:** Mode authoring done as prompt-driven markdown (no Python implementation).
+The agent reads the mode at execution time. This keeps the LLM-as-runtime model intact
+while still allowing structural regression tests (each test asserts the mode markdown
+contains required sections, refusals, gates).
+
+---
+
+## What Was Just Done (2026-04-25, Session 4 — Part 1)
+
+### COIN-AUDIT — modes/audit.md (truthfulness check) ✅ COMPLETE
+
+**New files:**
+- `modes/audit.md` (159 lines) — 9-check truthfulness audit with auto-fix flow + human gate
+- `tests/test_audit_mode.py` (10 tests) — structural + regression tests against the known-bad Filevine JSON
+- `docs/tasks/prompts/complete/COIN-AUDIT_04-25_modes-audit.md` — task prompt
+
+**Tests:** 10/10 audit tests pass. Pre-existing 8 failures in `test_score.py` are from
+this session's earlier company_tier inversion (FAANG 100 → 25 as pedigree filter); not
+caused by COIN-AUDIT. Needs follow-up task `COIN-SCORE-TESTS` to update assertions.
+
+**Decisions:** 9 audit checks encoded directly from the 2026-04-24 code review's CRITICAL/HIGH
+findings. Each check has an explicit fail condition, severity, and fix template — refusing
+to soften them is a hard rule.
+
+---
+
 ## What Was Just Done (2026-04-25, Session 3 — Part 3)
 
 ### santifer feature parity: scoring richness + liveness + PDF ✅ COMPLETE
