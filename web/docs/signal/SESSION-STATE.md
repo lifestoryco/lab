@@ -1,6 +1,61 @@
 # SIGNAL — session state & next-session handoff
 
-**Last session ended:** 2026-04-24
+**Last session ended:** 2026-04-25
+
+---
+
+## What Was Just Done (2026-04-25)
+
+### Specials + celebrations + P2 fixes ✅ COMPLETE
+
+**New files:**
+- `cage/specials.ts` — per-world special-item registry + STUN/REVEAL constants
+- `ui/SpecialButton.tsx` — bottom-left ability button with flash + keyboard shortcut
+- `scene/RevealMarker.tsx` — lantern halo on the silence cell
+
+**Modified:**
+- P2 quartet: matchMedia hoist in PostFXPipeline, final-biome `signal_biome_complete`, sessionSummary memo, body lock during play
+- Per-world specials in `engine/useGameStore.ts` + wired into `useCage.ts`
+- 5 distinct biome celebration variants in `scene/CageCelebration.tsx`
+
+**Commits:**
+- `0789643` — feat(web/signal): per-world special items + celebrations + P2 fixes
+- `c72637b` — refactor(web/signal): apply code-review fixes (a11y zoom, contrast, GPU buffer churn, etc.)
+
+### World-transition freeze fix ✅ COMPLETE
+
+**Modified:** `ui/WorldTransition.tsx`
+**Commit:** `d5283f8` — fix(web/signal): world-transition overlay no longer freezes mid-sequence
+**Decision:** Move schedule timers to a ref. nextWorld() mid-schedule was triggering an effect re-run whose cleanup nuked the still-pending fade-out timers, leaving the overlay stuck at opacity 1 with pointer-events blocking. Pre-existing bug, surfaced now because cage mode advances to 'playing' (no overlay layered on top to hide the stuck transition).
+
+### Puzzle redesign — A + B + C ✅ COMPLETE
+
+**Modified (12 files, +671/-252):**
+- `cage/levels.ts` — `monsters: MonsterSpawn[]` per level + `blockBudget` + `parBlocks` + `beatLocked`; 15 levels reseeded with intentional puzzle solutions
+- `cage/monster.ts` — `MonsterState` now carries `id` + `rule`; `spawnMonster(id, rule, col, row, dir?)`
+- `cage/enclosure.ts` — added `areAllEnclosed(monsters[])` that treats other monsters as walls
+- `audio/audioEngine.ts` — `isPlacementBeat(beatsPerStep)` exported for the beat-lock check
+- `engine/useGameStore.ts` — `monster | null` → `monsters[]`; placeBlock gates on budget + beat window; new tracking fields (cageBlocksUsedThisLevel, cageStarsThisRun, cageLastTapMissed); useSpecial fans out across all monsters; dev-only `window.__signalStore` for E2E probes
+- `engine/useCage.ts` — iterates monsters, fails on any escape, uses areAllEnclosed for solve
+- `scene/MonsterPawn.tsx` — renders N pawns, per-rule eye colour (drift red, bounce amber, split violet, silence cyan)
+- `scene/PathHintVisualizer.tsx` — aggregates predicted paths across all monsters with brightest-wins compositing
+- `scene/CageCelebration.tsx` — burst centroid is the monster cluster
+- `ui/CageHud.tsx` — BudgetDots row + BeatWindowIndicator pulse + missed-tap whispers
+- `ui/LevelCompleteOverlay.tsx` — ★ + 'par N · solved in M' on starred solves
+
+**Commit:** `21b9c60` — feat(web/signal): puzzle redesign — block budget + beat-lock + multi-monster
+**Decisions:**
+- Three-pillar redesign over single-mechanic addition. Spam-no-longer-works was the bigger problem than any one bolted-on feature.
+- Static & silence levels keep beatLocked off — they're spatial puzzles, not rhythm puzzles.
+- ALL monsters must be enclosed to solve. Each monster's BFS treats every other monster's cell as a wall.
+- Specials fan out to ALL matching monsters (Stun halts every monster regardless of rule; Mirror reverses every bounce monster).
+
+**Verified in preview:**
+- World transition advances cleanly (no freeze)
+- Multi-monster level 3-2 spawns drift + bounce
+- Beat-lock rejects off-beat taps (`lastMissed.reason === 'beat'`)
+
+---
 **Live URL:** https://www.handoffpack.com/lab/signal (rewrites to this repo's deployment when `LAB_URL` env var is set on handoffpack-www in Vercel)
 **This repo:** [lifestoryco/lab](https://github.com/lifestoryco/lab) — `web/` is the Next.js 14 app
 **Default mode:** Cage (puzzle). Free-play (Zen) accessible via bottom-right title link.
@@ -54,7 +109,11 @@ Plus the lab-repo-side commits:
 | Commit (lifestoryco/lab) | What |
 |---|---|
 | `0c00ca3` | feat(web): add Next.js 14 app hosting all handoffpack.com/lab/* pages — squash import |
-| (this commit) | docs(signal): port SESSION-STATE handoff for SIGNAL development continuity |
+| `b30a78e` | docs(signal): port SESSION-STATE handoff for SIGNAL development continuity |
+| `0789643` | feat(web/signal): per-world special items + celebrations + P2 fixes |
+| `c72637b` | refactor(web/signal): apply 3-agent code-review fixes (a11y zoom, contrast, GPU buffer churn, Space/X shortcut) |
+| `d5283f8` | fix(web/signal): world-transition overlay no longer freezes mid-sequence |
+| `21b9c60` | feat(web/signal): puzzle redesign — block budget + beat-lock + multi-monster |
 
 ---
 
@@ -77,8 +136,13 @@ web/
     │
     ├── cage/                                — Cage-specific engine
     │   ├── enclosure.ts                     — isEnclosed / nextStepTowardEdge / predictPath
-    │   ├── levels.ts                        — 15 level specs, BPM ramp, seed blocks
-    │   └── monster.ts                       — stepMonster rule dispatch
+    │   │                                      + areAllEnclosed (multi-monster BFS)
+    │   ├── levels.ts                        — 15 level specs: monsters[] + blockBudget +
+    │   │                                      parBlocks + beatLocked + BPM + seeds
+    │   ├── monster.ts                       — stepMonster (per-monster rule dispatch);
+    │   │                                      MonsterState carries id + rule
+    │   └── specials.ts                      — per-world ability registry (Sword/Mirror/
+    │                                          Anchor/Lantern) + STUN/REVEAL constants
     │
     ├── engine/
     │   ├── useCage.ts                       — cage runtime hook (onBeat subscriber)
@@ -101,7 +165,10 @@ web/
     │   ├── Monster.tsx                      — original Zen-gameover obelisk
     │   ├── MonsterPawn.tsx                  — in-play Cage pawn (rise + sink + flash)
     │   ├── PathHintVisualizer.tsx           — glows 3 cells of monster's predicted path
-    │   ├── CageCelebration.tsx              — drei Sparkles burst on solve
+    │   ├── CageCelebration.tsx              — drei Sparkles burst on solve, 5 per-biome
+    │   │                                      variants (puff / column / ripple / leaves /
+    │   │                                      sunburst), centroid of monster cluster
+    │   ├── RevealMarker.tsx                  — W5 lantern halo on the silence cell
     │   ├── SceneErrorBoundary.tsx           — WebGL fallback
     │   └── SceneFallback.tsx                — "requires a modern browser" copy
     │
@@ -109,8 +176,12 @@ web/
     │   ├── TitleScreen.tsx                  — SIGNAL wordmark, mode pill, free-play link
     │   ├── InstrumentSelector.tsx           — BPM pad (tap-tempo + drag), SPEED label
     │   ├── NarrativeOverlays.tsx            — in-play whispers (Zen + Cage)
-    │   ├── CageHud.tsx                      — level-ID intro, timer bar, rule hint, fail whisper
-    │   ├── LevelCompleteOverlay.tsx         — full-screen "Caged. / Tap to continue"
+    │   ├── CageHud.tsx                      — level-ID intro + par, timer bar, rule hint,
+    │   │                                      BudgetDots, BeatWindowIndicator, missed-tap
+    │   │                                      whispers, fail copy by reason
+    │   ├── SpecialButton.tsx                — bottom-left ability button (Space/X kbd)
+    │   ├── LevelCompleteOverlay.tsx         — full-screen "Caged. / par N · solved in M"
+    │   │                                      shows ★ when starred
     │   ├── CageFailOverlay.tsx              — Retry / Back to menu
     │   ├── WorldTransition.tsx              — biome-change ceremony
     │   └── ResultScreen.tsx                 — final composition, Share/Save, /s/[hash] viewer
@@ -131,29 +202,29 @@ web/
 
 ## What's still open (prioritized)
 
-### P0 — gameplay / feel tuning after playtest
+### P0 — playtest the redesigned puzzle on a real device
 
-Real-device feedback required. None are bugs, all are knob-turns.
+Major mechanic changes shipped in `21b9c60`. Need real-device confirmation that:
 
-1. **Monster motif volume / timbre.** Currently plays at `-10dB` on effectsBus with FMSynth (harmonicity 1.25, square modulation). Tune in `web/components/lab/signal/audio/audioEngine.ts` `motifSynth` config.
-2. **Kick drum punch.** `MembraneSynth` at `-3dB` equivalent via `Gain(0.75)`. May need sidechain-style ducking under placements, or swap to a 2-osc thump.
-3. **Per-level `beatsPerStep`.** Current values: 1-1 ∞ · 2-1 16 · 2-2 12 · 2-3 10 · 3-1 10 · 3-2 8 · 3-3 8 · 4-1 8 · 4-2 7 · 4-3 6 · silence ∞. Tune in `web/components/lab/signal/cage/levels.ts` after watching real players fail.
-4. **Placement-note duration/velocity.** Currently `'8n'` duration at 0.68 velocity. Might want shorter decay + louder attack for puzzle-feel.
+1. **Block budget feels tight, not punishing.** Current pars: 1-1=1, 1-2=2, 1-3=3, 2-1=4, 2-2=4, 2-3=4, 3-1=4, 3-2=6, 3-3=6, 4-1=5, 4-2=6, 4-3=7, 5-1=1, 5-2=1, 5-3=1. Margin (budget - par) is +1 except in tutorial + silence (=0). Adjust upward if star feels unattainable, downward if it feels gifted.
+2. **Beat-lock window is readable.** Currently 1-beat window before each step. The HUD pulse + soft "Wait for the pulse." whisper must give enough cue that off-beat misses don't feel arbitrary. Shorten BPM ramp if the window feels frantic at high BPM.
+3. **Multi-monster levels (3-2, 3-3, 4-2, 4-3) are solvable, not chaotic.** Per-monster eye colour helps (drift red, bounce amber, split violet, silence cyan). Path hint shows aggregated paths. If players still can't tell monsters apart, add a subtle floor-tint under each.
+4. **Tuning dials still in play (legacy P0):** monster motif volume / kick punch / `beatsPerStep` / placement-note decay. Tune in `audio/audioEngine.ts` and `cage/levels.ts` after watching real players fail.
 
 ### P1 — feature gaps you asked for that are not yet shipped
 
-1. **Rebrand to PULSE** (or alternate). Held for explicit approval. Touch points: `web/app/lab/signal/layout.tsx`, `web/app/lab/signal/page.tsx` metadata, `web/components/lab/signal/ui/TitleScreen.tsx` wordmark string, `web/app/api/og/signal/route.tsx` hero text, OG meta in `web/app/lab/signal/s/[hash]/page.tsx`. URL path stays `/lab/signal` to preserve any existing share links.
-2. **Sword / items for middle stages.** Unstarted. Rough scope: new placeable types with different behaviours (sword = kills monster on adjacency; warp block = teleports monster; mirror = reflects motif audio back). Would add a `placeable: 'wall' | 'sword' | 'warp'` field on `PlacedBlock` plus a selector UI. Estimate: 2-3 days.
+1. **Rebrand to PULSE** (or alternate). Held for explicit approval — user confirmed "keep SIGNAL for now" on 2026-04-25. Touch points still listed below for whenever the call changes: `web/app/lab/signal/layout.tsx`, `web/app/lab/signal/page.tsx` metadata, `web/components/lab/signal/ui/TitleScreen.tsx` wordmark string, `web/app/api/og/signal/route.tsx` hero text, OG meta in `web/app/lab/signal/s/[hash]/page.tsx`.
+2. ~~**Sword / items for middle stages.**~~ ✅ shipped 2026-04-25 in `0789643` as per-world specials (Sword/Mirror/Anchor/Lantern), then expanded in `21b9c60` to fan out across all monsters in multi-monster levels.
 3. **Bottom-row drum tracks.** User proposed "grid cells in the bottom row play drum sounds." Deferred. Would split `row === GRID_ROWS - 1` to map to kick/snare/hat/clap instead of pitch.
-4. **Per-world celebration animations.** Sparkles is a start. Distinct celebrations per biome candidates: rising-water shimmer for The Deep; falling-leaves for The Garden; radial-sunburst for The Truth. Research drei (`<Trail>`, `<Float>`, `<MeshTransmissionMaterial>`) or `wawa-vfx` for variety.
-5. **Second /code-review pass.** The previous pass only got Security results (3 other agents were rejected mid-run). Logic/Architecture/UX never ran.
+4. ~~**Per-world celebration animations.**~~ ✅ shipped 2026-04-25 in `0789643`/`c72637b` — 5 distinct biome variants in `scene/CageCelebration.tsx` (signal puff / temple column / deep ripple / garden leaves / truth sunburst) with biome-contrasting halo tones.
+5. ~~**Second /code-review pass.**~~ ✅ ran 2026-04-25 — 3-agent parallel review (logic, architecture, UX, no security per scope) on `0789643`. 9 findings remediated in `c72637b`.
 
 ### P2 — known-but-not-critical bugs
 
-1. **`matchMedia` call inside `useFrame`** at `web/components/lab/signal/postprocessing/PostFXPipeline.tsx` (~line 45). Allocates a MediaQueryList every frame. Hoist into a ref set once via `useEffect`.
-2. **`signal_biome_complete` never fires for the final biome** in `web/components/lab/signal/SignalPage.tsx`. Currently gated on `gamePhase === 'title' && worldIndex > 0` — but the final biome goes `playing → complete`, never through `title`. Add a branch that fires on `gamePhase === 'complete'` for the last biome too.
-3. **`encodeShareState` memoization** in ResultScreen busts on every render because `state` is a new object each SignalPage render. Wrap SignalPage's `sessionSummary` in a `useMemo` with stable deps.
-4. **`touchAction: 'none'` on the BPM button** doesn't stop the page from scrolling on some Android browsers during the initial hold. Consider adding `user-select: none` globally on `body` while `gamePhase === 'playing'`.
+1. ~~**`matchMedia` call inside `useFrame`**~~ ✅ fixed 2026-04-25 in `0789643` — hoisted to ref via `useEffect`, listens to media-query change events.
+2. ~~**`signal_biome_complete` never fires for the final biome**~~ ✅ fixed 2026-04-25 in `0789643` — added `gamePhase === 'complete'` branch.
+3. ~~**`encodeShareState` memoization**~~ ✅ fixed 2026-04-25 in `0789643` — wrapped `sessionSummary` in `useMemo` with stable deps.
+4. ~~**`touchAction: 'none'` Android scroll**~~ ✅ fixed 2026-04-25 in `0789643`, then refined in `c72637b` (scope to user-select + overscroll-behavior only — `touch-action` on body breaks system pinch-zoom for low-vision users; per-control `touch-action` is handled at the BPM pad).
 
 ### P3 — nice-to-haves
 
@@ -199,19 +270,20 @@ npm run build              # full build; catches edge-runtime OG route issues
 7. **Full-screen tap-to-continue** replaces tiny portal click target. 10s auto-advance.
 8. **Instant retry on fail.** No menu round-trip. Super Meat Boy pattern.
 9. **Repo migration.** SIGNAL lives in `lifestoryco/lab/web/` going forward; handoffpack-www becomes the marketing shell with env-gated rewrites.
+10. **Puzzle redesign over single-mechanic addition (2026-04-25).** "Cage one moving thing on a 10×10 grid with unlimited blocks" wasn't a puzzle. Block budget + beat-lock + multi-monster make every level a *find the right answer* problem instead of *spam until trapped*. Specials (Sword/Mirror/Anchor/Lantern) earn their place because multi-monster levels actually need them.
+11. **Schedule timers go on refs, not in effects (2026-04-25).** Effect cleanups cancel pending setTimeouts. The world-transition freeze was caused by `nextWorld()` mid-schedule triggering a re-render whose cleanup nuked the still-pending fade-out timers. Lesson: anything that must outlive a state change goes on a ref.
 
 ---
 
 ## First three moves for the next session
 
-1. **Real-device playtest on the deployed lab Vercel app.** Walk 1-1 → 1-3 (tutorial) → 2-1 → any level with split or silence. Note kick volume, motif droning, BPM feel, Sparkles intensity, tap-to-continue timing.
-2. **Decide on rebrand.** PULSE / LOOP / REFRAIN / TRAP / keep SIGNAL. Single small commit when picked.
+1. **Real-device playtest of the redesigned puzzle.** Walk 1-1 → 1-3 (1/2/3-block tutorials) → 2-2 (first beat-locked level) → 3-2 (first multi-monster: drift + bounce) → 4-3 (2 splits) → 5-1 (silence with par-1). Note: are pars achievable, does beat-lock feel readable at higher BPM, can you tell monsters apart in 3-2/3-3, does Lantern reveal feel useful in 5-1.
+2. **Tune the dials.** Most likely tweaks based on playtest: par margins in `cage/levels.ts`, monster step cadence (`beatsPerStep`), beat-lock window width in `audioEngine.isPlacementBeat`, motif volume in `audioEngine.ts`.
 3. **Pick next feature wave.** Options ranked by impact:
-   - Sword + items system (~2-3 days, biggest new mechanic)
-   - Per-world celebration variety (~1 day, uses drei)
-   - Analytics/perf fixes from P2 list (~2 hours)
-   - Second full /code-review (reveals more work)
-   - **Repo cutover** (P0.5) is independent work — can happen in parallel or in any order with the above.
+   - Bottom-row drum tracks (~1 day, last shipped P1 item)
+   - First-time discoverability whispers for special button + beat-lock + budget (~half day, medium-priority follow-up from review)
+   - Local leaderboards / star count display (~half day)
+   - **Repo cutover** (P0.5) — independent work. Vercel `LAB_URL` flip → verify rewrites → handoffpack-www cleanup PR. Requires Vercel dashboard access.
 
 ---
 
