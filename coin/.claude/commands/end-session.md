@@ -1,98 +1,91 @@
----
-description: Close a Coin work session cleanly. Verifies changes, runs tests, updates project state, pushes to origin.
----
+# END SESSION
 
-# /end-session
+> **Preamble:** You are closing a work session. The quality of this handoff determines the quality of the next session. Every commit must pass the type checker. The state doc must reflect reality, not aspiration. If you introduced a workaround during this session, document the real fix needed in What's Next. Boil the Lake.
 
-Close the session. Every step in order. No commentary between steps.
+Execute in order. No commentary between steps.
 
 ---
 
 ## Step 1 — Verify + commit all changes
 
-Run the test suite:
-```bash
-.venv/bin/pytest tests/ -q --tb=short 2>&1 | tail -20
-```
+Run your project's type checker (e.g., `npx tsc --noEmit`). If there are NEW errors you introduced, fix them. Pre-existing errors are acceptable.
 
-If there are test failures you introduced this session, fix them before continuing.
-Pre-existing failures are acceptable — document them.
-
-Check git status:
-```bash
-git status --short
-```
-
-Commit any uncommitted changes:
-- `feat:` new feature or capability
-- `fix:` bug fix
-- `refactor:` restructuring without behavior change
-- `docs:` documentation only
-- `test:` test additions/changes only
-- `chore:` dependency, config, tooling changes
+Then `git status`. If uncommitted changes exist:
+- Stage and commit with appropriate prefix
+- Prefixes: `feat:` · `fix:` · `refactor:` · `docs:` · `test:` · `chore:`
+- One commit per logical change. Don't batch unrelated work.
 
 ---
 
 ## Step 2 — Update project state
 
-Update `docs/state/project-state.md`. At the top insert:
+If `docs/state/project-state.md` exists, update these sections:
 
+**Header:** `_Last updated: YYYY-MM-DD | Session: <name> — <1-line description>_`
+
+**Current Status:** Update build status, active tasks, blockers in-place (replace, don't append).
+
+**What Was Just Done:** Insert a NEW block above the old one:
 ```markdown
-## What Was Just Done ({YYYY-MM-DD})
-
-### {Task name} ✅ COMPLETE  ← or 🚧 IN PROGRESS / ⏸ BLOCKED
-
+## What Was Just Done (YYYY-MM-DD — Session: <name>)
+### <Task/Feature> ✅ COMPLETE  ← or 🚧 IN PROGRESS / ⏸ BLOCKED
 **New files:** `path` — purpose
 **Modified:** `path` — what changed
-**Commits:** `{short hash}` — message
-**Decisions:** {Decision → Rationale}
+**Commits:** `hash` — message
+**Decisions:** Decision → Rationale (if any)
 ```
 
-Update in-place:
-- **Active Blockers** — remove resolved, add new
-- **Roadmap table** — mark completed ✅
-- **Resolved Bugs** — add any bugs fixed this session
+**What's Next:** Re-rank top 5. Remove completed items. Add new blockers.
 
-Commit the state update:
-```bash
-git add docs/state/project-state.md
-git commit -m "docs: update project state after {session description}
+**Previous Sessions:** Summarize old "What Was Just Done" entries to 2-3 lines and move to Previous Sessions. Keep max 4 full sessions visible.
 
-Authored by: Sean @ coin"
-```
+Commit: `docs: update session state for <name>`
 
 ---
 
-## Step 3 — Run the end script
+## Step 3 — Update memory (if project has one)
+
+If your project uses a persistent memory system (e.g., `~/.claude/projects/<project>/memory/`), add any **non-obvious learnings** from this session:
+- New gotchas discovered
+- Confirmed patterns that weren't documented
+- "Don't do X" lessons
+
+Skip if nothing new was learned. Don't duplicate what's already in CLAUDE.md.
+
+---
+
+## Step 4 — Run the end script
 
 ```bash
 bash scripts/end.sh "$PWD"
 ```
 
-If `⚠️ Uncommitted changes` appears, go back to Step 1.
-If `❌` appears, report the exact error.
+The script validates clean tree, summarizes commits, rebases onto origin/main, pushes, and handles cleanup.
+
+If it fails, report the exact error. Do not attempt manual workarounds.
 
 ---
 
-## Step 4 — Final report
+## Step 5 — Final report
 
 ```
 ═══════════════════════════════════════════════
-  Session Complete
-  Commits: {n}  |  HEAD: {short hash}  |  Pushed: ✅
+  Session Complete: <name>
+  Commits: <n>  |  Main: <hash>  |  Pushed: ✅
 ═══════════════════════════════════════════════
 
 What was done:
-  • {bullet}
+• bullet 1
+• bullet 2
 
 What's next:
-  1. {top priority from updated roadmap}
-  2. {second}
+1. Top priority
+2. Second
+3. Third
 ```
 
 ## Rules
-
-- Do NOT skip the state file update
-- Do NOT force-push
-- Do NOT commit `data/db/pipeline.db` or `.env`
-- Fix new test failures before pushing — never push broken tests
+- Do NOT skip the state file update if it exists — the next session depends on it
+- Do NOT use `--force` push
+- Do NOT modify files outside the worktree
+- If `end.sh` fails, report the error — don't work around it

@@ -1,37 +1,47 @@
----
-description: Execute a pending task prompt step-by-step. Reads the prompt file, implements it, verifies, and reports.
----
+# RUN TASK
 
-# /run-task [task-id]
+> **Preamble:** You are executing a pre-written session prompt. Follow it exactly — every step, every verification checkpoint, every human gate. Do not skip steps for speed. Do not deviate from the prompt's instructions. If the prompt asks you to do something that conflicts with CLAUDE.md rules or the current codebase state, STOP and tell the user rather than silently deviating. Boil the Lake.
 
-**Usage:** `/run-task S-1.2`
+**Input:** `$ARGUMENTS` (Task ID, e.g., `TASK-1.3`)
 
 ---
 
-## Steps
+## Step 1 — Parse the task ID
 
-1. Find the prompt file: `docs/tasks/prompts/pending/{task-id}_*.md`
-   - If not found: `❌ No prompt for {task-id} — run /prompt-builder {task-id} first`
-2. Read the prompt file in full
-3. Confirm acceptance criteria with the user before writing code
-4. Implement each step from the prompt
-5. Run the verification commands from the prompt
-6. If all criteria pass:
-   - Move prompt to `docs/tasks/prompts/complete/`
-   - Stage and commit:
-     ```bash
-     git add -p
-     git commit -m "feat: {task name}
+Extract the task ID from `$ARGUMENTS`. Normalize format: `TASK-1.3` → file pattern `TASK-1-3_*`.
 
-     Authored by: Sean @ coin"
-     ```
-7. Report completion:
-   ```
-   ✅ {task-id} complete — {n} files changed
-   Next: /docs-update {task-id}
-   ```
+If no task ID provided, print: `Usage: /run-task TASK-X.Y` and stop.
+
+---
+
+## Step 2 — Find the prompt
+
+Search `docs/tasks/pending/` for a file matching the pattern.
+
+- **Found in pending/** → proceed to Step 3
+- **Found in complete/** → print `⚠️ TASK-X.Y already completed. Prompt is in complete/. Re-run?` → stop
+- **Not found** → print `❌ No prompt exists for TASK-X.Y. Run /prompt-builder TASK-X.Y first.` → stop
+
+---
+
+## Step 3 — Load and execute
+
+Read the prompt file in full. It contains a self-contained session prompt with step-by-step instructions.
+
+Print:
+```
+═══════════════════════════════════════════════
+  Running: TASK-X.Y — <title from frontmatter>
+  Prompt:  docs/tasks/pending/<filename>
+═══════════════════════════════════════════════
+```
+
+Then execute the prompt exactly as written — follow every step, respect every human gate, run every verification command.
+
+---
 
 ## Rules
-- Never skip the verification step
-- Never mark complete if any acceptance criterion is untested
-- If blocked, keep prompt in pending/ and report what's blocking
+- Do NOT modify the prompt file itself
+- Do NOT skip human gates in the prompt
+- If any step conflicts with CLAUDE.md rules, STOP and surface the conflict — never silently deviate
+- After task completes, run `/update-docs TASK-X.Y` to update flight plan and move prompt to complete/

@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(.venv/bin/python scripts/*.py *)",
+      "Bash(.venv/bin/python -m pytest *)",
+      "Bash(.venv/bin/python -m pytest tests/*)",
+      "Bash(.venv/bin/python -c *)",
+      "Bash(.venv/bin/pip install *)",
+      "Bash(.venv/bin/pip list)",
+      "Bash(python3 --version)",
+      "Bash(python3 -m venv *)",
+      "Bash(sqlite3 data/db/pipeline.db *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(wc -l *)",
+      "Bash(grep -rn *)",
+      "Bash(find *)",
+      "Bash(git status *)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git branch *)",
+      "Bash(git show *)",
+      "Bash(brew list *)",
+      "Bash(open data/resumes/generated/*)",
+      "Read(/Users/tealizard/Documents/lab/coin/**)",
+      "Edit(/Users/tealizard/Documents/lab/coin/modes/*.md)",
+      "Edit(/Users/tealizard/Documents/lab/coin/scripts/*.py)",
+      "Edit(/Users/tealizard/Documents/lab/coin/careerops/*.py)",
+      "Edit(/Users/tealizard/Documents/lab/coin/tests/*.py)",
+      "Edit(/Users/tealizard/Documents/lab/coin/data/resumes/base.py)",
+      "Edit(/Users/tealizard/Documents/lab/coin/config.py)",
+      "Edit(/Users/tealizard/Documents/lab/coin/config/profile.yml)",
+      "Write(/Users/tealizard/Documents/lab/coin/data/resumes/generated/*.json)",
+      "Write(/Users/tealizard/Documents/lab/coin/data/applications/**)",
+      "Write(/Users/tealizard/Documents/lab/coin/data/interview-prep/*.md)",
+      "Write(/Users/tealizard/Documents/lab/coin/scripts/migrations/*.py)",
+      "Write(/Users/tealizard/Documents/lab/coin/tests/*.py)",
+      "Write(/Users/tealizard/Documents/lab/coin/tests/fixtures/**)",
+      "Write(/tmp/*)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(git push --force *)",
+      "Bash(git reset --hard *)",
+      "Bash(git clean -fd *)",
+      "Bash(curl * | sh)",
+      "Bash(curl * | bash)",
+      "Edit(/Users/tealizard/Documents/lab/coin/data/db/pipeline.db)",
+      "Edit(/Users/tealizard/Documents/lab/coin/data/resumes/generated/*_recruiter.pdf)",
+      "Write(/Users/tealizard/Documents/lab/coin/.env)"
+    ]
+  },
+  "env": {
+    "PYTHONUNBUFFERED": "1"
+  }
+}
