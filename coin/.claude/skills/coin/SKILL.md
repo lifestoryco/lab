@@ -44,6 +44,7 @@ Inspect `{{mode}}` (the user's input) and dispatch:
 | `audit <id>` or `audit` | `modes/audit.md` (truthfulness check on tailored JSON) |
 | `track <id> <status> [note]` or `applied <id>` etc. | `modes/track.md` |
 | `apply <id>` | `modes/apply.md` (live form fill — see `references/ats-patterns.md`) |
+| `network-scan <id>` or `network-scan <company>` | `modes/network-scan.md` (warm-intro discovery) |
 | `status`, `dashboard`, `pipeline` | `modes/status.md` |
 | `followup` or `follow up` | `modes/followup.md` (cadence tracker — flag overdue applies) |
 | `patterns` or `rejection patterns` | `modes/patterns.md` (analyze rejection clusters) |
@@ -96,6 +97,7 @@ Or pick a mode:
   /coin audit <id>            Truthfulness check before submitting
   /coin track <id> <status>   Transition pipeline state
   /coin apply <id>            Live ATS form fill (Greenhouse / Lever)
+  /coin network-scan <id>     Find warm intros at target company
   /coin followup              Flag overdue applications
   /coin patterns              Analyze rejection clusters
   /coin interview-prep <id>   Generate prep brief for upcoming interview
