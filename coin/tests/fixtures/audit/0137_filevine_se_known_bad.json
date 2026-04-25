@@ -1,0 +1,33 @@
+{
+  "role_id": 137,
+  "lane": "enterprise-sales-engineer",
+  "company": "Filevine",
+  "title": "Sales Engineer",
+  "url": "https://www.linkedin.com/jobs/view/sales-engineer-at-filevine-4379991176",
+  "generated_at": "2026-04-24T20:30:00+00:00",
+  "resume": {
+    "executive_summary": "Sales Engineer / Solutions Architect with 15 years of operator experience selling and shipping B2B SaaS to enterprise buyers. Co-owned Hydrant — a software engineering firm — through to a successful 2025 exit, after personally leading pre-sales discovery and stakeholder demos for accounts including Cox Communications, Safeguard Global, and TitanX (Series A). Earlier, drove a Utah wireless ISP from $6M to $13M ARR as the technical credibility on seven-figure deals — culminating in a $27M Boston Omaha acquisition. MBA + PMP behind disciplined deal mechanics, plus the storytelling instinct to turn dense technical capability into a demo that closes. Comfortable in front of CTOs, IT directors, and procurement; equally comfortable building the demo myself when the SE team is heads-down.",
+    "top_bullets": [
+      "Drove enterprise revenue from $6M to $13M ARR at Utah Broadband as the technical credibility on seven-figure circuit deployments for Fortune 500 clients — culminating in $27M acquisition by Boston Omaha (NASDAQ: BOMN)",
+      "Led pre-sales discovery and stakeholder demos for Cox Communications' True Local Labs as Hydrant's account lead — turned a concept into a $1M Year 1 revenue platform delivered 12 months ahead of plan",
+      "Served as fractional COO for TitanX, designing the GTM motion, demo environment, and deal qualification framework that enabled $27M Series A in under 24 months",
+      "Currently lead enterprise discovery and technical scoping at CA Engineering for IoT and wireless deals across aerospace, industrial, and Fortune 500 energy clients — translate prospect business problems into solution architectures and demos that close"
+    ],
+    "skills_matched": [
+      "enterprise sales engineering",
+      "consultative discovery",
+      "B2B SaaS demos",
+      "technical storytelling",
+      "stakeholder management",
+      "executive communication",
+      "RFP / SOW authorship",
+      "CRM systems (Salesforce, HubSpot, Odoo)",
+      "rapid product absorption"
+    ],
+    "skills_gap": [
+      "Legal-tech / case management software (JD: 'plus but not necessary')",
+      "AI/LLM product hands-on (worth a 1-week prep before final round)"
+    ],
+    "cover_letter_hook": "Filevine's pitch — turn legal operations from reactive to proactive — is exactly what I did at Hydrant for sales operations, customer success, and compliance teams across dozens of B2B engagements. I'm at home in the moment when a prospect says 'show me how this would work for my firm' and you have to compose a credible answer live. I'm a short drive from your SLC office and would be in-person five days a week from day one."
+  }
+}
