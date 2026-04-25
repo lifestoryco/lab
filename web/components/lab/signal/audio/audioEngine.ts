@@ -40,6 +40,12 @@ export function onBeat(fn: BeatSub): () => void {
   return () => { beatSubs.delete(fn) }
 }
 
+// Read-only accessor for non-React consumers (useSpecial reads this once per
+// activation to compute stun expiry without subscribing to a per-beat store).
+export function getCurrentBeat(): number {
+  return beatCounter
+}
+
 // Whether the monster motif should loop this session (set by cage hook).
 let motifActive = false
 export function setMotifActive(active: boolean) {

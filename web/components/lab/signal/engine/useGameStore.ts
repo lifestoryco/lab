@@ -6,6 +6,7 @@ import type { MonsterState } from '../cage/monster'
 import { spawnMonster } from '../cage/monster'
 import { cageLevelAt, CAGE_LEVELS, type CageLevel } from '../cage/levels'
 import { specialForWorld, REVEAL_DURATION_MS, STUN_DURATION_BEATS } from '../cage/specials'
+import { getCurrentBeat } from '../audio/audioEngine'
 
 // --- Types ---
 
@@ -105,7 +106,7 @@ interface GameState {
   specialChargesRemaining: number   // 0 or 1
   monsterStunUntilBeat: number | null   // beat index after which monster resumes
   revealActiveUntil: number | null      // performance.now() ms — for W5 lantern
-  currentBeat: number                   // mirrors audio engine beat counter for stun checks
+  lastSpecialFiredAt: number | null     // performance.now() ms — used for one-shot UI flash feedback
   // -----------------------------------------------------------------------
 
   // Actions
@@ -131,7 +132,6 @@ interface GameState {
   nextCageLevel: () => void
   // Per-world special — fires the world's unique ability if a charge remains.
   useSpecial: () => void
-  setCurrentBeat: (beat: number) => void
   reset: () => void
 }
 
@@ -182,7 +182,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   specialChargesRemaining: 0,
   monsterStunUntilBeat: null,
   revealActiveUntil: null,
-  currentBeat: 0,
+  lastSpecialFiredAt: null,
 
   placeBlock: (col, row) => {
     const state = get()
@@ -390,6 +390,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       specialChargesRemaining: specialForWorld(level.worldIndex) ? 1 : 0,
       monsterStunUntilBeat: null,
       revealActiveUntil: null,
+      lastSpecialFiredAt: null,
     })
   },
 
@@ -454,6 +455,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       specialChargesRemaining: specialForWorld(level.worldIndex) ? 1 : 0,
       monsterStunUntilBeat: null,
       revealActiveUntil: null,
+      lastSpecialFiredAt: null,
     })
   },
 
@@ -485,8 +487,6 @@ export const useGameStore = create<GameState>((set, get) => ({
     set({ gamePhase: 'playing', isPlaying: true })
   },
 
-  setCurrentBeat: (beat) => set({ currentBeat: beat }),
-
   // Per-world special — fires the world's unique ability if a charge remains.
   useSpecial: () => {
     const s = get()
@@ -497,28 +497,28 @@ export const useGameStore = create<GameState>((set, get) => ({
     const meta = specialForWorld(s.cageLevel.worldIndex)
     if (!meta) return
 
+    const firedAt = performance.now()
+
     switch (meta.kind) {
       case 'stun': {
         // Halt monster for STUN_DURATION_BEATS transport beats.
         set({
-          monsterStunUntilBeat: s.currentBeat + STUN_DURATION_BEATS,
+          monsterStunUntilBeat: getCurrentBeat() + STUN_DURATION_BEATS,
           specialChargesRemaining: 0,
+          lastSpecialFiredAt: firedAt,
         })
         return
       }
       case 'reverse': {
-        // Flip current bounce direction. (Drift uses no dir — but reverse on
-        // drift snaps to a new heading away from current edge approach.)
+        // Flip the bounce-rule monster's heading. Bounce monsters always have
+        // a non-zero dir vector (spawned with dirCol=1, dirRow=0; updated by
+        // stepMonster on every move), so a simple negation is sufficient and
+        // visibly reverses the next step.
         const m = s.monster
-        const newDir = { dirCol: -m.dirCol, dirRow: -m.dirRow }
-        // If both dirs are 0 (split / drift starts), nudge to a heading
-        // pointing back to centre.
-        if (newDir.dirCol === 0 && newDir.dirRow === 0) {
-          newDir.dirCol = m.col > s.cageLevel.startCol ? -1 : 1
-        }
         set({
-          monster: { ...m, dirCol: newDir.dirCol, dirRow: newDir.dirRow },
+          monster: { ...m, dirCol: -m.dirCol, dirRow: -m.dirRow },
           specialChargesRemaining: 0,
+          lastSpecialFiredAt: firedAt,
         })
         return
       }
@@ -527,14 +527,24 @@ export const useGameStore = create<GameState>((set, get) => ({
         set({
           monster: { ...s.monster, echoCol: null, echoRow: null },
           specialChargesRemaining: 0,
+          lastSpecialFiredAt: firedAt,
         })
         return
       }
       case 'reveal': {
+        const expires = firedAt + REVEAL_DURATION_MS
         set({
-          revealActiveUntil: performance.now() + REVEAL_DURATION_MS,
+          revealActiveUntil: expires,
           specialChargesRemaining: 0,
+          lastSpecialFiredAt: firedAt,
         })
+        // Auto-clear so RevealMarker unmounts (its wrapper guards on null).
+        if (typeof window !== 'undefined') {
+          window.setTimeout(() => {
+            const cur = get().revealActiveUntil
+            if (cur === expires) set({ revealActiveUntil: null })
+          }, REVEAL_DURATION_MS + 50)
+        }
         return
       }
     }
@@ -574,7 +584,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     specialChargesRemaining: 0,
     monsterStunUntilBeat: null,
     revealActiveUntil: null,
-    currentBeat: 0,
+    lastSpecialFiredAt: null,
   }),
 }))
 

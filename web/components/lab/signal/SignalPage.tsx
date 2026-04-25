@@ -161,8 +161,12 @@ export default function SignalPage() {
     }
   }, [mode, gamePhase, worldIndex, cageLevel, cageLastResult])
 
-  // Lock body selection + scroll while playing — prevents Android browsers
-  // from scroll-hijacking the BPM hold gesture and stops accidental text selection.
+  // Lock text-selection + overscroll while playing — prevents Android browsers
+  // from scrolling the page during the BPM hold gesture and stops accidental
+  // text selection. Critically: do NOT set touch-action:none on body — that
+  // breaks system pinch-zoom and double-tap-zoom for low-vision users
+  // (WCAG 1.4.4 / 1.4.10). Per-control touch-action is handled where needed
+  // (e.g. InstrumentSelector's BPM pad).
   useEffect(() => {
     if (typeof document === 'undefined') return
     if (gamePhase !== 'playing') return
@@ -171,17 +175,14 @@ export default function SignalPage() {
       userSelect: body.style.userSelect,
       webkitUserSelect: body.style.webkitUserSelect,
       overscroll: body.style.overscrollBehavior,
-      touchAction: body.style.touchAction,
     }
     body.style.userSelect = 'none'
     body.style.webkitUserSelect = 'none'
     body.style.overscrollBehavior = 'none'
-    body.style.touchAction = 'none'
     return () => {
       body.style.userSelect = prev.userSelect
       body.style.webkitUserSelect = prev.webkitUserSelect
       body.style.overscrollBehavior = prev.overscroll
-      body.style.touchAction = prev.touchAction
     }
   }, [gamePhase])
 

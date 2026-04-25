@@ -25,8 +25,6 @@ export function useCage() {
     // Runs on every transport 4n. Monster moves when (beatIdx % beatsPerStep) === 0.
     const unsubBeat = onBeat((beatIdx) => {
       const s = getGameState()
-      // Mirror beat into store for stun-duration math (cheap setter).
-      if (s.currentBeat !== beatIdx) s.setCurrentBeat(beatIdx)
       if (s.mode !== 'cage') return
       if (s.gamePhase !== 'playing') return
       if (!s.monster || !s.cageLevel) return

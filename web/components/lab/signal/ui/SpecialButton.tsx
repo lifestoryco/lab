@@ -11,20 +11,35 @@ export default function SpecialButton() {
   const mode      = useGameStore(s => s.mode)
   const worldIndex = useGameStore(s => s.worldIndex)
   const charges   = useGameStore(s => s.specialChargesRemaining)
+  const firedAt   = useGameStore(s => s.lastSpecialFiredAt)
   const useSpecial = useGameStore(s => s.useSpecial)
 
   const [flash, setFlash] = useState(false)
 
   const meta = specialForWorld(worldIndex)
 
-  // Brief flash whenever charges drops to 0 — visual feedback that the ability fired.
+  // Flash on actual activation — keyed off lastSpecialFiredAt so world
+  // transitions (which also drop charges to 0 transiently) don't trigger
+  // a phantom flash.
   useEffect(() => {
-    if (charges === 0 && meta) {
-      setFlash(true)
-      const t = setTimeout(() => setFlash(false), 600)
-      return () => clearTimeout(t)
+    if (firedAt === null) return
+    setFlash(true)
+    const t = setTimeout(() => setFlash(false), 600)
+    return () => clearTimeout(t)
+  }, [firedAt])
+
+  // Keyboard shortcut — Space or 'X' fires the special when available.
+  useEffect(() => {
+    if (gamePhase !== 'playing' || mode !== 'cage' || !meta || charges <= 0) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === 'Space' || e.key === 'x' || e.key === 'X') {
+        e.preventDefault()
+        useSpecial()
+      }
     }
-  }, [charges, meta])
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [gamePhase, mode, meta, charges, useSpecial])
 
   if (gamePhase !== 'playing') return null
   if (mode !== 'cage') return null
@@ -37,7 +52,9 @@ export default function SpecialButton() {
     <div
       style={{
         position: 'fixed',
-        bottom: 'clamp(16px, 3vh, 48px)',
+        // Lift above InstrumentSelector (which sits bottom-centre at ~16-48px)
+        // so the two controls don't overlap on narrow portrait screens.
+        bottom: 'clamp(96px, 14vh, 140px)',
         left: 'clamp(16px, 3vw, 36px)',
         zIndex: 11,
         display: 'flex',
@@ -51,13 +68,14 @@ export default function SpecialButton() {
         onClick={useSpecial}
         disabled={!enabled}
         aria-label={`${meta.name} — ${meta.hint}`}
+        title={meta.hint}
         style={{
           width: 56,
           height: 56,
           borderRadius: '50%',
           background: enabled ? `radial-gradient(circle at 35% 30%, ${accent}33, #0d0d0d 70%)` : '#0a0a0a',
-          border: enabled ? `1.5px solid ${accent}` : '1px solid rgba(255,255,255,0.12)',
-          color: enabled ? accent : '#3a3a3a',
+          border: enabled ? `1.5px solid ${accent}` : '1px solid rgba(255,255,255,0.22)',
+          color: enabled ? accent : '#6a6a6a',
           fontFamily: '"Cormorant Garamond", Georgia, serif',
           fontSize: 28,
           lineHeight: '56px',

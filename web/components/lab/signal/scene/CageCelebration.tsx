@@ -3,6 +3,9 @@
 // Per-world celebration on monster-cage. Each biome gets a distinct visual
 // signature on top of the existing camera-breath / bloom-bump / particle-burst
 // stack. All variants are GPU-batched (drei Sparkles) so cost is <1ms/frame.
+//
+// Sparkles instances stay mounted across cage solves and toggle visibility
+// instead of unmount/remount, avoiding GPU buffer churn on iOS Safari.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Sparkles } from '@react-three/drei'
@@ -18,33 +21,29 @@ interface BurstSpec {
   scale: [number, number, number]
   speed: number
   noise: number
-  yOffset: number   // hover above the cell
+  yOffset: number
 }
 
-// World-specific celebration personalities. Index = worldIndex (0..4).
 const VARIANT_BY_WORLD: BurstSpec[] = [
-  // 0 — The Signal: tight white sparkle puff (default tutorial-friendly)
   { count: 80,  size: 12, scale: [3.5, 2.8, 3.5], speed: 1.2, noise: 2.1, yOffset: 0.6 },
-  // 1 — The Temple: vertical golden column rising
   { count: 110, size: 10, scale: [1.6, 6.0, 1.6], speed: 1.6, noise: 1.4, yOffset: 1.4 },
-  // 2 — The Deep: wide cyan ripple, low and broad
   { count: 140, size: 9,  scale: [6.0, 1.2, 6.0], speed: 0.9, noise: 2.6, yOffset: 0.25 },
-  // 3 — The Garden: green falling-leaves spread, slow drift
   { count: 130, size: 13, scale: [5.2, 4.0, 5.2], speed: 0.6, noise: 3.4, yOffset: 1.1 },
-  // 4 — The Truth: bright sunburst — many big sparkles, fast spread
   { count: 180, size: 16, scale: [5.8, 5.8, 5.8], speed: 2.2, noise: 2.0, yOffset: 0.9 },
 ]
 
-// Each biome gets two colours — primary + secondary halo — so the burst feels
-// layered instead of monochrome. Falls back to white when biome has no accent.
+// Each biome gets two colours — primary core + secondary halo — so the burst
+// silhouettes against the floor instead of washing into it. Secondary tones
+// are intentionally darker / complementary so green-on-green and white-on-white
+// floors still read.
 function colorPairFor(worldIndex: number): [string, string] {
   switch (worldIndex) {
-    case 0: return ['#ffffff', '#cccccc']
-    case 1: return ['#ffd27a', '#ff8c5a']  // temple gold + ember
-    case 2: return ['#7fdfff', '#3aa0e0']  // deep cyan + indigo wash
-    case 3: return ['#a8e063', '#56ab2f']  // garden lime + leaf-green
-    case 4: return ['#fff7c2', '#ffb84a']  // truth bright cream + sun-amber
-    default: return ['#ffffff', '#aaaaaa']
+    case 0: return ['#ffffff', '#666666']  // signal: white core, charcoal halo
+    case 1: return ['#ffd27a', '#7a3a10']  // temple: gold core, ember-brown halo
+    case 2: return ['#7fdfff', '#0d3a66']  // deep:   cyan core, indigo halo
+    case 3: return ['#a8e063', '#1a3d1a']  // garden: lime core, dark-green halo
+    case 4: return ['#fff7c2', '#4a3000']  // truth:  cream core, deep-amber halo
+    default: return ['#ffffff', '#222222']
   }
 }
 
@@ -57,6 +56,8 @@ export default function CageCelebration() {
   } | null>(null)
   const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Effect cleanup must run unconditionally so a mid-burst unmount or rapid
+  // result-change cancels any pending setBurst(null).
   useEffect(() => {
     if (mode !== 'cage') return
     if (!lastResult?.solved) return
@@ -66,23 +67,29 @@ export default function CageCelebration() {
     setBurst({ x, z, worldIndex: s.worldIndex, at: performance.now() })
     if (clearTimer.current) clearTimeout(clearTimer.current)
     clearTimer.current = setTimeout(() => setBurst(null), LIFE_MS)
-    return () => {
-      if (clearTimer.current) clearTimeout(clearTimer.current)
-    }
   }, [lastResult, mode])
 
-  const variant = burst ? VARIANT_BY_WORLD[burst.worldIndex] ?? VARIANT_BY_WORLD[0] : null
-  const [primary, secondary] = burst
-    ? colorPairFor(burst.worldIndex)
-    : ['#ffffff', '#ffffff']
+  useEffect(() => () => {
+    if (clearTimer.current) clearTimeout(clearTimer.current)
+  }, [])
+
+  // Use the burst's worldIndex for variant selection while the burst is live;
+  // when no burst, fall back to current world so geometry is pre-allocated for
+  // the upcoming world's variant.
+  const fallbackWorld = useGameStore(s => s.worldIndex)
+  const activeWorld = burst?.worldIndex ?? fallbackWorld
+  const variant = VARIANT_BY_WORLD[activeWorld] ?? VARIANT_BY_WORLD[0]
+  const [primary, secondary] = colorPairFor(activeWorld)
 
   const colorPrimary   = useMemo(() => new THREE.Color(primary),   [primary])
   const colorSecondary = useMemo(() => new THREE.Color(secondary), [secondary])
 
-  if (!burst || !variant) return null
+  const x = burst?.x ?? 0
+  const z = burst?.z ?? 0
+  const visible = !!burst
 
   return (
-    <group position={[burst.x, variant.yOffset * TILE_SIZE, burst.z]}>
+    <group position={[x, variant.yOffset * TILE_SIZE, z]} visible={visible}>
       {/* Primary core burst */}
       <Sparkles
         count={variant.count}
@@ -93,7 +100,8 @@ export default function CageCelebration() {
         color={colorPrimary}
         opacity={0.95}
       />
-      {/* Secondary halo — wider, fewer particles, slower, complementary tone */}
+      {/* Secondary halo — wider, complementary tone so the burst stays legible
+          against any biome floor. */}
       <Sparkles
         count={Math.round(variant.count * 0.45)}
         size={variant.size * 1.6}
