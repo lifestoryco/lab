@@ -1,8 +1,15 @@
 """Pure-Python fit scoring. No LLM calls.
 
-8-dimension scoring system with A-F letter grades:
-  comp (0.30) · company_tier (0.15) · skill_match (0.22) · title_match (0.12)
-  remote (0.08) · application_effort (0.05) · seniority_fit (0.05) · culture_fit (0.03)
+8-dimension scoring system with A-F letter grades.
+Weights are sourced from config.FIT_SCORE_WEIGHTS — the docstring used to
+embed numbers, but they drifted; trust config.py as the source of truth.
+
+Current weights (2026-04-25):
+  comp 0.28 · company_tier 0.20 · skill_match 0.22 · title_match 0.12
+  remote 0.06 · application_effort 0.04 · seniority_fit 0.05 · culture_fit 0.03
+
+Quarantine: roles with lane='out_of_band' (FAANG-tier pedigree filter)
+short-circuit to composite=0, grade=F. See score_breakdown.
 """
 
 from __future__ import annotations
@@ -28,13 +35,30 @@ def score_comp(comp_min: int | None, comp_max: int | None) -> float:
 
 
 def score_company_tier(company: str | None) -> float:
-    """100 = FAANG+, 75 = high-growth unicorn, 45 = unknown/small."""
+    """Score the role's company against COMPANY_TIERS (config.py).
+
+    INVERTED for Sean's reality: tier1 = in-league mid-market / Utah tech (100),
+    tier2 = recognized brand (75), tier4 = FAANG pedigree filter (25).
+    Default for unknown small co = 65 (neutral, no penalty).
+
+    Match rule: substring of the canonical name appears IN the company string
+    (one direction only). Bidirectional matching previously caused false
+    positives ('mx' in 'mxnet labs', 'roku' in 'rokumetrics').
+    """
     if not company:
         return COMPANY_TIER_DEFAULT_SCORE
     c = company.lower().strip()
     for tier_cfg in COMPANY_TIERS.values():
-        if any(name in c or c in name for name in tier_cfg["companies"]):
-            return tier_cfg["score"]
+        # One-direction substring: canonical name in company name only.
+        # Tokenize on word boundary so 'mx' doesn't match 'mxnet' but 'mx' as
+        # a standalone word does.
+        for canonical in tier_cfg["companies"]:
+            cn = canonical.lower()
+            if cn == c or f" {cn} " in f" {c} " or c.startswith(f"{cn} ") or c.endswith(f" {cn}"):
+                return tier_cfg["score"]
+            # Also accept multi-word canonicals as substrings (e.g. "boston omaha")
+            if " " in cn and cn in c:
+                return tier_cfg["score"]
     return COMPANY_TIER_DEFAULT_SCORE
 
 
@@ -166,7 +190,23 @@ def score_breakdown(
           ...
         }
       }
+
+    Quarantine guard: lane='out_of_band' (FAANG-tier pedigree filter) returns
+    composite=0, grade=F immediately. Without this, LANES.get('out_of_band', {})
+    returns {} and the per-dimension scorers fall through to defaults producing
+    a 30-40 composite that resurrects quarantined roles in the dashboard.
     """
+    if lane == "out_of_band" or lane not in LANES:
+        return {
+            "composite": 0.0,
+            "grade": "F",
+            "dimensions": {
+                dim: {"raw": 0.0, "weight": w, "contribution": 0.0}
+                for dim, w in FIT_SCORE_WEIGHTS.items()
+            },
+            "quarantined": True,
+        }
+
     if profile is None:
         from data.resumes.base import PROFILE
         profile = PROFILE

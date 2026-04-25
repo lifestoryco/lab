@@ -99,7 +99,12 @@ def upsert_role(role: dict) -> int:
                 comp_min    = COALESCE(excluded.comp_min, roles.comp_min),
                 comp_max    = COALESCE(excluded.comp_max, roles.comp_max),
                 comp_source = COALESCE(excluded.comp_source, roles.comp_source),
-                fit_score   = COALESCE(excluded.fit_score, roles.fit_score),
+                -- Preserve out_of_band quarantine sink: a 0 fit_score on a
+                -- quarantined row must NOT be overwritten by re-discovery.
+                fit_score   = CASE
+                                WHEN roles.lane = 'out_of_band' THEN 0
+                                ELSE COALESCE(excluded.fit_score, roles.fit_score)
+                              END,
                 source      = COALESCE(excluded.source, roles.source),
                 updated_at  = excluded.updated_at
         """, payload)
@@ -172,6 +177,43 @@ def update_jd_parsed(role_id: int, parsed: dict) -> None:
             conn.execute(
                 "UPDATE roles SET comp_min = ?, comp_max = ?, comp_source = 'explicit', updated_at = ? WHERE id = ?",
                 (parsed["comp_min"], parsed.get("comp_max"), now, role_id),
+            )
+
+
+def update_lane(role_id: int, lane: str) -> None:
+    """Reassign a role to a different lane. Used by auto-pipeline after
+    score_title picks the best-matching archetype, and by migrations.
+    Setting lane='out_of_band' also forces fit_score to 0 to honor the
+    quarantine sink (matches the upsert ON CONFLICT logic)."""
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with _conn() as conn:
+        if lane == "out_of_band":
+            conn.execute(
+                "UPDATE roles SET lane = ?, fit_score = 0, updated_at = ? WHERE id = ?",
+                (lane, now, role_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE roles SET lane = ?, updated_at = ? WHERE id = ?",
+                (lane, now, role_id),
+            )
+
+
+def update_role_notes(role_id: int, note: str, append: bool = True) -> None:
+    """Add a note to the role's notes field. Default behavior: append with
+    timestamp + newline. Pass append=False to overwrite (rarely correct)."""
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    stamp = datetime.now(timezone.utc).date().isoformat()
+    with _conn() as conn:
+        if append:
+            conn.execute(
+                "UPDATE roles SET notes = COALESCE(notes,'') || ? || char(10), updated_at = ? WHERE id = ?",
+                (f"[{stamp}] {note}", now, role_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE roles SET notes = ?, updated_at = ? WHERE id = ?",
+                (note, now, role_id),
             )
 
 
