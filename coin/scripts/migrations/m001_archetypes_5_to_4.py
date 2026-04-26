@@ -31,7 +31,7 @@ sys.path.insert(0, str(ROOT))
 
 from config import DB_PATH
 
-MIGRATION_ID = "001_archetypes_5_to_4"
+MIGRATION_ID = "m001_archetypes_5_to_4"
 
 LANE_MAP = {
     "cox-style-tpm": "mid-market-tpm",
@@ -52,75 +52,94 @@ def _ensure_migrations_table(conn: sqlite3.Connection) -> None:
 
 def _already_applied(conn: sqlite3.Connection) -> bool:
     row = conn.execute(
-        "SELECT 1 FROM schema_migrations WHERE id = ?", (MIGRATION_ID,)
+        "SELECT 1 FROM schema_migrations WHERE id IN (?, ?)",
+        (MIGRATION_ID, "001_archetypes_5_to_4"),  # accept legacy unprefixed id
     ).fetchone()
     return row is not None
+
+
+def apply(db_path: Path | str, dry_run: bool = False, *, verbose: bool = True) -> int:
+    """Idempotently apply the 5→4 archetype rename. Returns the number of rows
+    rewritten; 0 if already applied, the DB doesn't exist, or `dry_run`."""
+    db_path = Path(db_path)
+    if not db_path.exists():
+        if verbose:
+            print(f"DB does not exist at {db_path}; nothing to migrate.")
+        return 0
+
+    conn = sqlite3.connect(str(db_path))
+    conn.row_factory = sqlite3.Row
+    try:
+        _ensure_migrations_table(conn)
+        # If the `roles` table doesn't exist yet (fresh DB before init_db), there
+        # is nothing to rewrite — record applied so future runs skip the lookup.
+        has_roles = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='roles'"
+        ).fetchone()
+        if not has_roles:
+            if not dry_run:
+                conn.execute(
+                    "INSERT OR IGNORE INTO schema_migrations (id, applied_at) "
+                    "VALUES (?, datetime('now'))",
+                    (MIGRATION_ID,),
+                )
+                conn.commit()
+            return 0
+
+        if _already_applied(conn) and not dry_run:
+            if verbose:
+                print(f"Migration {MIGRATION_ID} already applied. Skipping.")
+            return 0
+
+        pre = {
+            row["lane"]: row["count"]
+            for row in conn.execute("SELECT lane, COUNT(*) AS count FROM roles GROUP BY lane")
+        }
+        if verbose:
+            print("Lane distribution BEFORE:")
+            for lane, count in sorted(pre.items()):
+                print(f"  {lane or '(null)':32s} {count}")
+
+        if dry_run:
+            if verbose:
+                print("\n[DRY RUN] Would apply:")
+                for old, new in LANE_MAP.items():
+                    count = pre.get(old, 0)
+                    if count:
+                        print(f"  {old} → {new}  ({count} rows)")
+            return 0
+
+        rewritten = 0
+        if verbose:
+            print("\nApplying migration:")
+        for old, new in LANE_MAP.items():
+            cur = conn.execute("UPDATE roles SET lane = ? WHERE lane = ?", (new, old))
+            if cur.rowcount:
+                rewritten += cur.rowcount
+                if verbose:
+                    print(f"  {old} → {new}  ({cur.rowcount} rows)")
+        cur = conn.execute("UPDATE roles SET fit_score = 0 WHERE lane = 'out_of_band'")
+        if cur.rowcount and verbose:
+            print(f"  Quarantine sink applied: {cur.rowcount} rows zeroed")
+
+        conn.execute(
+            "INSERT OR IGNORE INTO schema_migrations (id, applied_at) "
+            "VALUES (?, datetime('now'))",
+            (MIGRATION_ID,),
+        )
+        conn.commit()
+        if verbose:
+            print(f"\n✅ Migration {MIGRATION_ID} applied.")
+        return rewritten
+    finally:
+        conn.close()
 
 
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true", help="Report changes without applying")
     args = ap.parse_args()
-
-    db_path = ROOT / DB_PATH
-    if not db_path.exists():
-        print(f"DB does not exist at {db_path}; nothing to migrate.")
-        return 0
-
-    conn = sqlite3.connect(str(db_path))
-    conn.row_factory = sqlite3.Row
-    _ensure_migrations_table(conn)
-
-    if _already_applied(conn) and not args.dry_run:
-        print(f"Migration {MIGRATION_ID} already applied. Skipping.")
-        conn.close()
-        return 0
-
-    # Report pre-state
-    pre = {
-        row["lane"]: row["count"]
-        for row in conn.execute("SELECT lane, COUNT(*) AS count FROM roles GROUP BY lane")
-    }
-    print("Lane distribution BEFORE:")
-    for lane, count in sorted(pre.items()):
-        print(f"  {lane:32s} {count}")
-
-    if args.dry_run:
-        print("\n[DRY RUN] Would apply:")
-        for old, new in LANE_MAP.items():
-            count = pre.get(old, 0)
-            if count:
-                print(f"  {old} → {new}  ({count} rows)")
-        conn.close()
-        return 0
-
-    # Apply
-    print("\nApplying migration:")
-    for old, new in LANE_MAP.items():
-        cur = conn.execute("UPDATE roles SET lane = ? WHERE lane = ?", (new, old))
-        if cur.rowcount:
-            print(f"  {old} → {new}  ({cur.rowcount} rows)")
-    # Force quarantine sink: any row in out_of_band gets fit_score=0
-    cur = conn.execute("UPDATE roles SET fit_score = 0 WHERE lane = 'out_of_band'")
-    if cur.rowcount:
-        print(f"  Quarantine sink applied: {cur.rowcount} rows zeroed")
-
-    conn.execute(
-        "INSERT INTO schema_migrations (id, applied_at) VALUES (?, datetime('now'))",
-        (MIGRATION_ID,),
-    )
-    conn.commit()
-
-    # Report post-state
-    post = {
-        row["lane"]: row["count"]
-        for row in conn.execute("SELECT lane, COUNT(*) AS count FROM roles GROUP BY lane")
-    }
-    print("\nLane distribution AFTER:")
-    for lane, count in sorted(post.items()):
-        print(f"  {lane:32s} {count}")
-    conn.close()
-    print(f"\n✅ Migration {MIGRATION_ID} applied.")
+    apply(DB_PATH, dry_run=args.dry_run)
     return 0
 
 

@@ -97,7 +97,8 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
-    db_path = ROOT / DB_PATH
+    # config.DB_PATH is always absolute (config._absolute_db_path()).
+    db_path = Path(DB_PATH)
     db_path.parent.mkdir(parents=True, exist_ok=True)
 
     if args.dry_run:
