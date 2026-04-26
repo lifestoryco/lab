@@ -469,25 +469,31 @@ heuristic fit scores 65–83.
 
 ## Next Session Agenda
 
-1. **Drop a photo + render Sean's resume with the new template** — save a
-   headshot to `coin/data/photos/sean.jpg`, set `PROFILE['photo_path'] = 'photos/sean.jpg'`
-   in `data/resumes/base.py`, then `/coin pdf 137 --recruiter` to verify.
-2. **Re-tailor the Filevine and Netflix roles under the new template** —
-   the previous 0004 / 0137 generated PDFs use the old single-column layout.
-3. **Submit the Netflix application** — resume JSON exists; render with
-   `/coin pdf 4 --recruiter` against the new template, then `/coin track 4 applied`.
-4. **Score + tailor the Netflix TPM 6 — Data Systems role** ($420K–$630K).
-5. **Re-score all existing roles** under the 8-dimension weights — wire
+1. **Filevine SE (id 137) — submit.** The new-template render lives at
+   `data/resumes/generated/0137_enterprise-sales-engineer_2026-04-24_recruiter.pdf`
+   and is great. Drop a headshot at `coin/data/photos/sean.jpg`, set
+   `PROFILE['photo_path'] = 'photos/sean.jpg'` in `data/resumes/base.py`,
+   re-render with `/coin pdf 137 --recruiter`, then submit and
+   `/coin track 137 applied`.
+2. **Discover next batch** — `/coin discover` (now Utah+Remote default,
+   consultancies filtered) to refresh the pipeline. Score new arrivals.
+3. **Re-score all existing roles** under the 8-dimension weights — wire
    `--rescore-existing` flag on `discover.py` (still not implemented).
-6. **Levels.fyi comp extraction** — Phase 2 backlog item; most roles still
+4. **Levels.fyi comp extraction** — Phase 2 backlog; most roles still
    have null `comp_min`.
-7. **Optional polish (LOW from this session, deferred):**
+5. **Optional polish (LOW from Session 6, deferred):**
    - Bundle Inter woff2 under `data/fonts/` for Reactive-Resume parity
      typography (currently fall back to Helvetica Neue/Arial).
    - Extract `careerops/dashboard.py` from `pipeline.py` (presentation vs
      CRUD separation — flagged LOW by architecture review).
    - Resolve `sean@lifestory.co` vs `sivins@caengineering.com` canonical
      outbound email (COIN-EMAIL-CANONICAL — tracked in _shared.md).
+
+**Closed (do not re-open):** Netflix TPM Infrastructure (id 4) — Session 3
+tailor under the legacy `cox-style-tpm` lane; output was stale and the
+underlying lane was renamed by m001. Artifacts deleted; row marked
+`closed` with note. Re-tailor from scratch under `mid-market-tpm` if Sean
+revisits.
 
 ## Active Blockers
 
