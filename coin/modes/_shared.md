@@ -139,7 +139,10 @@ Use `scripts/update_role.py --id N --status S` to transition. **Human gate requi
 | `ofertas` | Compare offers + negotiation counter-brief | `modes/ofertas.md` |
 | `cover-letter` | Generate 3-para cover letter (hook/proof/fit) + PDF | `modes/cover-letter.md` |
 | `network-scan` | Find LinkedIn warm intros at target company | `modes/network-scan.md` |
-| `onboarding` | First-run profile setup (9 deterministic questions) | `modes/onboarding.md` |
+| `onboarding` | First-run profile setup (7 deterministic questions) | `modes/onboarding.md` |
+| `followup` | Cadence tracker — 7d / 14d / 21d windows on outreach + applications | `modes/followup.md` |
+| `patterns` | Rejection cluster analysis (lane × tier × grade pivot) | `modes/patterns.md` |
+| `interview-prep` | Round-aware brief: recruiter / HM / technical / panel / final | `modes/interview-prep.md` |
 
 ## How to invoke Python (always via Bash tool)
 
