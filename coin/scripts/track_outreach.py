@@ -29,9 +29,26 @@ from config import DB_PATH
 
 VALID_ACTIONS = ("sent", "replied")
 
+# Static action → SQL map. Defence-in-depth: keeps column names out of f-strings
+# even though VALID_ACTIONS already whitelists at the entry. If a future
+# contributor adds a third action, the SQL must be added here too — review
+# pressure stays loud.
+_SQL_BY_ACTION: dict[str, dict[str, str]] = {
+    "sent": {
+        "no_note":   "UPDATE outreach SET sent_at = ? WHERE id = ?",
+        "with_note": "UPDATE outreach SET sent_at = ?, notes = ? WHERE id = ?",
+    },
+    "replied": {
+        "no_note":   "UPDATE outreach SET replied_at = ? WHERE id = ?",
+        "with_note": "UPDATE outreach SET replied_at = ?, notes = ? WHERE id = ?",
+    },
+}
+
 
 def _conn() -> sqlite3.Connection:
-    db = ROOT / DB_PATH
+    # config.DB_PATH is always absolute (config._absolute_db_path() anchors
+    # legacy relative defaults under the project root before export).
+    db = Path(DB_PATH)
     db.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(db))
     conn.row_factory = sqlite3.Row
@@ -53,7 +70,7 @@ def update(outreach_id: int, action: str, note: str | None = None) -> dict:
     """Set sent_at or replied_at for an outreach row. Returns the updated row."""
     if action not in VALID_ACTIONS:
         raise ValueError(f"action must be one of {VALID_ACTIONS}; got {action!r}")
-    column = "sent_at" if action == "sent" else "replied_at"
+    sql_variant = _SQL_BY_ACTION[action]
     with _conn() as conn:
         if not _table_exists(conn, "outreach"):
             raise RuntimeError(
@@ -66,15 +83,9 @@ def update(outreach_id: int, action: str, note: str | None = None) -> dict:
         if not existing:
             raise ValueError(f"outreach id={outreach_id} not found")
         if note is None:
-            conn.execute(
-                f"UPDATE outreach SET {column} = ? WHERE id = ?",
-                (_now(), outreach_id),
-            )
+            conn.execute(sql_variant["no_note"], (_now(), outreach_id))
         else:
-            conn.execute(
-                f"UPDATE outreach SET {column} = ?, notes = ? WHERE id = ?",
-                (_now(), note, outreach_id),
-            )
+            conn.execute(sql_variant["with_note"], (_now(), note, outreach_id))
         row = conn.execute(
             "SELECT * FROM outreach WHERE id = ?", (outreach_id,)
         ).fetchone()

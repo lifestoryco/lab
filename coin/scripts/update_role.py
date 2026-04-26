@@ -10,17 +10,18 @@ Usage:
 from __future__ import annotations
 
 import sys, pathlib
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
 import argparse
 import json
-import sys
 from pathlib import Path
 
 from careerops.pipeline import (
     init_db, update_status, update_fit_score, update_jd_parsed,
     STATUSES, TERMINAL_STATUSES,
 )
+from careerops.paths import validate_under
 
 def main() -> int:
     init_db()
@@ -48,7 +49,10 @@ def main() -> int:
         print(f"role {args.id} fit={args.fit}")
 
     if args.parsed_jd:
-        data = json.loads(Path(args.parsed_jd).read_text())
+        # --parsed-jd contents are persisted to roles.parsed_jd; constrain to data/
+        # so callers cannot exfiltrate arbitrary file contents into the DB.
+        validated = validate_under(Path(args.parsed_jd), ROOT / "data", "--parsed-jd")
+        data = json.loads(validated.read_text())
         update_jd_parsed(args.id, data)
         print(f"role {args.id} parsed JD saved ({len(data)} keys)")
 

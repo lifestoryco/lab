@@ -29,6 +29,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from weasyprint import HTML
 
 from careerops.pipeline import init_db, get_role
+from careerops.paths import validate_under
 from careerops.score import score_grade
 from config import (
     GENERATED_RESUMES_DIR,
@@ -75,8 +76,22 @@ def render(role_id: int, resume_path: Path, out_path: Path, recruiter: bool = Fa
     target_role = resume_doc.get("target_role")  # for header_role_for_pdf below
 
     from data.resumes.base import PROFILE, get_target_locations
-    profile_yml = yaml.safe_load(Path(PROFILE_YAML_PATH).read_text())
+    profile_yml = yaml.safe_load((ROOT / PROFILE_YAML_PATH).read_text())
     target_locations = get_target_locations()
+
+    # If a photo_path is set, validate it lives under data/ before exposing it
+    # via file:// to WeasyPrint. The render-time base_url is data/, so any
+    # photo path must resolve there too. Returns None when missing/unsafe so
+    # the template falls back to the text-only header.
+    profile_for_render = dict(PROFILE)
+    photo_rel = PROFILE.get("photo_path")
+    if photo_rel:
+        candidate = (ROOT / TEMPLATE_DIR / photo_rel).resolve()
+        data_root = (ROOT / TEMPLATE_DIR).resolve()
+        if str(candidate).startswith(str(data_root) + "/") and candidate.exists():
+            profile_for_render["photo_path"] = str(candidate)
+        else:
+            profile_for_render["photo_path"] = None
 
     lane = role.get("lane") or ""
     lane_cfg = profile_yml.get("archetypes", {}).get(lane, {})
@@ -94,7 +109,7 @@ def render(role_id: int, resume_path: Path, out_path: Path, recruiter: bool = Fa
     env = _build_env()
     template = env.get_template(template_name)
     html_content = template.render(
-        profile=PROFILE,
+        profile=profile_for_render,
         role=role,
         resume=resume,
         lane=lane,
@@ -103,6 +118,7 @@ def render(role_id: int, resume_path: Path, out_path: Path, recruiter: bool = Fa
         header_role=header_role,
         target_role=target_role,
         target_locations=target_locations,
+        is_internal=not recruiter,  # tracking template renders the warning banner
     )
 
     # base_url scoped to <project>/data/ — file:// resolution can only reach
@@ -136,8 +152,9 @@ def main() -> int:
     if not args.role_id and not args.input:
         ap.error("Provide --role-id or --input")
 
+    allowed = ROOT / GENERATED_RESUMES_DIR
     if args.input:
-        resume_path = Path(args.input)
+        resume_path = validate_under(Path(args.input), allowed, "--input")
         try:
             role_id = int(resume_path.stem.split("_")[0])
         except (ValueError, IndexError):
@@ -152,7 +169,7 @@ def main() -> int:
             return 1
         role_id = args.role_id
 
-    out_path = _resolve_out_path(resume_path, args.recruiter, args.out)
+    out_path = validate_under(_resolve_out_path(resume_path, args.recruiter, args.out), allowed, "--out")
     render(role_id, resume_path, out_path, recruiter=args.recruiter)
     return 0
 

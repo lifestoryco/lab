@@ -30,6 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from config import DB_PATH, LINKEDIN_CONNECTIONS_CSV
+from careerops.paths import validate_under
 
 DEFAULT_CSV = LINKEDIN_CONNECTIONS_CSV
 
@@ -233,13 +234,16 @@ def import_csv(db_path: str | Path, csv_path: str | Path, dry_run: bool = False)
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", default=DEFAULT_CSV)
-    ap.add_argument("--db", default=str(ROOT / DB_PATH))
+    # config.DB_PATH is absolute (config._absolute_db_path()) — pass through.
+    ap.add_argument("--db", default=DB_PATH)
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
     csv_path = Path(args.csv)
     if not csv_path.is_absolute():
         csv_path = ROOT / csv_path
+    # Refuse arbitrary paths — keeps a stray --csv /etc/passwd from being parsed.
+    csv_path = validate_under(csv_path, ROOT / "data", "--csv")
 
     if not csv_path.exists():
         print(
@@ -253,10 +257,18 @@ def main() -> int:
         )
         return 1
 
+    # DB lives in the user-data dir (persistent across worktrees) by default,
+    # or under data/db/ if a legacy relative COIN_DB_PATH is configured.
     db_path = Path(args.db).resolve()
-    allowed_db_root = (ROOT / "data" / "db").resolve()
-    if not str(db_path).startswith(str(allowed_db_root) + "/") and db_path.parent != allowed_db_root:
-        ap.error(f"--db must be under {allowed_db_root}")
+    allowed_roots = [
+        (ROOT / "data" / "db").resolve(),  # legacy in-tree
+        Path(DB_PATH).parent.resolve(),    # configured user-data dir
+    ]
+    if not any(
+        db_path == root or db_path.parent == root or str(db_path).startswith(str(root) + "/")
+        for root in allowed_roots
+    ):
+        ap.error(f"--db must be under one of: {[str(r) for r in allowed_roots]}")
     db_path.parent.mkdir(parents=True, exist_ok=True)
     summary = import_csv(db_path, csv_path, dry_run=args.dry_run)
 
