@@ -40,6 +40,9 @@ archetypes:
       - hardware + software delivery
       - RF / wireless / IoT
       - PRD authorship
+    rendercv_themes:
+      primary: engineeringresumes
+      alts: [classic, harvard]
 
   enterprise-sales-engineer:
     label: Enterprise SE / Solutions Architect (IoT, wireless, industrial SaaS)
@@ -56,6 +59,9 @@ archetypes:
       - technical deal credibility
       - RF / IoT / SaaS domain depth
       - SOW + PRD authorship
+    rendercv_themes:
+      primary: classic
+      alts: [moderncv, sb2nov]
 
   iot-solutions-architect:
     label: IoT / Wireless Solutions Architect (technical pre-sales + delivery)
@@ -73,6 +79,9 @@ archetypes:
       - embedded systems integration
       - industrial deployments
       - hardware + firmware coordination
+    rendercv_themes:
+      primary: engineeringclassic
+      alts: [engineeringresumes, ink]
 
   revenue-ops-operator:
     label: RevOps / BizOps Operator (Series B–D, Utah-friendly)
@@ -89,3 +98,6 @@ archetypes:
       - GTM systems
       - cross-functional P&L
       - Salesforce / HubSpot ops
+    rendercv_themes:
+      primary: sb2nov
+      alts: [classic, opal]

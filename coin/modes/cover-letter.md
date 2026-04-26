@@ -1,4 +1,4 @@
-# Coin Mode — `cover-letter` (standalone cover letter generation)
+# Coin Mode — `cover-letter` (standalone cover letter generation, v2)
 
 > Load `modes/_shared.md` first.
 
@@ -8,6 +8,15 @@ letter can each have the right voice (resume = past-tense bullet; letter =
 present-tense narrative).
 
 Port of the `proficiently` skill collection's cover-letter pattern.
+
+> **v2 (2026-04-25):** Reads from the experience DB via `careerops.experience`
+> (m005 schema). The truthfulness gate is now structural via
+> `careerops.score_panel.truthfulness_gate` — every metric in the rendered
+> cover letter MUST trace to an `outcome` row attached to its source
+> accomplishment. References below to `PROFILE.positions[*]` remain valid
+> (base.py seeds the experience tables) but the **runtime gate is against
+> the `outcome` table**, not the dict. Run `scripts/seed_from_base_py.py`
+> first if you haven't this session.
 
 ---
 

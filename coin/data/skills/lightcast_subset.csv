@@ -1,0 +1,563 @@
+name,lightcast_id,category,slug
+Technical Program Management,,Program Management,technical-program-management
+Program Management,,Program Management,program-management
+Cross-Functional Program Management,,Program Management,cross-functional-program-management
+Multi-Team Program Coordination,,Program Management,multi-team-program-coordination
+Program Execution,,Program Management,program-execution
+Program Governance,,Program Management,program-governance
+Program Charter Development,,Program Management,program-charter-development
+Program Risk Management,,Program Management,program-risk-management
+Program Budget Management,,Program Management,program-budget-management
+Program Scope Definition,,Program Management,program-scope-definition
+Program Roadmap,,Program Management,program-roadmap
+Program Lifecycle Management,,Program Management,program-lifecycle-management
+Release Management,,Program Management,release-management
+Stakeholder Management,,Program Management,stakeholder-management
+Executive Stakeholder Communication,,Program Management,executive-stakeholder-communication
+Cross-Functional Orchestration,,Program Management,cross-functional-orchestration
+Steering Committee Facilitation,,Program Management,steering-committee-facilitation
+Status Reporting,,Program Management,status-reporting
+Capacity Planning,,Program Management,capacity-planning
+Resource Planning,,Program Management,resource-planning
+Risk Mitigation,,Program Management,risk-mitigation
+Issue Management,,Program Management,issue-management
+Change Control,,Program Management,change-control
+Dependency Management,,Program Management,dependency-management
+Critical Path Analysis,,Program Management,critical-path-analysis
+Milestone Management,,Program Management,milestone-management
+Project Management,,Project Management,project-management
+Project Planning,,Project Management,project-planning
+Project Execution,,Project Management,project-execution
+Project Closeout,,Project Management,project-closeout
+PMP Certification,,Project Management,pmp-certification
+PRINCE2,,Project Management,prince2
+Agile Project Management,,Project Management,agile-project-management
+Scrum Master,,Project Management,scrum-master
+Kanban,,Project Management,kanban
+SAFe Agile,,Project Management,safe-agile
+Waterfall Methodology,,Project Management,waterfall-methodology
+Hybrid Project Methodology,,Project Management,hybrid-project-methodology
+Agile,,Methodology,agile
+Scrum,,Methodology,scrum
+Lean,,Methodology,lean
+Six Sigma,,Methodology,six-sigma
+Design Thinking,,Methodology,design-thinking
+Test-Driven Development,,Methodology,test-driven-development
+Continuous Integration,,Methodology,continuous-integration
+Continuous Delivery,,Methodology,continuous-delivery
+DevOps,,Methodology,devops
+GitOps,,Methodology,gitops
+OKRs,,Methodology,okrs
+KPI Definition,,Methodology,kpi-definition
+Balanced Scorecard,,Methodology,balanced-scorecard
+PDCA Cycle,,Methodology,pdca-cycle
+Root Cause Analysis,,Methodology,root-cause-analysis
+Cross-Functional Leadership,,Leadership,cross-functional-leadership
+Engineering Leadership,,Leadership,engineering-leadership
+Technical Leadership,,Leadership,technical-leadership
+Servant Leadership,,Leadership,servant-leadership
+People Management,,Leadership,people-management
+Mentoring,,Leadership,mentoring
+Coaching,,Leadership,coaching
+Conflict Resolution,,Leadership,conflict-resolution
+Decision Making,,Leadership,decision-making
+Strategic Planning,,Leadership,strategic-planning
+Organizational Design,,Leadership,organizational-design
+Team Building,,Leadership,team-building
+Hiring and Recruiting,,Leadership,hiring-and-recruiting
+Performance Management,,Leadership,performance-management
+1:1 Coaching,,Leadership,one-on-one-coaching
+Influencing Without Authority,,Leadership,influencing-without-authority
+Executive Presence,,Leadership,executive-presence
+C-Suite Communication,,Leadership,c-suite-communication
+Board Presentation,,Leadership,board-presentation
+Vendor Management,,Leadership,vendor-management
+Contract Negotiation,,Leadership,contract-negotiation
+Master Service Agreement,,Leadership,master-service-agreement
+SOW Authoring,,Leadership,sow-authoring
+PRD Authoring,,Documentation,prd-authoring
+Product Requirements Document,,Documentation,product-requirements-document
+Statement of Work,,Documentation,statement-of-work
+Technical Specification,,Documentation,technical-specification
+Architecture Decision Records,,Documentation,architecture-decision-records
+Runbook Authoring,,Documentation,runbook-authoring
+Confluence,,Documentation,confluence
+Notion,,Documentation,notion
+Wiki Documentation,,Documentation,wiki-documentation
+RF Engineering,,Wireless,rf-engineering
+RF Site Planning,,Wireless,rf-site-planning
+RF Propagation Analysis,,Wireless,rf-propagation-analysis
+Wi-Fi,,Wireless,wifi
+Wi-Fi 6,,Wireless,wifi-6
+Wi-Fi 6E,,Wireless,wifi-6e
+Wi-Fi 7,,Wireless,wifi-7
+Bluetooth,,Wireless,bluetooth
+Bluetooth Low Energy,,Wireless,bluetooth-low-energy
+Z-Wave,,Wireless,z-wave
+Zigbee,,Wireless,zigbee
+LoRaWAN,,Wireless,lorawan
+Cellular IoT,,Wireless,cellular-iot
+LTE,,Wireless,lte
+LTE-M,,Wireless,lte-m
+NB-IoT,,Wireless,nb-iot
+4G,,Wireless,4g
+5G,,Wireless,5g
+mmWave,,Wireless,mmwave
+Wireless Site Survey,,Wireless,wireless-site-survey
+Spectrum Analysis,,Wireless,spectrum-analysis
+Antenna Design,,Wireless,antenna-design
+Antenna Tuning,,Wireless,antenna-tuning
+Radio Resource Management,,Wireless,radio-resource-management
+Wireless Network Design,,Wireless,wireless-network-design
+Wireless ISP Operations,,Wireless,wireless-isp-operations
+Tower Site Management,,Wireless,tower-site-management
+Microwave Backhaul,,Wireless,microwave-backhaul
+Point-to-Point Wireless,,Wireless,point-to-point-wireless
+Point-to-Multipoint,,Wireless,point-to-multipoint
+WISP,,Wireless,wisp
+Spectrum Licensing,,Wireless,spectrum-licensing
+FCC Compliance,,Wireless,fcc-compliance
+EMC Compliance,,Wireless,emc-compliance
+SDR,,Wireless,software-defined-radio
+Software Defined Radio,,Wireless,software-defined-radio-2
+IoT,,IoT,iot
+Internet of Things,,IoT,internet-of-things
+Industrial IoT,,IoT,industrial-iot
+IIoT,,IoT,iiot
+IoT Architecture,,IoT,iot-architecture
+IoT Deployment,,IoT,iot-deployment
+IoT Solutions Design,,IoT,iot-solutions-design
+IoT Security,,IoT,iot-security
+IoT Device Provisioning,,IoT,iot-device-provisioning
+Edge Computing,,IoT,edge-computing
+Edge Devices,,IoT,edge-devices
+Edge Analytics,,IoT,edge-analytics
+Industrial Sensors,,IoT,industrial-sensors
+Vibration Monitoring,,IoT,vibration-monitoring
+Predictive Maintenance,,IoT,predictive-maintenance
+Asset Tracking,,IoT,asset-tracking
+Smart Building,,IoT,smart-building
+Home Automation,,IoT,home-automation
+Smart Home Safety Systems,,IoT,smart-home-safety-systems
+Connected Devices,,IoT,connected-devices
+MQTT,,IoT,mqtt
+CoAP,,IoT,coap
+LwM2M,,IoT,lwm2m
+OTA Firmware Updates,,IoT,ota-firmware-updates
+Device Management,,IoT,device-management
+Sensor Networks,,IoT,sensor-networks
+LPWAN,,IoT,lpwan
+Embedded Systems,,Embedded,embedded-systems
+Embedded Firmware,,Embedded,embedded-firmware
+Firmware Engineering,,Embedded,firmware-engineering
+Real-Time Operating Systems,,Embedded,real-time-operating-systems
+RTOS,,Embedded,rtos
+FreeRTOS,,Embedded,freertos
+Bare-Metal Programming,,Embedded,bare-metal-programming
+Microcontroller Programming,,Embedded,microcontroller-programming
+ARM Cortex,,Embedded,arm-cortex
+ESP32,,Embedded,esp32
+Nordic nRF,,Embedded,nordic-nrf
+Manufacturing Test,,Embedded,manufacturing-test
+Test Fixture Design,,Embedded,test-fixture-design
+Production Test Engineering,,Embedded,production-test-engineering
+Hardware-Software Integration,,Embedded,hardware-software-integration
+B2B SaaS,,SaaS,b2b-saas
+Enterprise SaaS,,SaaS,enterprise-saas
+SaaS Platform Development,,SaaS,saas-platform-development
+Multi-Tenant Architecture,,SaaS,multi-tenant-architecture
+SaaS Onboarding,,SaaS,saas-onboarding
+SaaS Customer Success,,SaaS,saas-customer-success
+SaaS Pricing Strategy,,SaaS,saas-pricing-strategy
+SaaS Metrics,,SaaS,saas-metrics
+ARR,,SaaS,arr
+Annual Recurring Revenue,,SaaS,annual-recurring-revenue
+MRR,,SaaS,mrr
+Monthly Recurring Revenue,,SaaS,monthly-recurring-revenue
+Churn Reduction,,SaaS,churn-reduction
+Retention Strategy,,SaaS,retention-strategy
+Net Revenue Retention,,SaaS,net-revenue-retention
+Gross Margin,,SaaS,gross-margin
+Customer Acquisition Cost,,SaaS,customer-acquisition-cost
+Lifetime Value,,SaaS,lifetime-value
+Cloud Architecture,,Cloud,cloud-architecture
+AWS,,Cloud,aws
+Azure,,Cloud,azure
+Google Cloud Platform,,Cloud,gcp
+GCP,,Cloud,gcp-2
+Cloud Migration,,Cloud,cloud-migration
+Hybrid Cloud,,Cloud,hybrid-cloud
+Multi-Cloud,,Cloud,multi-cloud
+Serverless,,Cloud,serverless
+Containers,,Cloud,containers
+Docker,,Cloud,docker
+Kubernetes,,Cloud,kubernetes
+Microservices,,Cloud,microservices
+API Design,,Cloud,api-design
+RESTful API,,Cloud,restful-api
+GraphQL,,Cloud,graphql
+gRPC,,Cloud,grpc
+Service Mesh,,Cloud,service-mesh
+Infrastructure as Code,,Cloud,infrastructure-as-code
+Terraform,,Cloud,terraform
+CI/CD,,Cloud,ci-cd
+GitHub Actions,,Cloud,github-actions
+Observability,,Cloud,observability
+Site Reliability Engineering,,Cloud,site-reliability-engineering
+Incident Response,,Cloud,incident-response
+Sales Engineering,,Sales Engineering,sales-engineering
+Solutions Engineering,,Sales Engineering,solutions-engineering
+Solutions Architecture,,Sales Engineering,solutions-architecture
+Pre-Sales Engineering,,Sales Engineering,pre-sales-engineering
+Technical Pre-Sales,,Sales Engineering,technical-pre-sales
+Post-Sales Engineering,,Sales Engineering,post-sales-engineering
+Customer-Facing Engineering,,Sales Engineering,customer-facing-engineering
+Solutions Consulting,,Sales Engineering,solutions-consulting
+Technical Consulting,,Sales Engineering,technical-consulting
+Discovery Calls,,Sales Engineering,discovery-calls
+Customer Discovery,,Sales Engineering,customer-discovery
+Demos,,Sales Engineering,demos
+Technical Demonstrations,,Sales Engineering,technical-demonstrations
+Proof of Concept,,Sales Engineering,proof-of-concept
+POC Delivery,,Sales Engineering,poc-delivery
+Pilot Program Management,,Sales Engineering,pilot-program-management
+RFP Response,,Sales Engineering,rfp-response
+RFI Response,,Sales Engineering,rfi-response
+Solutioning,,Sales Engineering,solutioning
+Bid Management,,Sales Engineering,bid-management
+Win Theme Development,,Sales Engineering,win-theme-development
+Technical Discovery,,Sales Engineering,technical-discovery
+Technical Win,,Sales Engineering,technical-win
+Solution Selling,,Sales,solution-selling
+Consultative Selling,,Sales,consultative-selling
+Challenger Sale,,Sales,challenger-sale
+MEDDIC,,Sales,meddic
+MEDDPICC,,Sales,meddpicc
+SPIN Selling,,Sales,spin-selling
+Sandler Sales,,Sales,sandler-sales
+Account Management,,Sales,account-management
+Strategic Account Management,,Sales,strategic-account-management
+Enterprise Account Management,,Sales,enterprise-account-management
+Key Account Management,,Sales,key-account-management
+Named Account Strategy,,Sales,named-account-strategy
+Land and Expand,,Sales,land-and-expand
+Cross-Sell,,Sales,cross-sell
+Upsell,,Sales,upsell
+Pipeline Management,,Sales,pipeline-management
+Forecasting,,Sales,forecasting
+Quota Attainment,,Sales,quota-attainment
+Sales Cycle Management,,Sales,sales-cycle-management
+Closing Strategy,,Sales,closing-strategy
+Negotiation,,Sales,negotiation
+Pricing Strategy,,Sales,pricing-strategy
+Deal Strategy,,Sales,deal-strategy
+Deal Desk,,Sales,deal-desk
+Revenue Operations,,RevOps,revenue-operations
+RevOps,,RevOps,revops
+Sales Operations,,RevOps,sales-operations
+Marketing Operations,,RevOps,marketing-operations
+Customer Success Operations,,RevOps,customer-success-operations
+Sales Enablement,,RevOps,sales-enablement
+Sales Process Optimization,,RevOps,sales-process-optimization
+Sales Process Design,,RevOps,sales-process-design
+Sales Cycle Analytics,,RevOps,sales-cycle-analytics
+Funnel Analysis,,RevOps,funnel-analysis
+Conversion Optimization,,RevOps,conversion-optimization
+Lead Scoring,,RevOps,lead-scoring
+Sales Forecasting,,RevOps,sales-forecasting
+Territory Planning,,RevOps,territory-planning
+Quota Planning,,RevOps,quota-planning
+Compensation Plan Design,,RevOps,compensation-plan-design
+Commission Modeling,,RevOps,commission-modeling
+Pricing and Packaging,,RevOps,pricing-and-packaging
+Deal Approval Workflow,,RevOps,deal-approval-workflow
+GTM Strategy,,GTM,gtm-strategy
+Go-to-Market Strategy,,GTM,go-to-market-strategy
+GTM Execution,,GTM,gtm-execution
+Product Launch,,GTM,product-launch
+Product Marketing,,GTM,product-marketing
+Demand Generation,,GTM,demand-generation
+ABM,,GTM,abm
+Account-Based Marketing,,GTM,account-based-marketing
+Field Marketing,,GTM,field-marketing
+Channel Strategy,,GTM,channel-strategy
+Partnerships,,GTM,partnerships
+Channel Partnerships,,GTM,channel-partnerships
+Strategic Alliances,,GTM,strategic-alliances
+Reseller Management,,GTM,reseller-management
+OEM Partnerships,,GTM,oem-partnerships
+Co-Selling,,GTM,co-selling
+Salesforce,,Sales Tools,salesforce
+Salesforce Administration,,Sales Tools,salesforce-administration
+Salesforce CPQ,,Sales Tools,salesforce-cpq
+HubSpot,,Sales Tools,hubspot
+HubSpot CRM,,Sales Tools,hubspot-crm
+HubSpot Marketing Hub,,Sales Tools,hubspot-marketing-hub
+Pipedrive,,Sales Tools,pipedrive
+Outreach,,Sales Tools,outreach
+Salesloft,,Sales Tools,salesloft
+Gong,,Sales Tools,gong
+Chorus,,Sales Tools,chorus
+ZoomInfo,,Sales Tools,zoominfo
+LinkedIn Sales Navigator,,Sales Tools,linkedin-sales-navigator
+Apollo.io,,Sales Tools,apollo-io
+Outreach.io,,Sales Tools,outreach-io
+Mutiny,,Sales Tools,mutiny
+6sense,,Sales Tools,6sense
+Demandbase,,Sales Tools,demandbase
+Clearbit,,Sales Tools,clearbit
+Drift,,Sales Tools,drift
+Intercom,,Sales Tools,intercom
+Marketo,,Marketing Tools,marketo
+Pardot,,Marketing Tools,pardot
+Eloqua,,Marketing Tools,eloqua
+Mailchimp,,Marketing Tools,mailchimp
+Customer.io,,Marketing Tools,customer-io
+Iterable,,Marketing Tools,iterable
+Braze,,Marketing Tools,braze
+Segment,,Marketing Tools,segment
+Mixpanel,,Marketing Tools,mixpanel
+Amplitude,,Marketing Tools,amplitude
+Heap,,Marketing Tools,heap
+Google Analytics,,Marketing Tools,google-analytics
+Google Tag Manager,,Marketing Tools,google-tag-manager
+Looker,,BI,looker
+Tableau,,BI,tableau
+Power BI,,BI,power-bi
+Mode,,BI,mode
+Sigma,,BI,sigma
+Hex,,BI,hex
+Snowflake,,BI,snowflake
+BigQuery,,BI,bigquery
+Redshift,,BI,redshift
+dbt,,BI,dbt
+Airflow,,BI,airflow
+SQL,,BI,sql
+Python for Data Analysis,,BI,python-for-data-analysis
+Excel,,BI,excel
+JIRA,,Project Tools,jira
+Asana,,Project Tools,asana
+ClickUp,,Project Tools,clickup
+Linear,,Project Tools,linear
+Trello,,Project Tools,trello
+MS Project,,Project Tools,ms-project
+Microsoft Project,,Project Tools,microsoft-project
+Smartsheet,,Project Tools,smartsheet
+Monday.com,,Project Tools,monday-com
+Wrike,,Project Tools,wrike
+Basecamp,,Project Tools,basecamp
+Airtable,,Project Tools,airtable
+Slack,,Communication,slack
+Microsoft Teams,,Communication,microsoft-teams
+Zoom,,Communication,zoom
+Webex,,Communication,webex
+Google Workspace,,Communication,google-workspace
+Google Meet,,Communication,google-meet
+Loom,,Communication,loom
+Whatsapp,,Communication,whatsapp
+Discord,,Communication,discord
+GitHub,,DevTools,github
+Bitbucket,,DevTools,bitbucket
+GitLab,,DevTools,gitlab
+Git,,DevTools,git
+Postman,,DevTools,postman
+Insomnia,,DevTools,insomnia
+Figma,,DevTools,figma
+FigJam,,DevTools,figjam
+Miro,,DevTools,miro
+Lucidchart,,DevTools,lucidchart
+Draw.io,,DevTools,drawio
+Visual Studio Code,,DevTools,visual-studio-code
+Cursor,,DevTools,cursor
+Aerospace Engineering,,Domain,aerospace-engineering
+Aerospace OEM,,Domain,aerospace-oem
+In-Flight Wireless Systems,,Domain,in-flight-wireless-systems
+Avionics,,Domain,avionics
+Defense Industry,,Domain,defense-industry
+Critical Infrastructure,,Domain,critical-infrastructure
+Industrial Automation,,Domain,industrial-automation
+Manufacturing Operations,,Domain,manufacturing-operations
+Smart Manufacturing,,Domain,smart-manufacturing
+Industry 4.0,,Domain,industry-4-0
+SCADA,,Domain,scada
+PLC Programming,,Domain,plc-programming
+Energy Sector,,Domain,energy-sector
+Utilities,,Domain,utilities
+Telecommunications,,Domain,telecommunications
+Telecom Infrastructure,,Domain,telecom-infrastructure
+Carrier Networks,,Domain,carrier-networks
+Broadband ISP,,Domain,broadband-isp
+Fixed Wireless Access,,Domain,fixed-wireless-access
+Public Safety,,Domain,public-safety
+Mission-Critical Communications,,Domain,mission-critical-communications
+Healthcare IT,,Domain,healthcare-it
+EHR Integration,,Domain,ehr-integration
+HIPAA,,Domain,hipaa
+HITRUST,,Domain,hitrust
+SOC 2,,Compliance,soc-2
+ISO 27001,,Compliance,iso-27001
+GDPR,,Compliance,gdpr
+PCI DSS,,Compliance,pci-dss
+NIST,,Compliance,nist
+Compliance Management,,Compliance,compliance-management
+Audit Readiness,,Compliance,audit-readiness
+Vendor Risk Assessment,,Compliance,vendor-risk-assessment
+Information Security,,Security,information-security
+Cybersecurity,,Security,cybersecurity
+Zero Trust,,Security,zero-trust
+Identity and Access Management,,Security,identity-and-access-management
+SSO,,Security,sso
+SAML,,Security,saml
+OAuth,,Security,oauth
+OIDC,,Security,oidc
+Data Privacy,,Security,data-privacy
+Network Security,,Security,network-security
+Penetration Testing,,Security,penetration-testing
+Incident Response Planning,,Security,incident-response-planning
+Disaster Recovery,,Security,disaster-recovery
+Business Continuity,,Security,business-continuity
+Product Management,,Product,product-management
+Technical Product Management,,Product,technical-product-management
+Platform Product Management,,Product,platform-product-management
+Hardware Product Management,,Product,hardware-product-management
+Roadmap Development,,Product,roadmap-development
+Product Strategy,,Product,product-strategy
+Product Discovery,,Product,product-discovery
+Product Vision,,Product,product-vision
+User Research,,Product,user-research
+Customer Interviews,,Product,customer-interviews
+Jobs To Be Done,,Product,jobs-to-be-done
+Product Analytics,,Product,product-analytics
+A/B Testing,,Product,ab-testing
+Feature Flagging,,Product,feature-flagging
+LaunchDarkly,,Product,launchdarkly
+GrowthBook,,Product,growthbook
+PRD Authoring 2,,Product,prd-authoring-2
+User Stories,,Product,user-stories
+Acceptance Criteria,,Product,acceptance-criteria
+Backlog Grooming,,Product,backlog-grooming
+Sprint Planning,,Product,sprint-planning
+Retrospectives,,Product,retrospectives
+Velocity Tracking,,Product,velocity-tracking
+Burn-Down Charts,,Product,burn-down-charts
+Series A,,Funding,series-a
+Series B,,Funding,series-b
+Series C,,Funding,series-c
+Series D,,Funding,series-d
+Pre-Seed,,Funding,pre-seed
+Seed,,Funding,seed
+Bridge Round,,Funding,bridge-round
+Convertible Note,,Funding,convertible-note
+SAFE Note,,Funding,safe-note
+Venture Capital,,Funding,venture-capital
+Private Equity,,Funding,private-equity
+Acquisition,,Funding,acquisition
+M&A,,Funding,m-and-a
+IPO Readiness,,Funding,ipo-readiness
+Due Diligence,,Funding,due-diligence
+Cap Table Management,,Funding,cap-table-management
+P&L Ownership,,Finance,p-and-l-ownership
+P&L Management,,Finance,p-and-l-management
+Budget Management,,Finance,budget-management
+Forecasting and Modeling,,Finance,forecasting-and-modeling
+Financial Modeling,,Finance,financial-modeling
+SaaS Financial Modeling,,Finance,saas-financial-modeling
+Business Case Development,,Finance,business-case-development
+ROI Analysis,,Finance,roi-analysis
+TCO Analysis,,Finance,tco-analysis
+Unit Economics,,Finance,unit-economics
+Cohort Analysis,,Finance,cohort-analysis
+Fractional COO,,Operator,fractional-coo
+Fractional CRO,,Operator,fractional-cro
+Operator,,Operator,operator
+Founding Team,,Operator,founding-team
+Early-Stage Startup,,Operator,early-stage-startup
+Series A Operations,,Operator,series-a-operations
+Series B Operations,,Operator,series-b-operations
+Series C Operations,,Operator,series-c-operations
+Scale-Up Leadership,,Operator,scale-up-leadership
+Public Speaking,,Communication,public-speaking
+Written Communication,,Communication,written-communication
+Technical Writing,,Communication,technical-writing
+Executive Communication,,Communication,executive-communication
+Customer Communication,,Communication,customer-communication
+Negotiation Communication,,Communication,negotiation-communication
+Active Listening,,Communication,active-listening
+Empathy,,Communication,empathy
+Cross-Cultural Communication,,Communication,cross-cultural-communication
+Global Team Communication,,Communication,global-team-communication
+Multi-Time-Zone Coordination,,Communication,multi-time-zone-coordination
+Async Communication,,Communication,async-communication
+Time Management,,Productivity,time-management
+Prioritization,,Productivity,prioritization
+Calendar Management,,Productivity,calendar-management
+Inbox Management,,Productivity,inbox-management
+Documentation Discipline,,Productivity,documentation-discipline
+Decision Documentation,,Productivity,decision-documentation
+Knowledge Management,,Productivity,knowledge-management
+Information Architecture,,Productivity,information-architecture
+Process Documentation,,Productivity,process-documentation
+SOP Authoring,,Productivity,sop-authoring
+Standard Operating Procedures,,Productivity,standard-operating-procedures
+Runbook Development,,Productivity,runbook-development
+Playbook Authoring,,Productivity,playbook-authoring
+Onboarding Programs,,Productivity,onboarding-programs
+Training Program Development,,Productivity,training-program-development
+First-Call Resolution,,Productivity,first-call-resolution
+SLA Management,,Productivity,sla-management
+KPI Reporting,,Productivity,kpi-reporting
+OKR Planning,,Productivity,okr-planning
+Quarterly Business Review,,Productivity,quarterly-business-review
+QBR Facilitation,,Productivity,qbr-facilitation
+Executive Briefing,,Productivity,executive-briefing
+Status Update Reporting,,Productivity,status-update-reporting
+Net Promoter Score,,CX,net-promoter-score
+NPS,,CX,nps
+Customer Satisfaction,,CX,customer-satisfaction
+CSAT,,CX,csat
+Customer Health Score,,CX,customer-health-score
+Voice of Customer,,CX,voice-of-customer
+VoC Programs,,CX,voc-programs
+Customer Advisory Board,,CX,customer-advisory-board
+User Acceptance Testing,,QA,user-acceptance-testing
+UAT,,QA,uat
+Quality Assurance,,QA,quality-assurance
+Test Planning,,QA,test-planning
+Test Case Design,,QA,test-case-design
+Bug Triage,,QA,bug-triage
+Defect Management,,QA,defect-management
+Release Quality Gates,,QA,release-quality-gates
+Beta Testing Programs,,QA,beta-testing-programs
+Customer Pilots,,QA,customer-pilots
+Early Access Programs,,QA,early-access-programs
+VoIP,,Telecom,voip
+SIP,,Telecom,sip
+PBX,,Telecom,pbx
+Hosted PBX,,Telecom,hosted-pbx
+SIP Trunking,,Telecom,sip-trunking
+Unified Communications,,Telecom,unified-communications
+Contact Center,,Telecom,contact-center
+CCaaS,,Telecom,ccaas
+UCaaS,,Telecom,ucaas
+QoS,,Telecom,qos
+SD-WAN,,Telecom,sd-wan
+MPLS,,Telecom,mpls
+BGP,,Telecom,bgp
+DNS,,Telecom,dns
+Network Architecture,,Networking,network-architecture
+LAN,,Networking,lan
+WAN,,Networking,wan
+WLAN,,Networking,wlan
+VLAN,,Networking,vlan
+TCP/IP,,Networking,tcp-ip
+IPv6,,Networking,ipv6
+Routing and Switching,,Networking,routing-and-switching
+Cisco,,Networking,cisco
+Juniper,,Networking,juniper
+Fortinet,,Networking,fortinet
+Palo Alto Networks,,Networking,palo-alto-networks
+Cradlepoint,,Networking,cradlepoint
+Ubiquiti,,Networking,ubiquiti
+Cambium Networks,,Networking,cambium-networks
+Mimosa,,Networking,mimosa
+Ruckus,,Networking,ruckus

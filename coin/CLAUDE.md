@@ -1,6 +1,6 @@
 # Coin — Career Ops Engine
 
-**Updated:** 2026-04-25 | **Status:** Phase 1 MVP — modal skill architecture
+**Updated:** 2026-04-26 | **Status:** v2 — experience DB + RenderCV multi-variant + structural truth gate
 
 > **Session Start:** Always read `docs/state/project-state.md` first.
 > **Context Budget:** Load CLAUDE.md + `.claude/skills/coin/SKILL.md` at startup.
@@ -70,7 +70,9 @@ live in `config/profile.yml`.
 | 4 | Never auto-submit applications — `applied` transition requires explicit "yes" |
 | 5 | Never commit `data/db/pipeline.db`, `data/resumes/generated/`, or `.env` |
 | 6 | **No Anthropic API calls.** Coin runs inside Claude Code; LLM work is the host session |
-| 7 | Truthfulness gates (per `modes/_shared.md` Operating Principle #3): never claim Cox/TitanX/Safeguard outcomes as direct employment (Hydrant engagements only); no "Fortune 500" / "seven-figure" / "world-class" without a verifiable named account; no CS/engineering degree (Sean has BA History + MBA WGU + PMP) |
+| 7 | Truthfulness gates: prose-level rules per `modes/_shared.md` Operating Principle #3 (never claim Cox/TitanX/Safeguard outcomes as direct employment — Hydrant engagements only; no "Fortune 500" / "seven-figure" / "world-class" without a verifiable named account; no CS/engineering degree). **Plus structural Check 10** in `modes/audit.md` — every numeric token in any rendered bullet MUST trace to an `outcome` row in the experience DB (m005 schema). Renderer refuses on mismatch. |
+| 8 | **Experience DB is source of truth.** `data/resumes/base.py` PROFILE is seed-input only (run `scripts/seed_from_base_py.py` to load it into SQLite tables: `accomplishment`, `outcome`, `evidence`, `skill`, `lane`, `accomplishment_lane`, `bullet_variant`, `jd_keyword`, `render_artifact`). Tailor mode reads from SQLite via `careerops.experience` at runtime. |
+| 9 | **Every render emits multiple variants.** `scripts/render_resume.py` produces ATS-strict + designed PDFs per role. High-fit (`fit_score >= 80`) emits 4 PDFs (3 RenderCV themes + 1 ATS-strict + WeasyPrint). Score panel persists `render_artifact` rows tracking ATS%, keyword overlap, buzzword density, truth-gate pass/fail per variant. |
 
 ---
 

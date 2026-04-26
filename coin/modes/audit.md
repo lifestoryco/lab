@@ -37,7 +37,10 @@ Load these files into context in this exact order. Each one anchors a different 
 
 If the tailored JSON does not exist, STOP and tell Sean: *"No tailored JSON for role <id>. Run `/coin tailor <id>` first."*
 
-## Step 2 — Run the 9 audit checks (in order)
+## Step 2 — Run the 14 audit checks (in order)
+
+> Checks 1-9 are prose-level truthfulness checks (judgment-based on the rendered text).
+> Checks 10-14 are **structural** — they call into Python helpers and produce deterministic verdicts. Run them after the prose checks pass.
 
 Each check returns one of: **PASS**, **FAIL** (CRITICAL), **WARN** (HIGH), **PASS-WITH-NOTE** (MEDIUM).
 For every non-PASS, capture (a) the offending quote verbatim, (b) why it fails, (c) a concrete fix.
@@ -146,6 +149,57 @@ Scan `PROFILE.skills_grid["Technical Domain Experience"]` and the tailored JSON 
 - **WARN** for "Aerospace & Defense" with a recommendation to reframe as "Aerospace adjacent (CA Engineering)".
 - **FAIL** for "Defense" appearing alone — no support in history.
 - **Fix template:** Drop unsupported domains; soften with a tenure qualifier where adjacency is real.
+
+### Check 10 — Metric ↔ outcome row (CRITICAL — structural; locked decision #4)
+
+This is the schema-level truthfulness gate. EVERY numeric token in EVERY rendered bullet must trace to an `outcome` row attached to the bullet's source accomplishment.
+
+Implementation: `careerops.score_panel.truthfulness_gate(generated_json)` walks the bullets, calls `careerops.linter.lint_bullet(text, outcome_rows=...)`, and reports unverified metrics. The numeric normalizer handles `$27M` ↔ `$27 million` ↔ `27,000,000` so equivalent forms compare equal.
+
+- **FAIL** when any metric token does not match any linked outcome row.
+- **Fix template:** Either (a) add an `outcome` row + `evidence` row via `/coin add-evidence <accomplishment_id>`, or (b) rewrite the bullet to drop the unbacked claim.
+- **Refusal to soften:** the renderer in `scripts/render_resume.py` also enforces this gate; truth=❌ blocks SHIP-READY verdict.
+
+### Check 11 — Buzzword density + kill-words (HIGH)
+
+`careerops.linter.lint_resume(bullets)` runs against the joined corpus.
+
+- **FAIL** if any kill-word from `data/linter/buzzwords.json` appears (52 kill-words including "responsible for", "helped with", "team player", "world-class", "thought leader", etc.).
+- **FAIL** if buzzword density > 6.0% across the resume (12 strong-verb flags / 100 tokens).
+- **WARN** if soft-kill words appear without `accomplishment.linter_override`.
+- **Fix template:** Replace kill-words with action verbs from audit.md Check 3 list (drove, headed, spearheaded, architected, championed). Tone down density by varying verbs.
+
+### Check 12 — Recruiter-eye 30-sec audit (HIGH)
+
+Re-parse the rendered PDF via `careerops.parser.parse_resume_pdf` and run the 8 visual checks documented in `modes/recruiter-eye.md`:
+- Name presence + ≥14pt size
+- Contact in body, not header/footer
+- Date format consistency
+- Canonical sections present (experience + education minimum)
+- Bullet density per role (3-5 newest, no 8+ ever)
+- No Unicode glyphs outside `–•·*`
+- Page count discipline (1 for ATS-strict; ≤2 for designed)
+- Mono-column layout (ATS-strict only)
+
+- **FAIL** for any FAIL-level recruiter-eye finding.
+- **WARN** acceptable for non-blocking visual issues.
+
+### Check 13 — ATS parseability self-check (HIGH; structural)
+
+`careerops.parser.parse_resume_pdf(pdf_path).ats_score()` re-parses our own rendered PDF. The score is the percentage of canonical signals (name, email, phone, sections, dates, monocolumn, glyph-clean, page-count) successfully extracted.
+
+- **FAIL** if `ats_score < 70` on the ATS-strict variant (`*.ats.pdf`).
+- **WARN** if `ats_score < 85` on any designed variant.
+- **Fix template:** address the missing signal directly — a low score means a real ATS will likely also fail. The parser report itself shows which signal is missing.
+
+### Check 14 — Lightcast keyword overlap (HIGH)
+
+`careerops.score_panel.keyword_overlap_pct(generated_json, role_id=role_id)` computes the percent of role's `must_have` JD keywords that appear in the rendered text. The JD-keyword extraction comes from `careerops.jd_parser` (Lightcast subset + must-have/nice-to-have classification).
+
+- **FAIL** if `keyword_overlap_pct < 40` on the must-have set.
+- **WARN** if `keyword_overlap_pct > 90` (stuffing risk).
+- **Target band: 60-85%.**
+- **Fix template:** Surface missing must-have terms in `skills_matched` if they're genuinely supported in PROFILE; otherwise add to `skills_gap` and reflect in the cover letter hook.
 
 ## Step 3 — Output format
 

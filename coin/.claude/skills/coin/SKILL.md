@@ -39,9 +39,18 @@ Inspect `{{mode}}` (the user's input) and dispatch:
 | Looks like a JD (text contains "responsibilities", "requirements", "qualifications", "about the role", or company + title pattern) | `modes/auto-pipeline.md` ⭐ |
 | `score <id>` or `parse <id>` | `modes/score.md` |
 | `tailor <id>` or `resume <id>` | `modes/tailor.md` |
-| `pdf <id> [--recruiter\|--brief]` | invoke `scripts/render_pdf.py --role-id <id> [--recruiter]` |
+| `pdf <id> [--recruiter\|--brief]` | invoke `scripts/render_pdf.py --role-id <id> [--recruiter]` (legacy WeasyPrint single-variant) |
+| `render <id> [--variants {1,2,4}]` | invoke `scripts/render_resume.py <id>` (multi-variant: WeasyPrint + RenderCV designed + ATS-strict) |
+| `render <id> --engine rendercv --theme <theme> [--variant designed\|ats]` | invoke `scripts/render_rendercv.py --role-id <id> --theme <theme> --variant <kind>` (single-theme RenderCV render) |
 | `cover-letter <id>` or `cover <id>` | `modes/cover-letter.md` (separate cover letter generation) |
-| `audit <id>` or `audit` | `modes/audit.md` (truthfulness check on tailored JSON) |
+| `audit <id>` or `audit` | `modes/audit.md` (truthfulness check, 14 checks: 9 prose + 5 structural) |
+| `recruiter-eye <id>` or `recruiter-eye <pdf>` | `modes/recruiter-eye.md` (30-sec human-screener heuristic audit on the rendered PDF) |
+| `capture` or `capture story` | `modes/capture.md` (STAR-format experience-DB capture session) |
+| `add-evidence <accomplishment_id> [--list\|--evidence-id N\|--outcome-id N]` | invoke `scripts/add_evidence.py` (upgrade evidence rows from self_reported → public/manager_quoted) |
+| `gap <id>` or `keyword-gap <id>` | run `careerops.score_panel.keyword_overlap_pct(...)` against the role's `jd_keyword` rows + report missing must-have terms |
+| `export [--format json-resume\|--out PATH]` | invoke `scripts/export_json_resume.py` (experience DB → JSON Resume v1) |
+| `import <path> [--apply]` | invoke `scripts/import_json_resume.py --in <path>` (JSON Resume → experience DB) |
+| `ingest-resume <pdf> [--apply]` | invoke `scripts/ingest_resume.py <pdf>` (clean-room PDF parser → seed accomplishments) |
 | `track <id> <status> [note]` or `applied <id>` etc. | `modes/track.md` |
 | `apply <id>` | `modes/apply.md` (live form fill — see `references/ats-patterns.md`) |
 | `network-scan <id>` or `network-scan <company>` | `modes/network-scan.md` (warm-intro discovery) |

@@ -1,23 +1,40 @@
-# Mode: tailor
+# Mode: tailor (v2, schema-driven)
 
-Generate a lane-tailored resume and cover letter hook for a specific role. This is the highest-value mode — the output is what Sean actually submits. The output JSON MUST pass `modes/audit.md`'s 9 checks before it can be rendered to PDF.
+Generate a lane-tailored resume + cover letter hook for a specific role. This is the highest-value mode — the output is what Sean actually submits.
+
+**Source of truth:** the experience DB (m005 schema). `data/resumes/base.py` is seed-input only; do not read PROFILE at runtime.
+
+The output JSON MUST pass `modes/audit.md`'s 14 checks (Checks 1-9 prose-level, 10-14 structural). Multi-variant rendering happens at Step 6 — every render emits both ATS-strict and designed variants.
 
 ## Input
 
 - `--id <role_id>` (required)
 - `--lane <archetype_id>` (optional; defaults to the role's current lane)
+- `--variants {1,2,4}` (optional; defaults to 4 if `fit_score >= 80`, else 2)
 
-## Step 1 — Load the role, the base profile, and the North Star
-
-Run these three reads (they're cheap):
+## Step 1 — Load the role + experience DB + North Star
 
 ```bash
+# Run migrations + seed (idempotent — safe every run)
+.venv/bin/python scripts/migrations/m005_experience_db.py
+.venv/bin/python scripts/migrations/m006_seed_lightcast.py
+.venv/bin/python scripts/seed_from_base_py.py
+
+# Read the role
 .venv/bin/python scripts/print_role.py --id <role_id>
+
+# Read profile.yml (lanes + per-lane themes)
 .venv/bin/python -c "import yaml; import json; print(json.dumps(yaml.safe_load(open('config/profile.yml')), indent=2))"
-.venv/bin/python -c "import sys; sys.path.insert(0,'.'); from data.resumes.base import PROFILE; import json; print(json.dumps(PROFILE, indent=2))"
+
+# Read the lane's accomplishment payload (fact-only — no rendered bullets yet)
+.venv/bin/python -c "
+from careerops import experience as exp
+import json
+print(json.dumps(exp.assemble_for_lane('<lane_slug>', min_relevance=60), default=str, indent=2))
+"
 ```
 
-Then load `modes/_shared.md` and the truthfulness anchors (these are non-skippable per Operating Principle #3):
+Then load `modes/_shared.md` and the truthfulness anchors (non-skippable per Operating Principle #3):
 - `.claude/skills/coin/references/priority-hierarchy.md`
 - `.claude/skills/coin/SKILL.md` "Sean's canonical facts" block
 
@@ -33,9 +50,43 @@ Then load `modes/_shared.md` and the truthfulness anchors (these are non-skippab
 - If lane is empty or unknown, ask Sean which archetype to target — never silently pick.
 - Fit score should be ≥ 50. If lower, confirm with Sean before tailoring.
 
-## Step 3 — Select emphasis stories
+## Step 2.5 — Run the structured-output ranker (Claude as ranker)
 
-From `PROFILE.positions[*].bullets`, draw the proof points whose `id` (from the legacy `PROFILE.stories` map) appears in the archetype's `proof_points` list (from profile.yml). You may add one more position bullet if the JD explicitly names a domain Sean has (e.g., aerospace, RF, 5G, BLE, Z-Wave) — borrow that proof too.
+This step replaces the old "pick stories by hand" flow with a deterministic Claude prompt. Per locked decision #2 (hybrid bullet selector): Claude ranks (temp 0, structured output), then Claude paraphrases the top-K winners.
+
+```python
+from careerops.ranker import build_ranker_prompt, validate_ranker_response, RankerPromptInputs
+from careerops import experience as exp
+
+payload = exp.assemble_for_lane(lane_slug, min_relevance=60)
+expected_ids = {entry["accomplishment"]["id"] for entry in payload}
+
+prompt = build_ranker_prompt(RankerPromptInputs(
+    lane_slug=lane_slug,
+    payload=payload,
+    jd_text=role["jd_raw"],
+    jd_role_id=role["id"],
+    k=6,
+    seniority_constraint=None,  # set when JD explicitly demands a level
+))
+```
+
+Emit JSON conforming to `careerops.ranker.RANKER_SCHEMA` (temp 0). Then validate:
+
+```python
+result = validate_ranker_response(your_json, expected_accomplishment_ids=expected_ids, k=6)
+assert result.valid, result.errors
+top_ids = result.top_k  # [accomplishment_id, ...]
+```
+
+The top-K accomplishment_ids are the inputs for Step 5 paraphrase.
+
+## Step 3 — Select emphasis stories (Lightcast tags + ranker score)
+
+For each top-K id from Step 2.5:
+1. Load the full accomplishment + outcomes + evidence + skill tags via `experience.get_accomplishment / list_outcomes / list_evidence / list_skills_for_accomplishment`.
+2. The ranker rationale tells you WHICH JD keywords each story matches.
+3. Drop any story whose `seniority_ceiling` is below what the JD demands (Eightfold-style title-ladder check).
 
 ## Step 4 — Determine `target_role` (REQUIRED)
 
@@ -115,17 +166,41 @@ If `save_resume.py` does not yet enforce `target_role`, your JSON might still be
 
 Before printing the preview, mentally run audit Check 3, 4, 5, 7 on your output. If any would fire, fix and rewrite before showing Sean. This saves a round-trip.
 
-## Step 8 — Render a preview for Sean
+## Step 8 — Render multi-variant + score panel
 
-Print the executive summary, the 5 bullets, and the cover letter hook as a formatted block. Include the file path of the saved JSON.
+Per locked decision #3, every render emits BOTH ATS-strict and designed variants. For high-fit roles (`fit_score >= 80`), render 4 variants (3 designed themes + 1 ATS-strict).
 
-## Step 9 — Recommend next step
+```bash
+.venv/bin/python scripts/render_resume.py <role_id>
+```
 
-End with:
-> "Tailored JSON saved at `<path>`. Recommended next:
-> 1. `/coin audit <id>` — verify against the 9 truthfulness checks (auto-pipeline calls this automatically)
-> 2. `/coin pdf <id> --recruiter` — render the submission PDF (only after audit is CLEAN)
-> 3. `/coin apply <id>` — open the ATS form and pre-fill (browser-assisted)"
+This calls `careerops.score_panel.score_artifact` on every output, persisting one row per variant to `render_artifact`. The reported metrics:
+
+```
+[ats     ] engineeringresumes       0004_<lane>.engineeringresumes.ats.pdf
+         ATS=92  KW=72%  density=2.1%  truth=✅  pages=1  → SHIP-READY
+[designed] harvard                  0004_<lane>.harvard.designed.pdf
+         ATS=88  KW=72%  density=2.1%  truth=✅  pages=1  → SHIP-READY
+```
+
+If the truth gate fails (`truth=❌`), the bullet text contains a metric not in any linked outcome row. Fix by:
+1. Identifying the offending metric (`careerops.score_panel.truthfulness_gate` reports the failure).
+2. Either add an `outcome` row + `evidence` row via `/coin add-evidence`, OR rewrite the bullet to drop the unbacked claim.
+
+Per the locked truth gate (#4), no SHIP-READY render advances if truth fails.
+
+## Step 9 — Show Sean the score panel + recommend variants
+
+Print the score panel header for every variant. Highlight the SHIP-READY one. Then:
+
+> "Tailored. Renders at `data/resumes/generated/<id:04d>_*.pdf`:
+> - Recommended for ATS submission: `<basename>.ats.pdf` — single-column, plain glyphs.
+> - Recommended for warm intro / hiring-manager-direct: `<basename>.<theme>.designed.pdf` (highest ATS + KW score).
+>
+> Next:
+> 1. `/coin audit <id>` — verify against the 14 truthfulness checks (auto-pipeline calls this).
+> 2. `/coin recruiter-eye <id>` — 30-sec human-screener pass.
+> 3. `/coin apply <id>` — open the ATS form and pre-fill the right variant."
 
 ## Failure modes
 
