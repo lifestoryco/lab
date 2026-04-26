@@ -1,5 +1,62 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-26, Session 6 — Code-review --fix EVERYTHING + PDF redesign + DB persistence)
+
+### /code-review (4-agent parallel) → all findings resolved + PDF beats rendercv reference ✅ COMPLETE
+
+**Tests:** 223/223 pass (no new failures, no skipped). Verdict: PASS.
+
+**Commits (6):**
+- `6eb5d94` chore(coin): persist pipeline.db across worktrees + worktree-aware start
+- `9d3b52d` fix(security): path-traversal guards across 5 scripts + shared helper
+- `e062428` fix(coin): close quarantine resurrection + cover-letter Check 2 + utah-remote default
+- `0cdcc84` feat(coin): init_db auto-runs migrations + careerops package surface
+- `79caebe` chore(coin): drop unused pydantic + dateutil; complete mode catalog
+- `3745ed5` feat(coin): Reactive-Resume sidebar PDF template + photo support + internal banner
+
+**1. Persistent DB across worktrees**
+- `config.py::DB_PATH` now defaults to `~/Library/Application Support/coin/pipeline.db` (macOS) / `$XDG_DATA_HOME/coin/` (Linux) / `%APPDATA%/coin/` (Windows). Always absolute. `COIN_DB_PATH` env override honored.
+- 95 production roles migrated from in-tree `data/db/` to user-data dir; worktrees now share state.
+- `scripts/start.sh` worktree-aware (uses `git rev-parse --show-toplevel`); reads DB_PATH from config rather than hardcoding `data/db/pipeline.db`.
+- `init_db()` auto-runs `m001..m004` so a fresh DB lands on the latest schema (no more `no such table: outreach` first-run errors).
+
+**2. Security path-traversal (1 CRIT + 2 HIGH + 2 MED + 1 LOW)**
+- New `careerops/paths.py::validate_under(path, root, label)` — symlink-resolving, exits non-zero, used by every script that takes a user path.
+- Guards added to: `render_pdf.py` (`--input`/`--out`), `save_resume.py` (`--input`), `update_role.py` (`--parsed-jd`), `import_linkedin_connections.py` (`--csv`).
+- `track_outreach.py` SQL: f-string column-name interpolation replaced with static `_SQL_BY_ACTION` map (defense-in-depth alongside the existing `VALID_ACTIONS` whitelist).
+- `pipeline.insert_offer` adds `assert set(cols).issubset(all_cols)` against future drift.
+
+**3. Logic — quarantine resurrection (CRIT × 2, HIGH × 2, LOW × 1)**
+- `pipeline._is_quarantined(lane)` helper: `lane == 'out_of_band' or lane not in LANES`. Both `upsert_role` ON CONFLICT and `update_lane` now sink fit_score=0 for ANY lane outside the 4 archetypes (closes the resurrection hole for legacy ids like `cox-style-tpm`).
+- `upsert_role` COALESCE wrapped with `NULLIF(...,'')` (matches `network_scrape.upsert_scraped` contract).
+- `modes/cover-letter.md` Check 2 was mislabeled (used Check 4's vague-flex content under the Pedigree non-claim label) → restored to audit Check 2 (no claim of FAANG/big-tech employment unless in PROFILE.positions).
+- `scripts/discover.py` + `scripts/print_role.py`: stale `cox-style-tpm` → `mid-market-tpm` in docstrings.
+
+**4. Architecture (3 HIGH + 6 MED + 4 LOW)**
+- `careerops/__init__.py` exports `offer_math`, `network_scrape`, `paths`.
+- `scripts/migrations/__init__.py` populated with `run_all(db_path)` + ordered `MIGRATIONS` list. m001 extracted public `apply()` (matches m002–m004); accepts both `001_…` and `m001_…` IDs in `_already_applied` for compat with existing DBs.
+- `m002`/`m003`/`m004`: drop the manual `ROOT/DB_PATH` join now that `config.DB_PATH` is always absolute.
+- `requirements.txt`: dropped unused `pydantic`, `python-dateutil`.
+- `_shared.md` mode catalog completed: added `followup`, `patterns`, `interview-prep` (was 13 of 16); onboarding row corrected to "7 questions".
+- `discover.py --utah-remote` default-on flag (memory-recorded scope that wasn't wired) with `--no-utah-remote` opt-out + consultancy blocklist (Big4 / Accenture / staff-aug shops).
+
+**5. PDF redesign (CRIT × 1, HIGH × 4, MED × 4, LOW × 5)**
+- `data/resume_template_recruiter.html` rewritten as Reactive-Resume "Azurill"-inspired: navy sidebar (`--accent: #0a3d62`) with optional 1.5in circular photo, name + creds, title, contact list, categorized Skills, Education, Certifications. Main column with Summary (rag-right), Selected Achievements callout (left-bar, no fill — print-robust), Professional Experience with absolute-positioned tabular-num dates. Page footer `Sean Ivins page X of Y`. Single `--accent` token swaps the entire palette.
+- Layout chose `position: relative` + `absolute` dates over `display: table` because the latter caused multi-page bullet/header fragmentation in WeasyPrint.
+- Photo support: drop a JPG at `data/photos/<file>.jpg`, set `PROFILE['photo_path']`. Path validated under `data/` before file:// exposure.
+- Internal `resume_template.html`: yellow `INTERNAL TRACKING — NOT FOR SUBMISSION` banner so misrouted PDFs are unmistakable. Render gated on `is_internal=True` flag from `render_pdf` when `--recruiter` omitted.
+- `data/photos/.gitkeep` + `.gitignore` allowlist (photos are user PII).
+- Reference render: 2-page Filevine SE resume (cleaner than the 3-page rendercv `classic.designed` reference Sean was using as a baseline).
+
+**Files touched (24):** config.py · CLAUDE.md · .gitignore · requirements.txt · careerops/{__init__,pipeline,paths(new)}.py · data/{resume_template,resume_template_recruiter,resumes/base}.* · data/photos/.gitkeep · modes/{_shared,cover-letter}.md · scripts/{start.sh,discover,render_pdf,save_resume,update_role,print_role,track_outreach,import_linkedin_connections}.py · scripts/migrations/{__init__,m001..m004}.py.
+
+**Decisions:**
+- Render-template layout: `position:absolute` dates beat `display:table-cell` headers because WeasyPrint fragments table-cell content across pages unpredictably (bullets appeared under the WRONG header on page 3 in early iterations).
+- DB persistence: user-data dir > git-attribute store > symlink. The user-data dir is the only option that survives `git worktree remove` AND `rm -rf coin/` AND machine moves with cloud-synced Library folders.
+- Migration ID compat: rather than rename existing schema_migrations rows, m001's `_already_applied` accepts both the old `001_…` and the new `m001_…` IDs. Avoids destructive DB rewrites at upgrade.
+
+---
+
 ## What Was Just Done (2026-04-25, Session 5 — Deferred-followup batch 2)
 
 ### COIN-NETWORK-LIVE-SCRAPE + COIN-OFERTAS-LEVELS-FYI + COIN-COVER-RECIPIENT-FROM-NETWORK ✅ COMPLETE
@@ -412,20 +469,29 @@ heuristic fit scores 65–83.
 
 ## Next Session Agenda
 
-1. **Submit the Netflix application.** Resume + PDF are generated:
-   `data/resumes/generated/0004_cox-style-tpm_2026-04-25.{json,pdf}`.
-   Sean reviews, applies, then: `/coin track 4 applied`.
-2. **Score + tailor the Netflix TPM 6 — Data Systems role** — same company,
-   different infra focus; $420K–$630K comp range expected.
-3. **Re-score all 31 existing roles** under the new 8-dimension weights —
-   run: `python scripts/discover.py --rescore-existing` (not yet wired) or
-   inline Python loop against `list_roles()`.
-4. **Add comp extraction to scraper** — most roles have null comp_min;
-   cross-reference Levels.fyi for Tier 1 companies.
+1. **Drop a photo + render Sean's resume with the new template** — save a
+   headshot to `coin/data/photos/sean.jpg`, set `PROFILE['photo_path'] = 'photos/sean.jpg'`
+   in `data/resumes/base.py`, then `/coin pdf 137 --recruiter` to verify.
+2. **Re-tailor the Filevine and Netflix roles under the new template** —
+   the previous 0004 / 0137 generated PDFs use the old single-column layout.
+3. **Submit the Netflix application** — resume JSON exists; render with
+   `/coin pdf 4 --recruiter` against the new template, then `/coin track 4 applied`.
+4. **Score + tailor the Netflix TPM 6 — Data Systems role** ($420K–$630K).
+5. **Re-score all existing roles** under the 8-dimension weights — wire
+   `--rescore-existing` flag on `discover.py` (still not implemented).
+6. **Levels.fyi comp extraction** — Phase 2 backlog item; most roles still
+   have null `comp_min`.
+7. **Optional polish (LOW from this session, deferred):**
+   - Bundle Inter woff2 under `data/fonts/` for Reactive-Resume parity
+     typography (currently fall back to Helvetica Neue/Arial).
+   - Extract `careerops/dashboard.py` from `pipeline.py` (presentation vs
+     CRUD separation — flagged LOW by architecture review).
+   - Resolve `sean@lifestory.co` vs `sivins@caengineering.com` canonical
+     outbound email (COIN-EMAIL-CANONICAL — tracked in _shared.md).
 
 ## Active Blockers
 
-None. No API key needed.
+None. No API key needed. DB persistent across worktrees.
 
 ---
 
@@ -438,7 +504,7 @@ None. No API key needed.
 | S-1.3 | Transformer: lane-aware resume rewriting | ✅ Done (moved to `modes/tailor.md`) |
 | S-1.4 | Pipeline DB: CRUD + dashboard | ✅ Done (11-state machine + Rich dashboard) |
 | S-1.5 | Compensation: Levels.fyi cross-reference | 🚧 Pending — Phase 2 |
-| S-2.1 | Resume quality: PDF via weasyprint | 🔲 Backlog |
+| S-2.1 | Resume quality: PDF via weasyprint | ✅ Done (Session 6 — Reactive-Resume sidebar template + photo support, beats rendercv reference) |
 | S-2.2 | Glassdoor comp band scraping | 🔲 Backlog |
 | S-2.3 | Full cover letter generation (beyond hook) | 🔲 Backlog |
 | S-2.4 | Batch resumability per santifer (claude -p workers) | 🔲 Backlog |
@@ -449,6 +515,23 @@ None. No API key needed.
 
 ## Resolved Bugs
 
+- (2026-04-26) Quarantine resurrection: `upsert_role` ON CONFLICT and `update_lane`
+  only sank fit_score=0 for the literal `'out_of_band'` lane. Legacy ids
+  (`cox-style-tpm`, etc.) bypassed the sink and resurrected stale scores even
+  though `score_breakdown` returned 0 for any lane not in LANES. Fixed by
+  broadening the predicate to `lane == 'out_of_band' OR lane NOT IN <current 4>`.
+- (2026-04-26) `roles` table COALESCE didn't preserve more-specific company
+  strings on conflict (matches `network_scrape.upsert_scraped` contract). Now
+  wraps each text field with `NULLIF(excluded.x, '')`.
+- (2026-04-26) `cover-letter.md` Check 2 was mislabeled — used Check 4's
+  vague-flex content under the Pedigree non-claim label, leaving the actual
+  pedigree-employment check unrun on cover letters.
+- (2026-04-26) Path traversal: `render_pdf.py`, `save_resume.py`,
+  `update_role.py`, `import_linkedin_connections.py` accepted any filesystem
+  path. Centralised guard in `careerops/paths.py`.
+- (2026-04-26) PDF template multi-page fragmentation: `display: table` on
+  `.position-head` caused bullets to render under the WRONG header on page 3+
+  in WeasyPrint. Switched to `position: absolute` for dates.
 - httpx http2 support required explicit `h2` package install — added to requirements.
 - Scripts couldn't find `careerops` module when invoked from `scripts/` dir
   → added `sys.path` bootstrap to each script (parent dir goes on path).
