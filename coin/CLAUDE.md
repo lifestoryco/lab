@@ -68,7 +68,7 @@ live in `config/profile.yml`.
 | 2 | Never write a resume without a target archetype — output is always lane-specific |
 | 3 | Comp floor: **$160K base / $200K total** (refreshed 2026-04-25; Sean is at $99K and $160K is the realistic 60%+ jump). Lower roles hidden unless Sean overrides |
 | 4 | Never auto-submit applications — `applied` transition requires explicit "yes" |
-| 5 | Never commit `data/db/pipeline.db`, `data/resumes/generated/`, or `.env` |
+| 5 | Never commit `data/resumes/generated/` or `.env`. The DB lives in the user-data dir (outside the repo) and is unreachable by `git add` by default |
 | 6 | **No Anthropic API calls.** Coin runs inside Claude Code; LLM work is the host session |
 | 7 | Truthfulness gates (per `modes/_shared.md` Operating Principle #3): never claim Cox/TitanX/Safeguard outcomes as direct employment (Hydrant engagements only); no "Fortune 500" / "seven-figure" / "world-class" without a verifiable named account; no CS/engineering degree (Sean has BA History + MBA WGU + PMP) |
 
@@ -96,7 +96,8 @@ live in `config/profile.yml`.
               ↓ reads/writes
 ┌──────────────────────────────────────────────────────────────┐
 │ State                                                        │
-│   data/db/pipeline.db       SQLite — role tracking           │
+│   ~/Library/Application Support/coin/pipeline.db             │
+│                            SQLite — survives `git worktree`   │
 │   data/resumes/base.py      canonical PROFILE dict           │
 │   config/profile.yml        North Star pitches per archetype │
 │   data/resumes/generated/   lane-tailored resume JSON output │
@@ -117,7 +118,9 @@ discovered → scored → resume_generated → applied →
 ## Architecture Constraints
 
 - **Language:** Python 3.11+ (system venv at `.venv/`, built on Python 3.13)
-- **Database:** SQLite at `data/db/pipeline.db` — no external DB deps
+- **Database:** SQLite at `~/Library/Application Support/coin/pipeline.db` (macOS) /
+  `$XDG_DATA_HOME/coin/pipeline.db` (Linux) — persistent across worktrees and clones.
+  Override with `COIN_DB_PATH=/abs/path` for tests or alternate environments. No external DB deps
 - **Scraping:** `httpx[http2]` + `BeautifulSoup4` — LinkedIn guest endpoint,
   Indeed best-effort (often Cloudflare-blocked)
 - **Terminal output:** `rich` — Bloomberg-style cards

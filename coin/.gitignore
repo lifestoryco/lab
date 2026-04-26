@@ -1,3 +1,4 @@
+.venv
 .venv/
 .env
 data/db/pipeline.db
@@ -10,9 +11,11 @@ __pycache__/
 dist/
 build/
 
-# Per-user PII (resumes, LinkedIn exports, tailored applications)
+# Per-user PII (resumes, LinkedIn exports, tailored applications, photos)
 data/inputs/
 data/applications/
 data/interview-prep/
 data/network/
 data/onboarding/
+data/photos/*
+!data/photos/.gitkeep

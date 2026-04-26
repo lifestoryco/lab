@@ -113,7 +113,34 @@ BOARDS = {
 }
 
 # ── Database ──────────────────────────────────────────────────────────────────
-DB_PATH = os.getenv("COIN_DB_PATH", "data/db/pipeline.db")
+# Persistent across worktrees and clones: defaults to the OS user-data dir, so
+# scoring history, applications, network, and outreach state survive any
+# `git worktree add` / fresh checkout. Override with COIN_DB_PATH for tests.
+def _default_db_path() -> str:
+    import sys
+    if "COIN_DB_PATH" in os.environ:
+        return os.environ["COIN_DB_PATH"]
+    home = os.path.expanduser("~")
+    if sys.platform == "darwin":
+        base = os.path.join(home, "Library", "Application Support", "coin")
+    elif sys.platform.startswith("win"):
+        base = os.path.join(os.environ.get("APPDATA", home), "coin")
+    else:
+        base = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.join(home, ".local", "share")), "coin")
+    return os.path.join(base, "pipeline.db")
+
+
+def _absolute_db_path() -> str:
+    raw = _default_db_path()
+    if os.path.isabs(raw):
+        return raw
+    # Legacy relative default (or COIN_DB_PATH=relative): anchor under the
+    # project root so every script — regardless of cwd — sees the same DB.
+    project_root = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(project_root, raw)
+
+
+DB_PATH = _absolute_db_path()
 
 # ── Company tier list (for company_tier scoring dimension) ───────────────────
 # IMPORTANT: tier scoring is INVERTED for Sean's reality.
