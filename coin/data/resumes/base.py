@@ -14,6 +14,12 @@ PROFILE = {
     "phone": "801.803.3084",
     "email": "sivins@caengineering.com",
     "linkedin": "linkedin.com/in/seanivins",
+    # Optional: drop a photo at data/photos/<file>.jpg and set the relative
+    # path here (relative to data/, since that's the WeasyPrint base_url).
+    # Leaving this None renders a clean text-only header.
+    "photo_path": None,
+    "website": None,   # e.g. "seanivins.com"
+    "github": None,    # e.g. "github.com/seanivins"
     "years_experience": 15,
     "domains": ["wireless infrastructure", "IoT systems", "B2B SaaS", "RF", "industrial"],
 
