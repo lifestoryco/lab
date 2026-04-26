@@ -9,7 +9,16 @@ import sqlite3
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from config import DB_PATH, MIN_BASE_SALARY
+from config import DB_PATH, MIN_BASE_SALARY, LANES
+
+
+def _is_quarantined(lane: str | None) -> bool:
+    """A lane is quarantined when it's the explicit 'out_of_band' marker OR
+    is not one of the four current archetypes (e.g. a removed legacy lane,
+    typo, or stale-import value). Both produce composite=0/grade=F in
+    score_breakdown — the DB write paths must keep fit_score in lockstep so
+    a re-upsert or update_lane cannot silently resurrect a stale score."""
+    return lane == "out_of_band" or lane not in LANES
 
 STATUSES = [
     "discovered",         # just scraped; not yet scored
@@ -37,6 +46,14 @@ def _conn() -> sqlite3.Connection:
 
 
 def init_db() -> None:
+    """Create the roles table on a fresh DB and apply every migration in order.
+
+    Migrations are idempotent and tracked in `schema_migrations`, so calling
+    this on an already-up-to-date DB is cheap. Side-effect: any DB created
+    after this point ships every table the modes expect (offers, connections,
+    outreach, contact_role/target_role_id columns) without a manual setup
+    step — fixes the 'no such table: outreach' class of fresh-DB errors.
+    """
     with _conn() as conn:
         conn.execute("""
             CREATE TABLE IF NOT EXISTS roles (
@@ -64,6 +81,18 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_roles_lane   ON roles(lane)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_roles_fit    ON roles(fit_score)")
 
+    # Ordered, idempotent migrations. Late import to avoid a circular pull
+    # (scripts.migrations.m###_*.py modules import config which is fine, but
+    # keep the cost off the careerops.pipeline import path).
+    try:
+        from scripts.migrations import run_all
+        run_all(DB_PATH)
+    except ImportError:
+        # Tests may run with scripts/ off sys.path; the modes that need
+        # post-roles tables can call run_all() themselves or the migration
+        # CLI directly. Don't fail init_db on missing migration runner.
+        pass
+
 
 def upsert_role(role: dict) -> int:
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -83,8 +112,14 @@ def upsert_role(role: dict) -> int:
         "discovered_at": now,
         "updated_at": now,
     }
+    # Build the quarantine predicate from the live LANES set so removed legacy
+    # archetype ids (cox-style-tpm, titanx-style-pm, …) sink to 0 alongside
+    # the explicit 'out_of_band' marker. Mirrors score_breakdown's `lane not
+    # in LANES` rule so the resurrection bug stays closed for both legacy
+    # lane names AND any new typo that bypasses the LANES whitelist.
+    valid_lanes_sql = ",".join(f"'{l}'" for l in LANES.keys())
     with _conn() as conn:
-        cur = conn.execute("""
+        cur = conn.execute(f"""
             INSERT INTO roles (url, title, company, location, remote, lane,
                                comp_min, comp_max, comp_source, fit_score,
                                source, jd_raw, discovered_at, updated_at)
@@ -92,20 +127,25 @@ def upsert_role(role: dict) -> int:
                     :comp_min, :comp_max, :comp_source, :fit_score,
                     :source, :jd_raw, :discovered_at, :updated_at)
             ON CONFLICT(url) DO UPDATE SET
-                title       = COALESCE(excluded.title, roles.title),
-                company     = COALESCE(excluded.company, roles.company),
-                location    = COALESCE(excluded.location, roles.location),
+                -- NULLIF so an empty-string excluded value doesn't overwrite a
+                -- populated stored one (matches network_scrape.upsert_scraped).
+                title       = COALESCE(NULLIF(excluded.title,    ''), roles.title),
+                company     = COALESCE(NULLIF(excluded.company,  ''), roles.company),
+                location    = COALESCE(NULLIF(excluded.location, ''), roles.location),
                 remote      = excluded.remote,
                 comp_min    = COALESCE(excluded.comp_min, roles.comp_min),
                 comp_max    = COALESCE(excluded.comp_max, roles.comp_max),
-                comp_source = COALESCE(excluded.comp_source, roles.comp_source),
-                -- Preserve out_of_band quarantine sink: a 0 fit_score on a
-                -- quarantined row must NOT be overwritten by re-discovery.
+                comp_source = COALESCE(NULLIF(excluded.comp_source, ''), roles.comp_source),
+                -- Quarantine sink: lane outside the current 4 archetypes
+                -- (or the explicit 'out_of_band') keeps fit_score at 0 so
+                -- re-discovery can't resurrect a stale score.
                 fit_score   = CASE
-                                WHEN roles.lane = 'out_of_band' THEN 0
+                                WHEN roles.lane = 'out_of_band'
+                                  OR roles.lane NOT IN ({valid_lanes_sql})
+                                THEN 0
                                 ELSE COALESCE(excluded.fit_score, roles.fit_score)
                               END,
-                source      = COALESCE(excluded.source, roles.source),
+                source      = COALESCE(NULLIF(excluded.source, ''), roles.source),
                 updated_at  = excluded.updated_at
         """, payload)
         return cur.lastrowid or _role_id_by_url(conn, payload["url"])
@@ -183,11 +223,13 @@ def update_jd_parsed(role_id: int, parsed: dict) -> None:
 def update_lane(role_id: int, lane: str) -> None:
     """Reassign a role to a different lane. Used by auto-pipeline after
     score_title picks the best-matching archetype, and by migrations.
-    Setting lane='out_of_band' also forces fit_score to 0 to honor the
-    quarantine sink (matches the upsert ON CONFLICT logic)."""
+    Any lane outside the current 4 archetypes (or the explicit 'out_of_band'
+    marker) forces fit_score to 0 — keeps the quarantine sink in lockstep
+    with score_breakdown's `lane not in LANES` rule, so a typo or legacy
+    lane name (cox-style-tpm, etc.) cannot leave a stale score behind."""
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     with _conn() as conn:
-        if lane == "out_of_band":
+        if _is_quarantined(lane):
             conn.execute(
                 "UPDATE roles SET lane = ?, fit_score = 0, updated_at = ? WHERE id = ?",
                 (lane, now, role_id),
@@ -250,6 +292,10 @@ def insert_offer(offer: dict) -> int:
     # Only insert columns the caller actually set so the schema's DEFAULT
     # values (status='active', signing_bonus=0, rsu_vest_years=4, etc.) apply.
     cols = [c for c in all_cols if payload.get(c) is not None]
+    # Defence-in-depth: even though `cols` is filtered through the all_cols
+    # whitelist above, assert membership before interpolation so a future
+    # contributor can't widen the source without re-checking.
+    assert set(cols).issubset(all_cols), f"insert_offer column drift: {set(cols) - set(all_cols)}"
     vals = [payload[c] for c in cols]
     placeholders = ",".join("?" * len(cols))
     with _conn() as conn:

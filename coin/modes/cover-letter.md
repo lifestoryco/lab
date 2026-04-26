@@ -152,7 +152,7 @@ skip Checks 6–9 which are orthogonality / domain-overreach / lane-specific
 and don't apply to a single-page letter):
 
 1. **Check 1 — Education truthfulness** — no CS / engineering degree claims; BA History + MBA WGU + PMP only
-2. **Check 2 — Pedigree non-claim** — no Fortune 500 / seven-figure / world-class qualifiers without a verifiable named account
+2. **Check 2 — Pedigree non-claim** — no bullet claiming employment AT a FAANG/big-tech/unicorn (Netflix, Meta, Google, Apple, Amazon, Microsoft, Stripe, OpenAI, Anthropic, Nvidia, Tesla, LinkedIn, Salesforce, Uber, Airbnb, Palantir, Snowflake, Databricks) unless the company appears in `PROFILE.positions[*].company`. Reframe as "for &lt;company&gt; as Hydrant's TPM" when the relationship was a Hydrant engagement
 3. **Check 3 — Cox/TitanX/Safeguard attribution** — frame as Hydrant engagements (PM/COO/lead), not Sean-as-direct-employee
 4. **Check 4 — Vague-flex qualifiers** — no "spearheaded multi-billion", "hypergrowth", "mission-critical" without a real anchor; verbs stay honest
 5. **Check 5 — Metric provenance** — every numeric claim traces to a PROFILE.positions[*].achievements line

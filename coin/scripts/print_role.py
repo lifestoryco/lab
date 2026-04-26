@@ -5,7 +5,7 @@ Usage:
   python scripts/print_role.py                      # list top active roles
   python scripts/print_role.py --id 42              # one role, full detail
   python scripts/print_role.py --status discovered  # filter by status
-  python scripts/print_role.py --lane cox-style-tpm
+  python scripts/print_role.py --lane mid-market-tpm
   python scripts/print_role.py --top 3              # top-3 by fit_score
 """
 
