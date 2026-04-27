@@ -236,3 +236,19 @@ STATE_TAX_RATES = {
     "AK": 0.0,
     "NH": 0.0,
 }
+
+
+# ── Disqualifiers ──────────────────────────────────────────────────────────────
+# Mirrors `careerops/disqualifiers.py` — keep in lockstep when editing.
+# Hand-editable rule list; the regex logic lives in disqualifiers.py.
+
+DISQUALIFIER_PATTERNS: list[tuple[str, str]] = [
+    (r"\b(secret|top.secret|ts/sci|public trust)\s+clearance", "clearance_required"),
+    (r"\b(ITAR|22\s*CFR\s*120|22\s*CFR\s*121|export\s+controlled)\b", "itar_restricted"),
+    (r"(BS|Bachelor'?s?|MS|Master'?s?|B\.S\.|M\.S\.)\s+(degree\s+)?(in|of)\s+(Computer Science|CS|Software Engineering|Electrical Engineering|Mechanical Engineering|Materials Science|Chemical Engineering)\s+(is\s+)?required", "degree_required"),
+]
+
+DOMAIN_PENALTY_RULES: list[tuple[str, str, int]] = [
+    (r"\b(Microsoft\s+stack|Azure|\.NET|C#|Power\s+Platform|Power\s+BI|Dynamics\s+365|D365)", "msft_stack_mismatch", -20),
+    (r"\b(cybersecurity|infosec|SIEM|SOC|threat\s+intel|penetration|red\s+team|blue\s+team|zero\s+trust)\b", "narrow_security_domain", -20),
+]

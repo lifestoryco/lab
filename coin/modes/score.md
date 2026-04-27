@@ -60,20 +60,49 @@ role doesn't yet have parsed_jd populated.
    .venv/bin/python scripts/update_role.py --id <role_id> --parsed-jd /tmp/parsed.json
    ```
 
+4a. **Run disqualifier scan** before scoring:
+
+   ```bash
+   .venv/bin/python -c "
+   import sys; sys.path.insert(0,'.')
+   from careerops.disqualifiers import apply_disqualifiers
+   from careerops.pipeline import get_role, update_lane, update_role_notes
+   from data.resumes.base import PROFILE
+   import json
+   r = dict(get_role(<role_id>))
+   parsed = json.loads(r['jd_parsed']) if r.get('jd_parsed') else {}
+   dq = apply_disqualifiers(r, parsed, PROFILE)
+   if dq['hard_dq']:
+       update_lane(<role_id>, 'out_of_band')
+       update_role_notes(<role_id>, f\"DQ: {','.join(dq['hard_dq'])}\")
+       print('HARD DQ:', dq['hard_dq'])
+   else:
+       print('soft:', dq['soft_dq'])
+   "
+   ```
+
+   If `hard_dq` is non-empty, STOP and report:
+   *"Role <id> at <company> hard-DQ'd: <reasons>. Quarantined to out_of_band.
+   Override with `/coin tailor <id> --force`."* Do not proceed.
+
 5. **Recompute fit score** (optional but recommended — score.py will use
-   the richer parsed skills now):
+   the richer parsed skills now). Pass `dq_result` so soft penalties apply:
 
    ```bash
    .venv/bin/python -c "
    import sys; sys.path.insert(0,'.')
    from careerops.pipeline import get_role, update_fit_score
-   from careerops.score import score_fit
+   from careerops.score import score_breakdown
+   from careerops.disqualifiers import scan_jd
+   from data.resumes.base import PROFILE
    import json
-   r = get_role(<role_id>)
+   r = dict(get_role(<role_id>))
    parsed = json.loads(r['jd_parsed']) if r.get('jd_parsed') else {}
-   score = score_fit(r, r['lane'], parsed_jd=parsed)
-   update_fit_score(<role_id>, score)
-   print('new fit:', score)
+   dq = scan_jd(r.get('jd_raw') or parsed.get('raw',''),
+                {**PROFILE, '_target_title': r.get('title','')})
+   out = score_breakdown(r, r['lane'], parsed_jd=parsed, dq_result=dq)
+   update_fit_score(<role_id>, out['composite'])
+   print('new fit:', out['composite'], 'dq:', dq.get('soft_dq'))
    "
    ```
 

@@ -205,6 +205,7 @@ def score_breakdown(
     lane: str,
     parsed_jd: dict | None = None,
     profile: dict | None = None,
+    dq_result: dict | None = None,
 ) -> dict:
     """Return composite score + per-dimension breakdown dict.
 
@@ -223,6 +224,19 @@ def score_breakdown(
     returns {} and the per-dimension scorers fall through to defaults producing
     a 30-40 composite that resurrects quarantined roles in the dashboard.
     """
+    if dq_result and dq_result.get("hard_dq"):
+        return {
+            "composite": 0.0,
+            "grade": "F",
+            "dimensions": {
+                dim: {"raw": 0.0, "weight": w, "contribution": 0.0}
+                for dim, w in FIT_SCORE_WEIGHTS.items()
+            },
+            "quarantined": True,
+            "disqualified": True,
+            "dq_reasons": list(dq_result["hard_dq"]),
+        }
+
     if lane == "out_of_band" or lane not in LANES:
         return {
             "composite": 0.0,
@@ -271,6 +285,22 @@ def score_breakdown(
     }
 
     composite = round(sum(d["contribution"] for d in dimensions.values()), 1)
+
+    if dq_result and dq_result.get("soft_dq"):
+        penalty = sum(p for _, p in dq_result["soft_dq"])
+        composite = round(max(0.0, min(100.0, composite + penalty)), 1)
+        dimensions["domain_fit"] = {
+            "raw": float(max(0, 100 + penalty)),
+            "weight": 0.0,
+            "contribution": 0.0,
+        }
+        return {
+            "composite": composite,
+            "grade": score_grade(composite),
+            "dimensions": dimensions,
+            "disqualified": False,
+            "dq_reasons": [r for r, _ in dq_result["soft_dq"]],
+        }
 
     return {
         "composite": composite,

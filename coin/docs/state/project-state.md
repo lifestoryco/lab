@@ -1,5 +1,57 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-27, Session 6 — COIN-DISQUALIFIERS)
+
+### COIN-DISQUALIFIERS — JD-aware quarantine + soft-penalty layer ✅ COMPLETE
+
+**Tests:** 239 → **265 passing** (+26; 0 regressions).
+
+**1. New module `careerops/disqualifiers.py`** — pure-regex scanner. Public API:
+- `scan_jd(jd_text, profile) -> DqResult` (hard_dq/soft_dq/matched_phrases)
+- `apply_disqualifiers(role, parsed_jd, profile) -> DqResult` (mutating helper:
+  sets `role['lane']='out_of_band'` + appends `DQ: <reasons>` to notes on hard hits)
+- 3 hard rules: `clearance_required` (Secret/TS/SCI/Public Trust), `itar_restricted`
+  (ITAR / 22 CFR 120/121 / export controlled), `degree_required` (BS/MS in CS/SE/EE/ME/
+  Materials/Chem). Equivalence carve-out: "or equivalent" within 30 chars demotes degree
+  match to no-DQ (Sean's 15yr experience qualifies)
+- 2 soft rules: `msft_stack_mismatch` (-20, gated on profile.skills not containing
+  Azure/D365/Power BI/etc), `narrow_security_domain` (-20, requires 3+ infosec mentions
+  AND title contains security|cyber prefix)
+
+**2. `careerops/score.py::score_breakdown`** — backward-compatible `dq_result` kwarg:
+- `hard_dq` → composite=0, grade=F, `disqualified=True`, `dq_reasons=[...]`
+- `soft_dq` → composite clamped[0,100] after penalty, `domain_fit` info dimension
+  (weight=0, doesn't double-count), `dq_reasons=[...]`
+- `dq_result=None` → byte-identical to prior output (no new keys; 239 existing tests untouched)
+
+**3. `coin/config.py`** — `DISQUALIFIER_PATTERNS` and `DOMAIN_PENALTY_RULES` lists
+mirror the regexes for hand-editability. disqualifiers.py remains source of truth.
+
+**4. `modes/score.md` Step 4a + Step 5** — disqualifier scan inline before re-score,
+hard-DQ stop with override hint, soft-DQ threading via `dq_result` kwarg.
+
+**5. `modes/auto-pipeline.md` Step 2.1/2.2** — same insertion; quarantine stop message
+extended to surface `dq_reasons` (was FAANG-only).
+
+**6. `tests/test_disqualifiers.py` (26 tests)** — Rock West / HPE / JourneyTeam / Coda
+verbatim JD fixtures, parametrized clearance + ITAR variants, equivalence-clause carve-out,
+msft skill-presence gate, security-title-+-frequency dual gate, score_breakdown DQ
+integration (hard zero, soft penalty, no-DQ identity, domain_fit weight=0).
+
+**Files touched (5):** `careerops/disqualifiers.py` (new), `careerops/score.py`,
+`config.py`, `modes/score.md`, `modes/auto-pipeline.md`, `tests/test_disqualifiers.py` (new).
+
+**Decisions:**
+- Pure regex, no LLM. Deterministic by design — must be cheap to call on every JD parse.
+- Hard-DQ short-circuits BEFORE the existing `lane='out_of_band'` quarantine guard so
+  the new `dq_reasons` field is populated when DQ caused the quarantine (vs. FAANG-pedigree
+  filter which doesn't carry reasons).
+- `domain_fit` dimension carries weight=0 — penalty already hit composite; the dimension
+  exists purely so the future dashboard can render "soft-penalized -20" without rebuilding
+  the math from dq_reasons.
+
+---
+
 ## What Was Just Done (2026-04-27, Session 6 — Coin v2 program kickoff)
 
 ### Authored 7 v2 task prompts + executed 1 (COIN-SCRAPER-POSTED-AT) ✅
