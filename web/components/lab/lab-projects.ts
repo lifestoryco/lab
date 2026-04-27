@@ -69,6 +69,15 @@ export const LAB_PROJECTS: LabProject[] = [
     techTags: ['Canvas 2D', 'Sumi-e', 'Framer Motion', 'RAG (planned)'],
     dateAdded: '2026-04-23',
   },
+  {
+    slug: 'coy',
+    name: 'SANTOS COY',
+    tagline: 'Blood, frontier, and the making of Texas. Sixteen generations from Lepe to Houston.',
+    gradient: 'linear-gradient(145deg, #1c1a17 0%, #2a2723 30%, #704214 65%, #c9a961 100%)',
+    accentColor: '#c9a961',
+    techTags: ['Genealogy', 'Static HTML', 'GSAP', 'Tailwind'],
+    dateAdded: '2026-04-27',
+  },
 ]
 
 export const LAB_PROJECTS_MAP: Record<string, LabProject> = LAB_PROJECTS.reduce(
