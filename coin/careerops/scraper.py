@@ -12,11 +12,60 @@ Outputs list[dict] ready to feed into pipeline.upsert_roles().
 
 from __future__ import annotations
 
+import datetime
 import time
 import re
 from urllib.parse import urlparse
 import httpx
 from bs4 import BeautifulSoup
+
+# Matches "Posted N <unit>s ago" / "N <unit> ago". Used as a fallback when
+# LinkedIn's <time> element lacks a machine-readable datetime attribute.
+RELATIVE_AGE_RE = re.compile(
+    r"(\d+)\s+(minute|hour|day|week|month|year)s?\s+ago",
+    re.IGNORECASE,
+)
+_RELATIVE_AGE_DAYS = {
+    "minute": 0, "hour": 0, "day": 1, "week": 7, "month": 30, "year": 365,
+}
+
+
+def _extract_posted_at(card) -> str | None:
+    """Pull a posting date (ISO YYYY-MM-DD) off a LinkedIn card, or None.
+
+    Tries selectors in order of reliability; prefers the machine-readable
+    datetime attribute over parsed human strings.
+    """
+    selectors = (
+        "time.job-search-card__listdate",
+        "time.job-search-card__listdate--new",
+        "time[datetime]",
+        ".job-search-card__listdate",
+    )
+    el = None
+    for sel in selectors:
+        el = card.select_one(sel)
+        if el is not None:
+            break
+    if el is None:
+        return None
+
+    dt_attr = el.get("datetime") if hasattr(el, "get") else None
+    if dt_attr:
+        try:
+            return datetime.date.fromisoformat(dt_attr).isoformat()
+        except (ValueError, TypeError):
+            pass
+
+    text = el.get_text(strip=True) if hasattr(el, "get_text") else ""
+    m = RELATIVE_AGE_RE.search(text or "")
+    if not m:
+        return None
+    n = int(m.group(1))
+    unit = m.group(2).lower()
+    delta_days = n * _RELATIVE_AGE_DAYS.get(unit, 0)
+    posted = datetime.date.today() - datetime.timedelta(days=delta_days)
+    return posted.isoformat()
 
 from config import (
     BOARDS, LANES, REQUEST_DELAY_SECONDS, REQUEST_TIMEOUT,
@@ -108,12 +157,15 @@ def _parse_linkedin_cards(html: str) -> list[dict]:
         location = location_el.get_text(strip=True) if location_el else None
         comp_raw = salary_el.get_text(strip=True) if salary_el else None
 
+        posted_at = _extract_posted_at(card)
+
         results.append({
             "url": href,
             "title": title,
             "company": company,
             "location": location,
             "comp_raw": comp_raw,
+            "posted_at": posted_at,
             "source": "linkedin",
         })
     return results

@@ -17,6 +17,7 @@ import sys, pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 import argparse
+import datetime
 import json
 import sys
 
@@ -30,6 +31,10 @@ def main() -> int:
     ap.add_argument("--limit", type=int, default=20, help="Max roles per lane")
     ap.add_argument("--location", help="Override default location")
     ap.add_argument("--skip-filter", action="store_true", help="Disable comp filter")
+    ap.add_argument(
+        "--max-age-days", type=int, default=None,
+        help="Drop roles older than N days (by posted_at). Roles with unknown posted_at pass."
+    )
     args = ap.parse_args()
 
     if args.lane:
@@ -39,6 +44,28 @@ def main() -> int:
 
     if not args.skip_filter:
         scraped = compensation.filter_by_comp(scraped)
+
+    if args.max_age_days is not None:
+        cutoff = datetime.date.today() - datetime.timedelta(days=args.max_age_days)
+        before = len(scraped)
+        kept: list[dict] = []
+        for r in scraped:
+            pa = r.get("posted_at")
+            if not pa:
+                kept.append(r)
+                continue
+            try:
+                if datetime.date.fromisoformat(pa) >= cutoff:
+                    kept.append(r)
+            except (ValueError, TypeError):
+                kept.append(r)
+        dropped = before - len(kept)
+        print(
+            f"--max-age-days {args.max_age_days}: dropped {dropped} of {before} "
+            f"roles older than cutoff",
+            file=sys.stderr,
+        )
+        scraped = kept
 
     saved = []
     for role in scraped:
@@ -56,6 +83,7 @@ def main() -> int:
             "comp_max": role.get("comp_max"),
             "comp_source": role.get("comp_source"),
             "fit_score": fit,
+            "posted_at": role.get("posted_at"),
             "source": role.get("source"),
             "url": role.get("url"),
         })

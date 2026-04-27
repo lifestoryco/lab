@@ -192,8 +192,25 @@ def test_breakdown_shape():
     assert "grade" in bd
     assert "dimensions" in bd
     expected_dims = {"comp", "company_tier", "skill_match", "title_match",
-                     "remote", "application_effort", "seniority_fit", "culture_fit"}
+                     "remote", "application_effort", "seniority_fit", "culture_fit",
+                     "freshness"}
     assert set(bd["dimensions"].keys()) == expected_dims
+
+
+def test_score_breakdown_includes_freshness():
+    """m005 regression: freshness must be a key + composite still in [0,100]."""
+    role = {"title": "Senior TPM", "company": "Filevine",
+            "location": "Salt Lake City, UT", "remote": 0, "comp_min": 200000,
+            "posted_at": None}
+    bd = score_breakdown(role, "mid-market-tpm")
+    assert "freshness" in bd["dimensions"]
+    assert 0 <= bd["composite"] <= 100
+
+
+def test_fit_score_weights_sum_to_one():
+    """FIT_SCORE_WEIGHTS must sum to exactly 1.0 (with float tolerance)."""
+    from config import FIT_SCORE_WEIGHTS
+    assert abs(sum(FIT_SCORE_WEIGHTS.values()) - 1.0) < 1e-9
 
 def test_breakdown_contributions_sum_to_composite():
     role = {"title": "Senior TPM", "company": "Filevine", "location": "Salt Lake City, UT", "remote": 0, "comp_min": 200000}

@@ -5,11 +5,33 @@ State machine adapted from santifer/career-ops (translated to English):
   contact → interviewing → offer | rejected | withdrawn | no_apply | closed
 """
 
+import datetime as _dt_module
 import sqlite3
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from config import DB_PATH, MIN_BASE_SALARY
+
+
+def format_age(posted_at: str | None) -> str:
+    """Render a posted_at ISO date as a compact age string for the dashboard.
+
+    Returns '?' for unknown/unparseable; '3d' for <7 days, '2w' for <30,
+    '5mo' for <365, '1y+' beyond.
+    """
+    if not posted_at:
+        return "?"
+    try:
+        days = (_dt_module.date.today() - _dt_module.date.fromisoformat(posted_at)).days
+    except (ValueError, TypeError):
+        return "?"
+    if days < 7:
+        return f"{days}d"
+    if days < 30:
+        return f"{days // 7}w"
+    if days < 365:
+        return f"{days // 30}mo"
+    return "1y+"
 
 STATUSES = [
     "discovered",         # just scraped; not yet scored
@@ -57,6 +79,7 @@ def init_db() -> None:
                 jd_parsed     TEXT,
                 notes         TEXT,
                 discovered_at TEXT,
+                posted_at     TEXT,
                 updated_at    TEXT
             )
         """)
@@ -80,6 +103,7 @@ def upsert_role(role: dict) -> int:
         "fit_score": role.get("fit_score"),
         "source": role.get("source"),
         "jd_raw": role.get("jd_raw"),
+        "posted_at": role.get("posted_at"),
         "discovered_at": now,
         "updated_at": now,
     }
@@ -87,10 +111,10 @@ def upsert_role(role: dict) -> int:
         cur = conn.execute("""
             INSERT INTO roles (url, title, company, location, remote, lane,
                                comp_min, comp_max, comp_source, fit_score,
-                               source, jd_raw, discovered_at, updated_at)
+                               source, jd_raw, discovered_at, posted_at, updated_at)
             VALUES (:url, :title, :company, :location, :remote, :lane,
                     :comp_min, :comp_max, :comp_source, :fit_score,
-                    :source, :jd_raw, :discovered_at, :updated_at)
+                    :source, :jd_raw, :discovered_at, :posted_at, :updated_at)
             ON CONFLICT(url) DO UPDATE SET
                 title       = COALESCE(excluded.title, roles.title),
                 company     = COALESCE(excluded.company, roles.company),
@@ -106,6 +130,9 @@ def upsert_role(role: dict) -> int:
                                 ELSE COALESCE(excluded.fit_score, roles.fit_score)
                               END,
                 source      = COALESCE(excluded.source, roles.source),
+                -- Never clobber a known posted_at with NULL: once captured,
+                -- it stays captured even if a future scrape misses the element.
+                posted_at   = COALESCE(excluded.posted_at, roles.posted_at),
                 updated_at  = excluded.updated_at
         """, payload)
         return cur.lastrowid or _role_id_by_url(conn, payload["url"])
@@ -467,6 +494,7 @@ def dashboard() -> None:
     table.add_column("ID", style="dim", width=4)
     table.add_column("Status", width=16)
     table.add_column("Lane", width=22)
+    table.add_column("Age", justify="right", width=5)
     table.add_column("Company", width=20)
     table.add_column("Title", width=34)
     table.add_column("Comp", width=14)
@@ -485,10 +513,17 @@ def dashboard() -> None:
         grade = score_grade(fit_val) if fit_val is not None else "—"
         fit_color = "green" if fit_val and fit_val >= 70 else ("yellow" if fit_val and fit_val >= 55 else "red")
         grade_color = {"A": "bold green", "B": "green", "C": "yellow", "D": "red", "F": "dim red"}.get(grade, "dim")
+        # posted_at may be absent on rows from a DB that never went through a
+        # post-m005 scrape (e.g. test fixtures / older inserts) — guard with .get-style access.
+        try:
+            age_val = r["posted_at"]
+        except (IndexError, KeyError):
+            age_val = None
         table.add_row(
             str(r["id"]),
             r["status"] or "",
             r["lane"] or "",
+            format_age(age_val),
             (r["company"] or "")[:20],
             (r["title"] or "")[:34],
             comp,

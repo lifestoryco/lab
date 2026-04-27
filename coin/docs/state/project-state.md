@@ -1,5 +1,104 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-27, Session 6 — Coin v2 program kickoff)
+
+### Authored 7 v2 task prompts + executed 1 (COIN-SCRAPER-POSTED-AT) ✅
+
+**Session goal:** Plan and kick off the Coin v2 program (Sean: $99K → $160K+).
+Today's `/coin discover --utah` exposed structural gaps — JD-blind scoring,
+LinkedIn-only sourcing, no posting freshness, no UI beyond Rich CLI, thin
+story library. Locked plan via AskUserQuestion (7 forking questions answered),
+then authored 8 self-contained task prompts and executed the first one.
+
+**Plan file:** `~/.claude/plans/great-work-yes-please-polymorphic-hollerith.md`
+(approved by Sean — context, vision, 8 workstreams, 4-sprint sequence).
+
+**Authored prompts** (all in `docs/tasks/prompts/pending/`, ~3.3K lines total):
+- `COIN-DISQUALIFIERS` (S) — JD-aware quarantine: clearance/ITAR/CS-deg hard
+  DQ, MSFT-stack/narrow-domain-SE soft -20pt penalty. Catches the
+  #4/#9/#13/#14 false positives Sean flagged today.
+- `COIN-MULTI-BOARD` (M) — Greenhouse/Lever/Ashby scrapers (port santifer
+  scan.mjs MIT). Solves "all comp unverified" — Ashby exposes comp directly.
+- `COIN-LEVELS-CROSSREF` (M) — Manual Levels.fyi seed (~50 cos), comp
+  imputation with confidence haircut. Auto-runs during upsert.
+- `COIN-SCORE-V2` (L) — 2-stage discovery: stage 1 cheap title-only,
+  stage 2 host-Claude-session JD parse + DQ scan + re-score top-N.
+- `COIN-WEB-UI` (L) — `/lab/coin` Next.js page in existing `web/` app.
+  Mirrors `/lab/holo` pattern (better-sqlite3 reads, Python subprocess
+  mutations). Kanban + role detail + ofertas + stories views.
+- `COIN-EXPERIENCE-DEEPDIVE` (M) — Conversational interview mode.
+  Expands `data/resumes/base.py`'s ~5 stories to 30-50 in `stories.yml`.
+  Hardens audit Check 5 (metric provenance must trace to story id).
+- `COIN-SCHEDULER` (S) — launchd 7am daily discover + iMessage on A-grade
+  (≥85). Quiet by design. Requires SCORE-V2 first (A-grade trustworthy).
+
+**Executed prompts:**
+- `COIN-SCRAPER-POSTED-AT` — see detailed entry below.
+
+**Decisions locked via AskUserQuestion:**
+- UI surface → `/lab/coin` in existing `web/` (mirror `/lab/holo`)
+- Score V2 → LLM-augmented JD parsing (host session, not Anthropic SDK)
+- Comp data → Multi-board direct (Greenhouse/Lever/Ashby)
+- Deep-dive format → Conversational interview, Coin transcribes
+- Disqualifiers → Hard for clearance/ITAR/CS-deg; soft for MSFT-stack +
+  narrow-domain SE. Sean is a US citizen (citizenship is NOT a DQ).
+- Scheduler → Daily launchd at 7am + iMessage on A-grade only
+- Privacy/NDA → None — `base.py` is fair game
+
+**Repos audited for borrowable code:**
+- `santifer/career-ops` (MIT) — port `scan.mjs` API-detection switch +
+  pipeline tab taxonomy. Direct port-source for COIN-MULTI-BOARD + WEB-UI.
+- `drbarzaga/JobPortal` — archived MERN job-board product, wrong shape. Skip.
+- `doreanbyte/katswiri` (Unlicense) — Dart/Flutter, Malawi job boards.
+  Useful only as `BoardScraper` ABC pattern reference.
+
+**Sequencing for next sessions:**
+- Sprint 1: COIN-DISQUALIFIERS, COIN-MULTI-BOARD, COIN-LEVELS-CROSSREF
+  (sequential — they all touch `score.py`, `pipeline.py`, `config.py`)
+- Sprint 2: COIN-SCORE-V2 (depends on Sprint 1)
+- Sprint 3: COIN-WEB-UI + COIN-EXPERIENCE-DEEPDIVE (parallel, both after Sprint 2)
+- Sprint 4: COIN-SCHEDULER (after SCORE-V2)
+
+Estimated remaining execution: 12-15 hours across 3-4 sessions. Prompts
+are the leverage — once written, `/run-task` walks each one autonomously.
+
+---
+
+## What Was Just Done (2026-04-27, COIN-SCRAPER-POSTED-AT)
+
+### Capture posting age and surface freshness ✅ COMPLETE
+
+**Tests:** 223 → **239 passing** (+16; 0 regressions).
+
+**Motivating example:** Sean flagged role #11 (Filevine) — a posting that
+LinkedIn was still showing but had actually been live ~30 days. Coin's
+`discovered_at` only records when the scraper first saw the role, so
+month-old reqs masquerade as fresh in the dashboard. Stale reqs rarely
+convert (the recruiter screen window is 5–14d), so tailoring effort
+spent on them is wasted throughput.
+
+**What shipped:**
+- `scripts/migrations/m005_posted_at.py` — `roles.posted_at TEXT` column,
+  idempotent, supports `--rollback` (uses `ALTER TABLE ... DROP COLUMN`
+  on SQLite ≥3.35, falls back to table rebuild otherwise).
+- `careerops/scraper.py::_extract_posted_at` — pulls posted_at off LinkedIn
+  cards, preferring the machine-readable `datetime` attribute and
+  falling back to a `RELATIVE_AGE_RE` regex against the human string.
+- `careerops/pipeline.py::upsert_role` — persists `posted_at` with
+  `COALESCE(excluded.posted_at, roles.posted_at)` so a future scrape
+  that misses the element never clobbers a known date.
+- `careerops/score.py::score_freshness` — new dimension wired into
+  `score_breakdown`. Buckets: ≤7d=100, ≤14d=80, ≤30d=60, ≤90d=30,
+  >90d=10, unknown=50.
+- `config.FIT_SCORE_WEIGHTS` rebalanced (sum still 1.0):
+  `freshness 0.04` added; `application_effort 0.04 → 0.02`,
+  `culture_fit 0.03 → 0.01`.
+- `scripts/discover.py --max-age-days N` — drops roles older than N days
+  before scoring/upserting; reports `dropped X of Y` to stderr. Verified
+  live: dropped 10 of 20 roles older than 14 days.
+- `scripts/dashboard.py` — new "Age" column (between Lane and Company),
+  rendered via `pipeline.format_age` (`3d` / `1w` / `5mo` / `1y+` / `?`).
+
 ## What Was Just Done (2026-04-25, Session 5 — Deferred-followup batch 2)
 
 ### COIN-NETWORK-LIVE-SCRAPE + COIN-OFERTAS-LEVELS-FYI + COIN-COVER-RECIPIENT-FROM-NETWORK ✅ COMPLETE
