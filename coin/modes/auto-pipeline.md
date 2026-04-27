@@ -91,13 +91,24 @@ update_lane(<id>, '<lane>')
 ## Step 2 — SCORE
 
 ```python
-from careerops.pipeline import get_role, update_fit_score
+from careerops.pipeline import get_role, update_fit_score, update_lane, update_role_notes
 from careerops.score import score_breakdown
+from careerops.disqualifiers import apply_disqualifiers
+from data.resumes.base import PROFILE
 import json
 
-role = get_role(role_id)
+role = dict(get_role(role_id))
 parsed = json.loads(role['jd_parsed']) if role.get('jd_parsed') else None
-breakdown = score_breakdown(role, role['lane'], parsed_jd=parsed)
+
+# 2.1 — JD-aware disqualifier scan (runs before scoring)
+dq = apply_disqualifiers(role, parsed or {}, PROFILE)
+if dq['hard_dq']:
+    update_lane(role_id, 'out_of_band')
+    update_role_notes(role_id, f"DQ: {','.join(dq['hard_dq'])}")
+
+# 2.2 — Score (dq_result threads through; hard-DQ shorts to composite=0,
+# soft-DQ subtracts penalty)
+breakdown = score_breakdown(role, role['lane'], parsed_jd=parsed, dq_result=dq)
 update_fit_score(role_id, breakdown['composite'])
 ```
 
@@ -105,7 +116,7 @@ update_fit_score(role_id, breakdown['composite'])
 
 | Condition | Action |
 |---|---|
-| `lane == "out_of_band"` | STOP. Print: *"Role <id> at <company> is pedigree-filtered (FAANG-tier requiring CS degree or ex-FAANG-TPM pattern). Tailoring would burn effort on a likely recruiter-screen reject. Override with `/coin tailor <id> --force`."* |
+| `lane == "out_of_band"` | STOP. Print: *"Role <id> at <company> is quarantined: <dq_reasons or 'pedigree-filtered'>. Targeting it would burn tailoring effort on a likely auto-reject. Override with `/coin tailor <id> --force` if you really want to."* |
 | `composite < 50` (D or F grade) | STOP and ASK: *"This role scored <X> (<grade>). Tailor anyway? Most D/F roles waste effort. (yes/no)"* |
 | `composite >= 50` | Continue to Step 3 |
 
