@@ -178,9 +178,10 @@ FIT_SCORE_WEIGHTS = {
     "skill_match":        0.22,
     "title_match":        0.12,
     "remote":             0.06,
-    "application_effort": 0.04,
+    "application_effort": 0.02,  # dropped from 0.04 to make room for freshness
     "seniority_fit":      0.05,
-    "culture_fit":        0.03,
+    "culture_fit":        0.01,  # dropped from 0.03 to make room for freshness
+    "freshness":          0.04,  # new (m005): stale postings rarely convert
 }
 
 # ── Score → letter grade thresholds ──────────────────────────────────────────

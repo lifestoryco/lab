@@ -1,18 +1,21 @@
 """Pure-Python fit scoring. No LLM calls.
 
-8-dimension scoring system with A-F letter grades.
+9-dimension scoring system with A-F letter grades.
 Weights are sourced from config.FIT_SCORE_WEIGHTS — the docstring used to
 embed numbers, but they drifted; trust config.py as the source of truth.
 
-Current weights (2026-04-25):
+Current weights (2026-04-27, after m005 posted_at):
   comp 0.28 · company_tier 0.20 · skill_match 0.22 · title_match 0.12
-  remote 0.06 · application_effort 0.04 · seniority_fit 0.05 · culture_fit 0.03
+  remote 0.06 · seniority_fit 0.05 · freshness 0.04 · application_effort 0.02
+  · culture_fit 0.01
 
 Quarantine: roles with lane='out_of_band' (FAANG-tier pedigree filter)
 short-circuit to composite=0, grade=F. See score_breakdown.
 """
 
 from __future__ import annotations
+
+import datetime
 
 from config import (
     FIT_SCORE_WEIGHTS, LANES, MIN_BASE_SALARY, MIN_TOTAL_COMP,
@@ -143,6 +146,30 @@ def score_seniority_fit(parsed_jd: dict | None) -> float:
     return 55.0
 
 
+def score_freshness(posted_at: str | None) -> int:
+    """Score role freshness. Stale postings rarely convert.
+
+    Returns 100 if ≤7d, 80 if ≤14d, 60 if ≤30d, 30 if ≤90d, 10 if
+    >90d, 50 if unknown (don't penalize too hard for missing data).
+    """
+    if posted_at is None:
+        return 50
+    try:
+        posted = datetime.date.fromisoformat(posted_at)
+    except (ValueError, TypeError):
+        return 50
+    age_days = (datetime.date.today() - posted).days
+    if age_days <= 7:
+        return 100
+    if age_days <= 14:
+        return 80
+    if age_days <= 30:
+        return 60
+    if age_days <= 90:
+        return 30
+    return 10
+
+
 def score_culture_fit(parsed_jd: dict | None) -> float:
     """Start 80; deduct 10 per red flag; add 5 per positive culture signal. Clamp 0-100."""
     if not parsed_jd:
@@ -231,6 +258,7 @@ def score_breakdown(
         "application_effort": score_application_effort(role.get("url")),
         "seniority_fit":      score_seniority_fit(parsed_jd),
         "culture_fit":        score_culture_fit(parsed_jd),
+        "freshness":          float(score_freshness(role.get("posted_at"))),
     }
 
     dimensions = {

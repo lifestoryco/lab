@@ -1,5 +1,40 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-27, COIN-SCRAPER-POSTED-AT)
+
+### Capture posting age and surface freshness ✅ COMPLETE
+
+**Tests:** 223 → **239 passing** (+16; 0 regressions).
+
+**Motivating example:** Sean flagged role #11 (Filevine) — a posting that
+LinkedIn was still showing but had actually been live ~30 days. Coin's
+`discovered_at` only records when the scraper first saw the role, so
+month-old reqs masquerade as fresh in the dashboard. Stale reqs rarely
+convert (the recruiter screen window is 5–14d), so tailoring effort
+spent on them is wasted throughput.
+
+**What shipped:**
+- `scripts/migrations/m005_posted_at.py` — `roles.posted_at TEXT` column,
+  idempotent, supports `--rollback` (uses `ALTER TABLE ... DROP COLUMN`
+  on SQLite ≥3.35, falls back to table rebuild otherwise).
+- `careerops/scraper.py::_extract_posted_at` — pulls posted_at off LinkedIn
+  cards, preferring the machine-readable `datetime` attribute and
+  falling back to a `RELATIVE_AGE_RE` regex against the human string.
+- `careerops/pipeline.py::upsert_role` — persists `posted_at` with
+  `COALESCE(excluded.posted_at, roles.posted_at)` so a future scrape
+  that misses the element never clobbers a known date.
+- `careerops/score.py::score_freshness` — new dimension wired into
+  `score_breakdown`. Buckets: ≤7d=100, ≤14d=80, ≤30d=60, ≤90d=30,
+  >90d=10, unknown=50.
+- `config.FIT_SCORE_WEIGHTS` rebalanced (sum still 1.0):
+  `freshness 0.04` added; `application_effort 0.04 → 0.02`,
+  `culture_fit 0.03 → 0.01`.
+- `scripts/discover.py --max-age-days N` — drops roles older than N days
+  before scoring/upserting; reports `dropped X of Y` to stderr. Verified
+  live: dropped 10 of 20 roles older than 14 days.
+- `scripts/dashboard.py` — new "Age" column (between Lane and Company),
+  rendered via `pipeline.format_age` (`3d` / `1w` / `5mo` / `1y+` / `?`).
+
 ## What Was Just Done (2026-04-25, Session 5 — Deferred-followup batch 2)
 
 ### COIN-NETWORK-LIVE-SCRAPE + COIN-OFERTAS-LEVELS-FYI + COIN-COVER-RECIPIENT-FROM-NETWORK ✅ COMPLETE
