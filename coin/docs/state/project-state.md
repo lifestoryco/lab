@@ -1,5 +1,54 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-28, eloquent-lichterman session — extended)
+
+### Lab repo split + COIN UX hardening + 4-agent code-review pass ✅ COMPLETE
+
+**Tests:** 380 → **381 passing** (+1: `test_dry_run_does_not_delete_failed_flag`).
+**Commits added on top of the earlier 4-task batch:**
+- `0c0bd66` — Revert botched merge of stale Coy work into main (only the
+  authoritative copy in `handoffpack-www` should drive the live site)
+- `2c80aac` — Two-repo boundary docs (`lab/CLAUDE.md`, `web/components/lab/coin/README.md`),
+  dedicated `lab-lifestoryco` Vercel project, predeploy guard script
+  refusing builds against the wrong project link
+- `0409373` — COIN UX hardening + Vercel read-only deploy + 4-agent
+  code-review remediations (22 files, +1022/-328)
+
+**`/lab/coin` is now live and read-only at:** `https://lab-lifestoryco.vercel.app/lab/coin`
+(password `jobs`, set on the lab-lifestoryco Vercel env). The
+`handoffpack-www` Vercel env's `LAB_URL` is NOT set yet — flipping it on
+will route `www.handoffpack.com/lab/*` (except `/lab/coy`) to this deploy
+via the existing rewrite. That's a one-env-var change in the
+handoffpack-www Vercel dashboard whenever you want to surface the lab
+gallery on the marketing domain.
+
+**Known limits of the deployed COIN dashboard:**
+- Read-only: track / tailor / notes endpoints all return 503 with a
+  "use the local Coin CLI" message. By design — Vercel can't run the
+  Python `careerops.web_cli` subprocess and the bundled DB is immutable.
+- DB freshness depends on snapshot refreshes. To pick up new local
+  discover/track activity on prod: `cd web && npm run sync-coin-db`,
+  commit, push. Auto-deploys via lab-lifestoryco.
+- COIN_NOTIFY_PHONE for the launchd scheduler is still unset (this was
+  flagged in the previous session and still needs Sean to do).
+
+**New kanban columns from this session's UX work:**
+- "Resume Builder" — drop a role here to enqueue a tailored resume build
+  (writes marker file at `data/tailor_pending/<id>.txt`)
+- "Not a Fit" — drop a role here to dismiss it (`no_apply` with note
+  tagged `[user_dismissed:not_a_fit]`). The note tag is a parseable token
+  so a future scoring iteration can mine the rejection corpus.
+
+**Docs added you should read once:**
+- `lab/CLAUDE.md` — the two-repo deployment map (`handoffpack-www` owns
+  the marketing site + Coy; `lab` owns the dynamic lab projects via
+  `LAB_URL` rewrite). Read this before any future deploy work.
+- `lab/web/components/lab/coin/README.md` — the COIN web tier overview,
+  including the read-only deploy contract and the gotchas (don't reintroduce
+  `fileMustExist:true`; keep the `serverComponentsExternalPackages` entry).
+
+---
+
 ## What Was Just Done (2026-04-28, eloquent-lichterman session — 4 tasks shipped)
 
 ### COIN-SCORE-V2, COIN-WEB-UI, COIN-EXPERIENCE-DEEPDIVE, COIN-SCHEDULER ✅ ALL COMPLETE
