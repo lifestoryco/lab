@@ -61,6 +61,15 @@ export const LAB_PROJECTS: LabProject[] = [
     dateAdded: '2026-04-15',
   },
   {
+    slug: 'coin',
+    name: 'COIN',
+    tagline: 'Career ops intelligence — pipeline, scoring, offer comparison.',
+    gradient: 'linear-gradient(145deg, #050510 0%, #0d1117 30%, #1a0a2e 60%, #7c3aed 100%)',
+    accentColor: '#7c3aed',
+    techTags: ['Python', 'Next.js', 'SQLite', 'Career Ops'],
+    dateAdded: '2026-04-28',
+  },
+  {
     slug: 'shrine',
     name: 'THE SHRINE',
     tagline: 'An archive of the awakened. One ensō, twenty masters, 1,800 years.',
