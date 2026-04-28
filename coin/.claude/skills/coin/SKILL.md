@@ -112,7 +112,7 @@ Or pick a mode:
 Lanes (4):
   mid-market-tpm · enterprise-sales-engineer · iot-solutions-architect · revenue-ops-operator
 
-Floors: $160K base / $200K total · Locations: Remote, SLC, Lehi, Draper
+Floors: $130K base / $160K total · Top: $230K total · Locations: Remote, SLC, Lehi, Draper
 ```
 
 ---
@@ -154,7 +154,7 @@ If the marker file at `config.ONBOARDING_MARKER` (`data/onboarding/.completed`) 
 - **Cert:** PMP (PMI ID 2857003, valid Dec 2021 – Aug 2026)
 - **Phone / email:** 801.803.3084 · sean@lifestory.co (job search) or sivins@caengineering.com (employer email — keep separate)
 - **Location:** Salt Lake City, UT 84106
-- **Current TC:** $99K (target: $160K base / $200K total minimum)
+- **Current TC:** $99K (floor: $130K base / $160K total · top of range: $230K total)
 - **Career order (newest first):** CA Engineering (TPM, 2025–) → Hydrant (TPM/Co-Owner, 2019–2024, exited) → Utah Broadband (Enterprise AM, 2013–2019) → LINX (IT PM VoIP, 2011–2013)
 - **Real role at past clients:** Cox = agency PM via Hydrant. TitanX = fractional COO. Safeguard = Hydrant client. None were direct employees of Sean.
 - **Pedigree constraint:** Filtered out at recruiter screen #1 by FAANG-tier roles requiring CS degree or ex-FAANG-TPM pattern. Don't waste tailoring effort there.

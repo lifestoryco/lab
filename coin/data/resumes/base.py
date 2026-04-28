@@ -186,7 +186,7 @@ PROFILE = {
     # ── Targeting (config.py is the canonical source for comp; profile.yml
     # is canonical for target_locations. These two keys remain only for
     # backward-compat with the brief PDF template's header.) ─────────────────
-    "target_comp_min_base": 160000,
+    "target_comp_min_base": 130000,
 }
 
 

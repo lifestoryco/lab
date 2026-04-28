@@ -4,10 +4,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── Compensation floors ───────────────────────────────────────────────────────
-# Sean is at $99K; targeting a 60-100% jump to a real product company or SE seat.
-# $160K base / $200K TC is the realistic floor — anything below isn't worth a tailor pass.
-MIN_BASE_SALARY = int(os.getenv("COIN_MIN_BASE", "160000"))
-MIN_TOTAL_COMP = int(os.getenv("COIN_MIN_TC", "200000"))
+# Sean is at $99K; floor $130K base / $160K TC, top of range $230K total.
+# Below the floor isn't worth a tailor pass.
+MIN_BASE_SALARY = int(os.getenv("COIN_MIN_BASE", "130000"))
+MIN_TOTAL_COMP = int(os.getenv("COIN_MIN_TC", "160000"))
 
 # ── Scraper behavior ──────────────────────────────────────────────────────────
 REQUEST_DELAY_SECONDS = 2.0
