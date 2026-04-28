@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>co.lifestory.coin.discover</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>-c</string>
+        <string>cd /Users/tealizard/Documents/lab/coin &amp;&amp; .venv/bin/python scripts/discover.py --location 'Utah, United States' --deep-score 15 --boards linkedin,greenhouse,lever,ashby &gt;&gt; data/logs/discover_$(date +\%Y-\%m-\%d).log 2&gt;&amp;1 ; .venv/bin/python scripts/notify.py --since-hours 24 --min-grade A &gt;&gt; data/logs/notify_$(date +\%Y-\%m-\%d).log 2&gt;&amp;1</string>
+    </array>
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>7</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/tealizard/Documents/lab/coin/data/logs/launchd_stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/tealizard/Documents/lab/coin/data/logs/launchd_stderr.log</string>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>WorkingDirectory</key>
+    <string>/Users/tealizard/Documents/lab/coin</string>
+</dict>
+</plist>

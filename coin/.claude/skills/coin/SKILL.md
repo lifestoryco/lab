@@ -56,6 +56,7 @@ Inspect `{{mode}}` (the user's input) and dispatch:
 | `ofertas` or `offers` or `compare offers` | `modes/ofertas.md` (multi-offer math + negotiation brief) |
 | `setup` or `onboard` or `re-onboard` | `modes/onboarding.md` (executable 7-question profile setup) |
 | `deep-dive` or `dive` or `expand-stories` | `modes/deep-dive.md` (interactive STAR proof-point capture → stories.yml; ~30 min per position; powers tailor + audit Check 5) |
+| `scheduler` or `scheduler install` or `scheduler status` or `scheduler test` or `scheduler logs` or `scheduler uninstall` | `modes/scheduler.md` (launchd 7am daily discover + iMessage A-grade interrupt) |
 | first-run with no DB | follow `Setup Checklist` below, then dispatch `modes/onboarding.md` |
 | `help` | print this file |
 

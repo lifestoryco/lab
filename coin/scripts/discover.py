@@ -225,5 +225,27 @@ def _tally(rows: list[dict], key: str) -> dict:
     return out
 
 
+_DISCOVER_FAILED_FLAG = pathlib.Path(__file__).resolve().parent.parent / "data" / ".discover_failed.flag"
+
+
+def _run_with_failure_flag() -> int:
+    """Wrap main() so unhandled exceptions write a flag that notify.py reads."""
+    import datetime as _dt
+    try:
+        # Clear stale flag at the start of every successful path through main().
+        if _DISCOVER_FAILED_FLAG.exists():
+            try:
+                _DISCOVER_FAILED_FLAG.unlink()
+            except OSError:
+                pass
+        return main()
+    except Exception as exc:  # noqa: BLE001 — flag every unhandled error
+        _DISCOVER_FAILED_FLAG.parent.mkdir(parents=True, exist_ok=True)
+        _DISCOVER_FAILED_FLAG.write_text(
+            f"{_dt.datetime.now().isoformat()}\n{type(exc).__name__}: {exc}\n"
+        )
+        raise
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(_run_with_failure_flag())
