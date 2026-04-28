@@ -1,5 +1,57 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-28, COIN-MULTI-BOARD)
+
+### COIN-MULTI-BOARD — Greenhouse / Lever / Ashby scrapers ✅ COMPLETE
+
+**Tests:** 265 → **293 passing** (+28; 0 regressions). Anthropic dep confirmed absent.
+
+**Why:** Pre-task, every role in the DB was LinkedIn-only with `comp_source='unverified'`. The comp floor was being enforced against zero verified bands. Live smoke now produces 237 board roles across 7 companies with 100% verified comp on the top 10.
+
+**1. New package `careerops/boards/`** — three public-API scrapers behind a shared ABC:
+- `BoardScraper` (base): rate-limited GET (1.5s/instance), HTML strip, regex comp fallback (`COMP_REGEX`), normalized location handling, common `_to_role_dict` shape
+- `GreenhouseBoard` — `boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true`. Comp priority: structured `metadata` (e.g. Datadog's `currency_range`) → regex on rendered content → none
+- `LeverBoard` — `api.lever.co/v0/postings/{slug}?mode=json`. Priority: structured `salaryRange.min/max` → regex on `descriptionPlain + additionalPlain`
+- `AshbyBoard` — `api.ashbyhq.com/posting-api/job-board/{slug}?includeCompensation=true`. Priority: `compensationTier{minValue,maxValue}` → `compensationTiers[].components` → `compensationTierSummary` string parse → regex fallback. Highest-signal source overall
+- All cite santifer/career-ops scan.mjs (MIT) in module docstrings
+
+**2. `config.TARGET_COMPANIES` registry** — 32 companies, slugs verified live on 2026-04-28:
+- Greenhouse (verified): lucidsoftware, weave, qualtrics, awardco, mastercontrol, recursionpharmaceuticals, vercel, datadog, cloudflare
+- Lever (verified): spotify
+- Ashby (verified): airbyte, hightouch, ramp, writer, linear
+- 17 entries marked `# TODO verify` — Filevine, Pluralsight, Podium, Domo, Vivint, Spiff, Notion, RevenueCat, Block, Snowflake, MongoDB, Confluent, HashiCorp, dbt Labs, Census, Retool, Fivetran. None of the standard ATS slugs returned 200 — these companies likely use non-standard ATS endpoints (Workday, custom). Slug discovery deferred
+- Adobe / Stripe / Anthropic / FAANG explicitly excluded — pedigree filter
+- New env override: `COIN_BOARD_SCORE_FLOOR` (default 55) — title-score gate before a board role surfaces
+
+**3. `careerops/scraper.py`** — orchestrator + dedup:
+- New `search_boards(lane, location, boards, companies)` — ThreadPoolExecutor(max_workers=4) over `(company × board) tasks`. Each task swallows exceptions per-board so one failure doesn't kill the run
+- New `_canonical_url(url)` — strips query/fragment/trailing slash, lowercases. Used to dedupe across LinkedIn ↔ board sources
+- `search_all_lanes(...)` extended with `boards`/`companies` kwargs; default sources now `linkedin,greenhouse,lever,ashby`
+- Location filter: substring match against role.location, with remote roles always passing (Sean is remote-friendly)
+
+**4. `scripts/discover.py`** — two new flags (existing flags preserved):
+- `--boards linkedin,greenhouse,lever,ashby` (default = all four). Drop a name to skip
+- `--companies "Vercel,Datadog,Weave"` — limit board scrapes to a subset; ignored for LinkedIn
+
+**5. `careerops/compensation.py`** — `filter_by_comp` now respects pre-populated `comp_min/comp_source` instead of overwriting them with `parse_comp_string(role['comp_raw'])` (LinkedIn-only field). Critical fix — without this, board scraper output collapsed to `unverified` on its way through `discover.py`
+
+**6. `careerops/pipeline.py` + migration `m006_comp_currency.py`:**
+- `roles.comp_currency TEXT DEFAULT 'USD'` column added; idempotent migration with rollback path (handles SQLite ≥3.35 DROP COLUMN and pre-3.35 rebuild)
+- `upsert_role` accepts/persists `comp_currency`; `init_db` schema updated for fresh DBs
+- `comp_source` enum (TEXT, no CHECK) accepts `explicit | parsed | imputed_levels | unverified` — no schema change needed; the four values flow through string storage
+
+**7. Tests (28 new):**
+- `tests/test_boards_greenhouse.py` (8) — fixture: `greenhouse_filevine.json`
+- `tests/test_boards_lever.py` (8) — fixture: `lever_lucidsoftware.json`
+- `tests/test_boards_ashby.py` (8) — fixture: `ashby_vercel.json`
+- `tests/test_boards_orchestrator.py` (4) — lane-score floor, LinkedIn↔board dedup, per-board failure isolation, `companies` flag scope
+
+**Live smoke (network):** `discover.py --boards greenhouse,lever,ashby --companies "Weave,Vercel,Airbyte,Spotify,Linear,Ramp,Writer"` → 237 roles (greenhouse 47, lever 92, ashby 98); top 10 all carry `comp_min`/`comp_max` with `comp_source` in {explicit, parsed}. Top: Ramp Senior Security PM ($160K-$259K, ashby explicit, 89.7 fit).
+
+**Unblocks:** COIN-LEVELS-CROSSREF (next), then COIN-SCORE-V2.
+
+---
+
 ## What Was Just Done (2026-04-27, Session 6 — COIN-DISQUALIFIERS)
 
 ### COIN-DISQUALIFIERS — JD-aware quarantine + soft-penalty layer ✅ COMPLETE

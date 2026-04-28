@@ -72,6 +72,7 @@ def init_db() -> None:
                 comp_min      INTEGER,
                 comp_max      INTEGER,
                 comp_source   TEXT,
+                comp_currency TEXT DEFAULT 'USD',
                 fit_score     REAL,
                 status        TEXT DEFAULT 'discovered',
                 source        TEXT,
@@ -100,6 +101,7 @@ def upsert_role(role: dict) -> int:
         "comp_min": role.get("comp_min"),
         "comp_max": role.get("comp_max"),
         "comp_source": role.get("comp_source"),
+        "comp_currency": role.get("comp_currency") or "USD",
         "fit_score": role.get("fit_score"),
         "source": role.get("source"),
         "jd_raw": role.get("jd_raw"),
@@ -110,19 +112,20 @@ def upsert_role(role: dict) -> int:
     with _conn() as conn:
         cur = conn.execute("""
             INSERT INTO roles (url, title, company, location, remote, lane,
-                               comp_min, comp_max, comp_source, fit_score,
+                               comp_min, comp_max, comp_source, comp_currency, fit_score,
                                source, jd_raw, discovered_at, posted_at, updated_at)
             VALUES (:url, :title, :company, :location, :remote, :lane,
-                    :comp_min, :comp_max, :comp_source, :fit_score,
+                    :comp_min, :comp_max, :comp_source, :comp_currency, :fit_score,
                     :source, :jd_raw, :discovered_at, :posted_at, :updated_at)
             ON CONFLICT(url) DO UPDATE SET
-                title       = COALESCE(excluded.title, roles.title),
-                company     = COALESCE(excluded.company, roles.company),
-                location    = COALESCE(excluded.location, roles.location),
-                remote      = excluded.remote,
-                comp_min    = COALESCE(excluded.comp_min, roles.comp_min),
-                comp_max    = COALESCE(excluded.comp_max, roles.comp_max),
-                comp_source = COALESCE(excluded.comp_source, roles.comp_source),
+                title         = COALESCE(excluded.title, roles.title),
+                company       = COALESCE(excluded.company, roles.company),
+                location      = COALESCE(excluded.location, roles.location),
+                remote        = excluded.remote,
+                comp_min      = COALESCE(excluded.comp_min, roles.comp_min),
+                comp_max      = COALESCE(excluded.comp_max, roles.comp_max),
+                comp_source   = COALESCE(excluded.comp_source, roles.comp_source),
+                comp_currency = COALESCE(excluded.comp_currency, roles.comp_currency),
                 -- Preserve out_of_band quarantine sink: a 0 fit_score on a
                 -- quarantined row must NOT be overwritten by re-discovery.
                 fit_score   = CASE

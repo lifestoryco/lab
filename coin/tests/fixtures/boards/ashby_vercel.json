@@ -1,0 +1,60 @@
+{
+  "apiVersion": "1",
+  "jobs": [
+    {
+      "id": "abc-789",
+      "title": "Engineering Program Manager",
+      "department": "Engineering",
+      "team": "Platform",
+      "employmentType": "FullTime",
+      "location": "Remote (United States)",
+      "isRemote": true,
+      "workplaceType": "Remote",
+      "publishedAt": "2026-04-19T12:00:00Z",
+      "jobUrl": "https://jobs.ashbyhq.com/vercel/abc-789",
+      "applyUrl": "https://jobs.ashbyhq.com/vercel/abc-789/application",
+      "descriptionPlain": "Vercel is hiring an EPM.",
+      "compensation": {
+        "compensationTierSummary": "$170K - $220K",
+        "compensationTier": {
+          "minValue": 170000,
+          "maxValue": 220000,
+          "currencyCode": "USD"
+        }
+      }
+    },
+    {
+      "id": "def-012",
+      "title": "Senior Solutions Engineer",
+      "department": "Sales",
+      "team": "Solutions",
+      "employmentType": "FullTime",
+      "location": "Salt Lake City, UT",
+      "isRemote": false,
+      "workplaceType": "Hybrid",
+      "publishedAt": "2026-04-15T09:00:00Z",
+      "jobUrl": "https://jobs.ashbyhq.com/vercel/def-012",
+      "applyUrl": "https://jobs.ashbyhq.com/vercel/def-012/application",
+      "descriptionPlain": "Solutions Engineer role. $150,000 to $200,000 base.",
+      "compensation": {
+        "compensationTierSummary": "$150K - $200K",
+        "compensationTier": {}
+      }
+    },
+    {
+      "id": "ghi-345",
+      "title": "Product Marketing Manager",
+      "department": "Marketing",
+      "team": "Growth",
+      "employmentType": "FullTime",
+      "location": "Remote (Global)",
+      "isRemote": true,
+      "workplaceType": "Remote",
+      "publishedAt": "2026-04-10T14:00:00Z",
+      "jobUrl": "https://jobs.ashbyhq.com/vercel/ghi-345",
+      "applyUrl": "https://jobs.ashbyhq.com/vercel/ghi-345/application",
+      "descriptionPlain": "Marketing role, no compensation listed.",
+      "compensation": {}
+    }
+  ]
+}

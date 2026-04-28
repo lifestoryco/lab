@@ -1,0 +1,36 @@
+{
+  "jobs": [
+    {
+      "id": 4567890,
+      "title": "Senior Solutions Engineer",
+      "absolute_url": "https://boards.greenhouse.io/filevine/jobs/4567890",
+      "location": {"name": "Lehi, UT"},
+      "updated_at": "2026-04-22T18:14:09-04:00",
+      "content": "<p>Filevine is hiring a Senior Solutions Engineer.</p><p>Compensation: $135,000 - $175,000 + equity.</p>",
+      "metadata": [
+        {"name": "Salary range", "value": "$135,000 - $175,000"},
+        {"name": "Department", "value": "Sales Engineering"}
+      ]
+    },
+    {
+      "id": 4567891,
+      "title": "Technical Program Manager, Platform",
+      "absolute_url": "https://boards.greenhouse.io/filevine/jobs/4567891",
+      "location": {"name": "Remote — US"},
+      "updated_at": "2026-04-19T10:00:00-04:00",
+      "content": "<p>We are looking for a TPM. The hiring range is $150,000 to $200,000 annually.</p>",
+      "metadata": []
+    },
+    {
+      "id": 4567892,
+      "title": "Senior Account Executive",
+      "absolute_url": "https://boards.greenhouse.io/filevine/jobs/4567892",
+      "location": {"name": "Salt Lake City, UT"},
+      "updated_at": "2026-04-18T08:30:00-04:00",
+      "content": "<p>Sales role. No comp range disclosed.</p>",
+      "metadata": [
+        {"name": "Department", "value": "Sales"}
+      ]
+    }
+  ]
+}
