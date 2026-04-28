@@ -86,8 +86,28 @@ Scan for unsupported puffery strings. Each match without a verifiable named acco
 
 **Trumps:** If Check 4 and Check 6 both fire on the same bullet (vague flex + causation), report only Check 4 (the puffery is the more obvious recruiter signal).
 
-### Check 5 — Metric provenance (CRITICAL)
-For every quantitative claim in `top_bullets` and `executive_summary` (numeric, spelled-out, OR collective-noun), verify it traces back to:
+### Check 5 — Metric provenance (CRITICAL, HARDENED)
+
+For each quantitative claim in `top_bullets` and `executive_summary`,
+parse the bullet's **source attribution suffix** first:
+
+- `[story:<id>]` → **story-attributed**. Load via
+  `careerops.stories.get_story_by_id(id)`. Verify the metric value/unit
+  in the bullet matches a metric in `story.metrics[]` EXACTLY (value
+  string + unit). If no match → **FAIL** with `"metric drift: bullet
+  says <X>, story says <Y>"`. This is the load-bearing change — story
+  ids let audit trace metrics back to a specific captured story.
+- `[source:PROFILE]` → **PROFILE-attributed**. PASS with WARNING:
+  `"metric source is PROFILE, not stories.yml. Consider running
+  /coin deep-dive to capture this story properly."`
+- (no attribution suffix) → **UNATTRIBUTED**. **FAIL** with
+  `"metric has no source attribution — tailor must use stories.yml
+  (preferred) or [source:PROFILE] (fallback)"`. The unattributed-FAIL
+  is what forces tailor to consult `stories.yml` first.
+
+For story-attributed and PROFILE-attributed metrics, also verify the
+claim traces back to:
+- A `careerops.stories.yml` story metric (preferred), OR
 - A `PROFILE.positions[*].bullets` entry, OR
 - A `PROFILE.positions[*].summary` entry (start/end dates, location), OR
 - A direct quote from the JD (skill counts, "for our 10K-customer base")

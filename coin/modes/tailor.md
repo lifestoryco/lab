@@ -35,7 +35,43 @@ Then load `modes/_shared.md` and the truthfulness anchors (these are non-skippab
 
 ## Step 3 — Select emphasis stories
 
-From `PROFILE.positions[*].bullets`, draw the proof points whose `id` (from the legacy `PROFILE.stories` map) appears in the archetype's `proof_points` list (from profile.yml). You may add one more position bullet if the JD explicitly names a domain Sean has (e.g., aerospace, RF, 5G, BLE, Z-Wave) — borrow that proof too.
+### Sub-step 3a — Consult `stories.yml` first
+
+```python
+from careerops.stories import find_stories_for_skills
+candidates = find_stories_for_skills(jd.required_skills, lane=target_lane)
+```
+
+Rank order:
+1. **Grade A > B > C** (find_stories_for_skills already weights by grade × skill overlap × recency).
+2. `named_account_ok=true` preferred IF the role/JD allows naming
+   (e.g. JD doesn't say "no client name disclosure" and Sean's
+   `named_account_ok` for that story is true).
+3. Recent stories (`last_validated` within 2 years) preferred.
+
+When emitting a bullet derived from a story, embed the story id in
+the bullet's source attribution:
+
+```
+"<bullet text> [story:<id>]"
+```
+
+This lets audit Check 5 trace metrics back to the source story. The
+attribution suffix can be stripped at render time, but it MUST be in
+the JSON that audit consumes.
+
+### Sub-step 3b — Fallback to `PROFILE.positions[*].bullets`
+
+Only if `find_stories_for_skills` returns fewer candidates than the
+target bullet count, fall back to the legacy `PROFILE` proof points
+in `data/resumes/base.py`. Bullets derived from PROFILE get the
+attribution `[source:PROFILE]` instead of a story id. PROFILE-attributed
+bullets pass audit Check 5 with a WARNING (consider running `/coin
+deep-dive` to capture the story properly).
+
+You may add one more position bullet if the JD explicitly names a
+domain Sean has (e.g., aerospace, RF, 5G, BLE, Z-Wave) — borrow that
+proof too.
 
 ## Step 4 — Determine `target_role` (REQUIRED)
 

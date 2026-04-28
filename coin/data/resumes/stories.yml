@@ -1,0 +1,270 @@
+version: 1
+# STAR-format proof point library. Authoritative source for tailored
+# resume bullets and audit Check 5 (metric provenance). Add via
+# `/coin deep-dive`. Edit by hand only if you know what you're doing —
+# every metric here is referenced by id from generated resumes.
+stories:
+  - id: cox-true-local-labs
+    role: hydrant
+    project: Cox Communications — True Local Labs
+    dates:
+      start: 2019-09
+      end: 2021-06
+    lanes_relevant_for:
+      - mid-market-tpm
+      - enterprise-sales-engineer
+    situation: >-
+      Cox Communications wanted to build True Local Labs, a hyperlocal
+      data-enrichment platform, but had no in-house team capable of
+      orchestrating distributed engineering across multiple continents.
+      Hydrant was contracted to deliver concept-to-production.
+    task: >-
+      Run complete program execution including daily global standups,
+      coordinate data enrichment teams across continents, and deliver
+      a production-ready platform within an aggressive timeline.
+    action: >-
+      Established daily synchronous standups across three time zones,
+      built the SOW + delivery roadmap, owned client-facing weekly
+      review with Cox executive sponsors, ran release gating against
+      a published criteria checklist, and resolved cross-team blockers
+      end-of-day every day for 18 months.
+    result: >-
+      Platform shipped to production and exceeded $1M Year 1 revenue
+      twelve months ahead of the original schedule. Cox extended the
+      Hydrant contract for two follow-on workstreams.
+    metrics:
+      - value: "1M"
+        unit: USD
+        description: "Year 1 revenue"
+        source: "Cox engagement summary; Hydrant client invoice"
+      - value: "12"
+        unit: months
+        description: "ahead of original schedule"
+        source: "Cox program plan v1 vs ship date"
+    team:
+      size: 12
+      composition: "3 PMs, 5 engineers (data + backend), 2 designers, 1 QA, 1 ops"
+      sean_role: "Hydrant PM (program lead)"
+    artifact: "Cox engagement deck (private); Hydrant case study (private)"
+    named_account_ok: true
+    related_skills:
+      - stakeholder management
+      - distributed engineering
+      - B2B SaaS
+      - data platform
+      - program management
+      - client engagement
+    grade: A
+    created: 2026-04-27
+    last_validated: 2026-04-27
+
+  - id: titanx-fractional-coo
+    role: hydrant
+    project: TitanX (Series A sales-intelligence platform)
+    dates:
+      start: 2020-03
+      end: 2022-01
+    lanes_relevant_for:
+      - mid-market-tpm
+      - revenue-ops-operator
+      - enterprise-sales-engineer
+    situation: >-
+      TitanX, an early-stage sales intelligence startup, needed
+      operational scaffolding to scale from a working prototype to a
+      fundable Series A. Founder/CTO was technical-only; sales,
+      hiring, RevOps and process all unowned.
+    task: >-
+      Operate as fractional COO — own the architecture, hiring plan,
+      and RevOps stack required to make TitanX investable at Series A
+      scale, in under two years.
+    action: >-
+      Designed the platform architecture review cadence, documented
+      every internal process, set up the CRM + sales operations
+      stack, ran weekly executive review with the founder, and
+      coordinated due-diligence material for the Series A round.
+    result: >-
+      TitanX closed a $27M Series A round in under 24 months from
+      engagement start. Internal process docs Sean wrote remained the
+      operating manual through the funding event.
+    metrics:
+      - value: "27M"
+        unit: USD
+        description: "Series A round size"
+        source: "TitanX press release; Hydrant engagement record"
+      - value: "24"
+        unit: months
+        description: "engagement start to close"
+        source: "Hydrant project tracker"
+    team:
+      size: 6
+      composition: "Founder/CTO, 2 engineers, 1 sales lead, Sean (frac COO), 1 ops"
+      sean_role: "Hydrant fractional COO"
+    artifact: "TitanX series A announcement (public); Hydrant ops doc (private)"
+    named_account_ok: true
+    related_skills:
+      - operations
+      - process design
+      - RevOps
+      - executive communication
+      - fundraising support
+      - go-to-market strategy
+    grade: A
+    created: 2026-04-27
+    last_validated: 2026-04-27
+
+  - id: utah-broadband-acquisition
+    role: utah_broadband
+    project: Utah Broadband — growth to acquisition by Boston Omaha (BOMN)
+    dates:
+      start: 2013-04
+      end: 2020-03
+    lanes_relevant_for:
+      - revenue-ops-operator
+      - enterprise-sales-engineer
+      - iot-solutions-architect
+    situation: >-
+      Utah Broadband was a regional fixed-wireless ISP scaling
+      enterprise accounts during a hypergrowth phase. Sales,
+      engineering, and field-install teams operated in silos.
+    task: >-
+      Drive enterprise revenue while coordinating technical operations
+      across sales, RF engineering, and field installation — sustain
+      growth long enough to make the company acquisition-ready.
+    action: >-
+      Owned the enterprise account portfolio, designed the technical
+      pre-sales process, ran the sales <> engineering sync that
+      eliminated install-day surprises, and coordinated field
+      installation scheduling against engineering capacity.
+    result: >-
+      Utah Broadband was acquired by Boston Omaha Corporation
+      (NASDAQ: BOMN) in March 2020 in a $27M transaction. Sean's
+      enterprise book transitioned with continuity to the acquirer.
+    metrics:
+      - value: "27M"
+        unit: USD
+        description: "acquisition transaction size"
+        source: "Boston Omaha 8-K (public)"
+    team:
+      size: 25
+      composition: "Sales (4), RF engineering (8), field installation (10), ops (3)"
+      sean_role: "Enterprise Account Manager (technical pre-sales lead)"
+    artifact: "Boston Omaha SEC filings (public, 2020)"
+    named_account_ok: true
+    related_skills:
+      - enterprise sales
+      - RF systems
+      - wireless ISP
+      - technical pre-sales
+      - fixed wireless
+      - installation operations
+    grade: A
+    created: 2026-04-27
+    last_validated: 2026-04-27
+
+  - id: arr-growth-6m-to-13m
+    role: utah_broadband
+    project: Enterprise ARR expansion 2016–2019
+    dates:
+      start: 2016-01
+      end: 2019-12
+    lanes_relevant_for:
+      - revenue-ops-operator
+      - enterprise-sales-engineer
+    situation: >-
+      Utah Broadband's enterprise segment was producing $6M ARR but
+      had stalled — pipeline was thin and renewal velocity was lagging
+      installation capacity.
+    task: >-
+      Rebuild the enterprise pipeline, lift retention, and double
+      ARR over a multi-year horizon while staying inside the install
+      team's capacity envelope.
+    action: >-
+      Restructured the enterprise account-management cadence,
+      introduced renewal-risk scoring, paired each large account
+      with an RF engineer for technical reviews, and rebuilt the
+      outbound prospecting motion against high-fit verticals.
+    result: >-
+      ARR grew from $6M to $13M across the engagement window — a
+      117% expansion. Renewal velocity rose to match installation
+      capacity (no longer the bottleneck).
+    metrics:
+      - value: "6M"
+        unit: USD
+        description: "starting ARR"
+        source: "Utah Broadband internal financial summary"
+      - value: "13M"
+        unit: USD
+        description: "ending ARR"
+        source: "Utah Broadband internal financial summary"
+      - value: "117"
+        unit: percent
+        description: "ARR growth"
+        source: "computed from 6M → 13M"
+    team:
+      size: 6
+      composition: "4 enterprise AMs, 2 RF engineers (paired)"
+      sean_role: "Enterprise Account Manager"
+    artifact: "Utah Broadband internal QBR decks (private)"
+    named_account_ok: true
+    related_skills:
+      - enterprise sales
+      - account management
+      - renewal motion
+      - pipeline operations
+      - retention
+      - revenue operations
+    grade: A
+    created: 2026-04-27
+    last_validated: 2026-04-27
+
+  - id: global-engineering-orchestration
+    role: ca_engineering
+    project: CA Engineering — multi-client cross-continental delivery
+    dates:
+      start: 2025-01
+      end: present
+    lanes_relevant_for:
+      - mid-market-tpm
+      - iot-solutions-architect
+      - enterprise-sales-engineer
+    situation: >-
+      CA Engineering was running concurrent wireless / IoT programs
+      for an aerospace OEM (in-flight wireless), a Fortune 500 energy
+      company (industrial sensor deployment), and an international
+      enterprise (conferencing). Engineers spread across multiple
+      continents with no single program owner.
+    task: >-
+      Stand up a single program-management cadence that synchronizes
+      hardware, firmware, and RF teams against client business
+      stakeholders without slowing any individual stream.
+    action: >-
+      Designed the daily global standup format with rotating
+      time-zone hosts, owned client-facing weekly reviews, ran
+      release gating against published criteria per client, and
+      established the SOW + forecasting cadence reporting to the CRO.
+    result: >-
+      All three concurrent programs maintained delivery velocity
+      simultaneously through 2025–2026. Sean became the primary
+      client liaison for technical scope and timeline conversations.
+    metrics:
+      - value: "3"
+        unit: concurrent programs
+        description: "aerospace OEM, F500 energy, international enterprise"
+        source: "CA Engineering CRM (private)"
+    team:
+      size: 18
+      composition: "Sean (TPM), 3 client-facing engineers, 8 firmware/RF engineers, 4 hardware engineers, 2 ops"
+      sean_role: "Technical Program Manager"
+    artifact: "CA Engineering client SOWs (private)"
+    named_account_ok: false
+    related_skills:
+      - distributed engineering
+      - wireless infrastructure
+      - IoT
+      - RF systems
+      - client engagement
+      - program management
+      - hardware/firmware coordination
+    grade: A
+    created: 2026-04-27
+    last_validated: 2026-04-27

@@ -55,6 +55,7 @@ Inspect `{{mode}}` (the user's input) and dispatch:
 | `levels-refresh` or `refresh levels` | `modes/levels-refresh.md` (quarterly comp seed refresh) |
 | `ofertas` or `offers` or `compare offers` | `modes/ofertas.md` (multi-offer math + negotiation brief) |
 | `setup` or `onboard` or `re-onboard` | `modes/onboarding.md` (executable 7-question profile setup) |
+| `deep-dive` or `dive` or `expand-stories` | `modes/deep-dive.md` (interactive STAR proof-point capture → stories.yml; ~30 min per position; powers tailor + audit Check 5) |
 | first-run with no DB | follow `Setup Checklist` below, then dispatch `modes/onboarding.md` |
 | `help` | print this file |
 
