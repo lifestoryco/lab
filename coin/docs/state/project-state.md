@@ -1,5 +1,65 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-28, eloquent-lichterman session — 4 tasks shipped)
+
+### COIN-SCORE-V2, COIN-WEB-UI, COIN-EXPERIENCE-DEEPDIVE, COIN-SCHEDULER ✅ ALL COMPLETE
+
+**Tests:** 310 → **380 passing** (+70 across the four tasks; 0 regressions). All four prompt files moved from `pending/` to `complete/`.
+
+**Commits pushed to `lifestoryco/lab` main:**
+- `1e4cfcc` — COIN-SCORE-V2: two-stage JD-aware scoring (m008 migration, score helpers, deep-score loop hooks)
+- `73d88d5` — COIN-WEB-UI: Next.js dashboard at `/lab/coin` with password gate
+- `f40a373` — COIN-EXPERIENCE-DEEPDIVE: STAR proof-point library + audit Check 5 hardening
+- `0b494af` — COIN-SCHEDULER: launchd 7am daily discover + iMessage A-grade interrupt
+
+### COIN-WEB-UI — live in production
+
+- **URL:** https://www.handoffpack.com/lab/coin
+- **Password:** `jobs` (set via `COIN_WEB_PASSWORD` Vercel env var on `handoffpack-www` project, production scope)
+- **Architecture:** read path uses `better-sqlite3` against pipeline.db for SSR (zero-latency); mutate path spawns Python `careerops.web_cli` subprocess so Python remains source of truth for state-machine validation
+- **Gate:** middleware redirects unauth `/lab/coin/*` → `/lab/coin/login`; cookie `coin_auth` set on successful POST `/api/coin/login`
+- **Tabs:** Pipeline (kanban, framer-motion DnD), Discover, Roles, Network, Ofertas, Stories
+- **Local dev:** `cd web && npm run dev` — `web/.env.local` already has `COIN_WEB_PASSWORD=jobs` (gitignored)
+
+### COIN-SCHEDULER — code shipped, ⚠️ NOT INSTALLED YET
+
+The launchd job is **not** loaded. Sean needs to run two things to activate it:
+
+1. **Add phone number to `coin/.env`** (gitignored — not the .env.example):
+   ```
+   COIN_NOTIFY_PHONE=+18018033084
+   ```
+   (or whichever number is registered to iMessage on your Apple ID, E.164 format)
+
+2. **Install + grant Automation permission:**
+   ```
+   /coin scheduler install
+   /coin scheduler test
+   ```
+   The `test` invocation will trigger macOS's "allow your terminal to control Messages.app?" prompt. **Click Allow.** If you click Don't Allow, run `tccutil reset AppleEvents` and try `test` again.
+
+After that the launchd job fires daily at 7am local time. Quiet by design — only roles graded A (composite ≥ 85) discovered in the last 24h get an iMessage. Failures write `data/.discover_failed.flag`; notify.py sends a single failure-alert iMessage.
+
+### COIN-EXPERIENCE-DEEPDIVE — corpus seeded with 5 stories
+
+`data/resumes/stories.yml` is committed with 5 STAR-format proof points migrated from PROFILE: Cox True Local Labs, TitanX Series A, Utah Broadband acquisition, ARR 6M→13M, global engineering orchestration. Run `/coin deep-dive` to walk role-by-role and grow the corpus — 30-min sessions, 3–5 new stories per position. Tailor now consults stories.yml first via `find_stories_for_skills` (skill overlap × grade × recency); audit Check 5 is hardened to FAIL on unattributed metrics.
+
+### COIN-SCORE-V2 — two-stage scoring landed earlier this session
+
+m008 migration adds `score_stage1`/`score_stage2`/`score_stage`/`jd_parsed_at`. `discover.py --deep-score N` (default 15) prepares a JD-fetched candidate set and writes `data/.deep_score_pending.json` with a `### DEEP-SCORE-PENDING` marker; `modes/discover.md` Step 4a is the host-session prompt that re-scores the top-N with full JD parsing + DQ.
+
+### Sidequest fixed mid-session
+
+The dev server was 404-ing `/lab/coin` for hours because the `.claude/launch.json` in this worktree was pointing `npm run dev` at a stale `objective-rosalind` worktree's `web/` (not the actual `lab/web/`). Fixed in both `.claude/launch.json` files (worktree + parent). Old `lab/web/.next.old/` rename remains as a benign artifact you can `rm -rf` whenever.
+
+### Live verification
+
+- `curl -sI https://www.handoffpack.com/lab/coin` → 307 → `/lab/coin/login` ✓
+- `curl -L https://www.handoffpack.com/lab/coin` → 200 (login page renders) ✓
+- Vercel deploy: `https://handoffpack-orou6cxy8-handoffpack.vercel.app` aliased to `www.handoffpack.com`
+
+---
+
 ## What Was Just Done (2026-04-28, COIN-LEVELS-CROSSREF)
 
 ### COIN-LEVELS-CROSSREF — Comp imputation from Levels.fyi seed ✅ COMPLETE (Option-1 scope)
@@ -693,8 +753,11 @@ None. No API key needed.
 | S-2.2 | Glassdoor comp band scraping | 🔲 Backlog |
 | S-2.3 | Full cover letter generation (beyond hook) | 🔲 Backlog |
 | S-2.4 | Batch resumability per santifer (claude -p workers) | 🔲 Backlog |
-| S-3.1 | Scheduler: daily auto-search cron | 🔲 Backlog |
-| S-3.2 | Multi-board: Greenhouse / Lever / Workday | 🔲 Backlog |
+| S-3.1 | Scheduler: daily auto-search cron | ✅ Done (COIN-SCHEDULER — launchd 7am + iMessage A-grade interrupt; needs `/coin scheduler install` + Automation grant to activate) |
+| S-3.2 | Multi-board: Greenhouse / Lever / Workday | ✅ Done (COIN-MULTI-BOARD — Greenhouse + Lever + Ashby) |
+| S-3.3 | Two-stage JD-aware scoring | ✅ Done (COIN-SCORE-V2) |
+| S-3.4 | Web dashboard at /lab/coin | ✅ Done (COIN-WEB-UI — gated at handoffpack.com/lab/coin) |
+| S-3.5 | STAR proof-point library + deep-dive mode | ✅ Done (COIN-EXPERIENCE-DEEPDIVE) |
 
 ---
 
