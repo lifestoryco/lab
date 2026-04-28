@@ -5,9 +5,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "bash scripts/predeploy-check.sh",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "sync-coin-db": "cp ../coin/data/db/pipeline.db data/coin/pipeline.db && echo '✓ refreshed web/data/coin/pipeline.db'"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",
