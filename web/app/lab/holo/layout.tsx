@@ -1,4 +1,27 @@
+import type { Metadata } from 'next'
 import { Fraunces, Inter_Tight, JetBrains_Mono } from 'next/font/google'
+
+const title = 'HOLO — Pokémon TCG price intelligence'
+const description = 'Live comps, market signals, and flip-profit math for Pokémon TCG sealed product. Built by Sean Ivins.'
+
+export const metadata: Metadata = {
+  title,
+  description,
+  alternates: { canonical: 'https://www.handoffpack.com/lab/holo' },
+  openGraph: {
+    title,
+    description,
+    url: 'https://www.handoffpack.com/lab/holo',
+    siteName: "Sean Ivins' Lab",
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title,
+    description,
+  },
+}
+
 
 /**
  * Fraunces — editorial serif with a real voice. Variable font with opsz
