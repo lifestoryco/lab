@@ -1,5 +1,105 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-28, COIN-LEVELS-CROSSREF)
+
+### COIN-LEVELS-CROSSREF — Comp imputation from Levels.fyi seed ✅ COMPLETE (Option-1 scope)
+
+**Tests:** 293 → **310 passing** (+17; 0 regressions). Anthropic dep absent.
+
+**Why:** LinkedIn-only roles arrived with `comp_source='unverified'`, hard-capped at score 55. For ~50 known-paying companies the penalty is unfair noise that pushes real opportunities below LinkedIn junk.
+
+**Scope decision (with Sean, 2026-04-28):** ship the infrastructure with a small high-confidence seed (Datadog, Cloudflare, Vercel, Ramp — all sourced live from Levels.fyi component pages); mark the remaining 33 target companies `unknown: true` so the lookup function returns None honestly. Sean fills the rest quarterly via `/coin levels-refresh`. The acceptance criterion "≥30 of 40 Utah roles imputed" is deferred to that refresh — most Utah-anchored Filevine/Awardco/Weave/etc. have no usable Levels.fyi presence anyway.
+
+**1. New seed `data/levels_seed.yml`** — 37 companies. 4 with verified component breakdowns (base + stock/yr × 4 = rsu_4yr_p50 + bonus). 33 marked `unknown: true` (some have no Levels presence at all; some have totals but no component breakdown). YAML header documents the "no spread → p25=p50=p75 point estimate" convention used when Levels gives only the median.
+
+**2. New module `careerops/levels.py`:**
+- `load_levels_seed()` — module-level cache; `_reset_cache()` exposed for tests
+- `lookup_company(company)` — exact → suffix-stripped → one-direction substring (mirrors `score_company_tier`'s convention; `'Hash'` does NOT match `'HashiCorp'`). Returns None on miss or `unknown: true`
+- `impute_comp(company, role_title)` — picks level from title hints (staff/principal/director/vp → 0.7 confidence) or company default (L5-first → 0.5). Walks down the fallback ladder if exact level missing (-0.1 per step, floor 0.3). Returns `{comp_min, comp_max, comp_source='imputed_levels', level_matched, confidence}` rounded to nearest $1K
+- `get_seed_age(company)` and `flag_stale(threshold_days=90)` — for `/coin levels-refresh`
+
+**3. Migration `m007_comp_confidence.py`** — adds `roles.comp_confidence REAL`. Idempotent + rollback (3.35 DROP COLUMN, pre-3.35 rebuild).
+
+**4. `careerops/score.py::score_comp` extended:**
+- New signature: `score_comp(comp_min, comp_max, comp_source=None, comp_confidence=None)`
+- `imputed_levels` applies haircut `raw * (0.5 + 0.5 * confidence)`. Confidence 0.7 → 85% credit; 0.5 → 75%; 0.3 → 65%. Verified comp at the same band always scores higher than imputed
+- `unverified` still hard-caps at 55 (regression-guarded by test)
+
+**5. `careerops/pipeline.py::upsert_role` auto-impute hook** — after the row lands, if `comp_source='unverified'` AND the company is in the seed, an UPDATE patches `comp_min/comp_max/comp_source='imputed_levels'/comp_confidence` and appends `[imputed comp from Levels.fyi seed: <level> @ confidence <X>]` to `notes`. Idempotent on subsequent upserts (the row is no longer `unverified` so the hook skips). Verified live: a fake `unverified` Vercel SE role landed as `imputed_levels` with `$197K, 0.5 confidence`.
+
+**6. `modes/levels-refresh.md`** — quarterly walk-through. Calls `flag_stale(90)`, surfaces each entry's source URL, asks Sean for new bands per level via `AskUserQuestion`, atomically updates the YAML. Documents the v2.1 manual approach; never auto-scrapes Levels.fyi.
+
+**7. `modes/audit.md` Check 5** — added imputed-comp guard: any resume/cover-letter prose that references a comp range derived from `comp_source='imputed_levels'` flags CRITICAL. Same fabrication failure mode the 2026-04-24 review caught with Cox/TitanX inflation.
+
+**8. SKILL.md routing** — `/coin levels-refresh` → `modes/levels-refresh.md`. Discovery menu updated.
+
+**9. Tests in `tests/test_levels_crossref.py` (17 tests):**
+- YAML structure validation
+- `lookup_company` exact / lowercase / suffix-stripped / one-direction substring / unknown-flag / miss / malformed-entry edge cases
+- `impute_comp` title-matched-staff / default-L5-on-Senior / unknown-company-returns-None
+- `score_comp` haircut formula correctness, unverified hard-cap regression
+- `upsert_role` auto-impute integration test (fresh DB, asserts `comp_source='imputed_levels'`, populated bands, notes audit trail)
+- `get_seed_age` known/unknown
+- `flag_stale` threshold filter
+
+**Scope deferred to /coin levels-refresh:** populating component breakdowns for the remaining 33 stub companies. Sean owns this — it's a quarterly chore, not engineering work.
+
+**Unblocks:** COIN-SCORE-V2 (final pre-condition cleared).
+
+---
+
+## What Was Just Done (2026-04-28, COIN-MULTI-BOARD)
+
+### COIN-MULTI-BOARD — Greenhouse / Lever / Ashby scrapers ✅ COMPLETE
+
+**Tests:** 265 → **293 passing** (+28; 0 regressions). Anthropic dep confirmed absent.
+
+**Why:** Pre-task, every role in the DB was LinkedIn-only with `comp_source='unverified'`. The comp floor was being enforced against zero verified bands. Live smoke now produces 237 board roles across 7 companies with 100% verified comp on the top 10.
+
+**1. New package `careerops/boards/`** — three public-API scrapers behind a shared ABC:
+- `BoardScraper` (base): rate-limited GET (1.5s/instance), HTML strip, regex comp fallback (`COMP_REGEX`), normalized location handling, common `_to_role_dict` shape
+- `GreenhouseBoard` — `boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true`. Comp priority: structured `metadata` (e.g. Datadog's `currency_range`) → regex on rendered content → none
+- `LeverBoard` — `api.lever.co/v0/postings/{slug}?mode=json`. Priority: structured `salaryRange.min/max` → regex on `descriptionPlain + additionalPlain`
+- `AshbyBoard` — `api.ashbyhq.com/posting-api/job-board/{slug}?includeCompensation=true`. Priority: `compensationTier{minValue,maxValue}` → `compensationTiers[].components` → `compensationTierSummary` string parse → regex fallback. Highest-signal source overall
+- All cite santifer/career-ops scan.mjs (MIT) in module docstrings
+
+**2. `config.TARGET_COMPANIES` registry** — 32 companies, slugs verified live on 2026-04-28:
+- Greenhouse (verified): lucidsoftware, weave, qualtrics, awardco, mastercontrol, recursionpharmaceuticals, vercel, datadog, cloudflare
+- Lever (verified): spotify
+- Ashby (verified): airbyte, hightouch, ramp, writer, linear
+- 17 entries marked `# TODO verify` — Filevine, Pluralsight, Podium, Domo, Vivint, Spiff, Notion, RevenueCat, Block, Snowflake, MongoDB, Confluent, HashiCorp, dbt Labs, Census, Retool, Fivetran. None of the standard ATS slugs returned 200 — these companies likely use non-standard ATS endpoints (Workday, custom). Slug discovery deferred
+- Adobe / Stripe / Anthropic / FAANG explicitly excluded — pedigree filter
+- New env override: `COIN_BOARD_SCORE_FLOOR` (default 55) — title-score gate before a board role surfaces
+
+**3. `careerops/scraper.py`** — orchestrator + dedup:
+- New `search_boards(lane, location, boards, companies)` — ThreadPoolExecutor(max_workers=4) over `(company × board) tasks`. Each task swallows exceptions per-board so one failure doesn't kill the run
+- New `_canonical_url(url)` — strips query/fragment/trailing slash, lowercases. Used to dedupe across LinkedIn ↔ board sources
+- `search_all_lanes(...)` extended with `boards`/`companies` kwargs; default sources now `linkedin,greenhouse,lever,ashby`
+- Location filter: substring match against role.location, with remote roles always passing (Sean is remote-friendly)
+
+**4. `scripts/discover.py`** — two new flags (existing flags preserved):
+- `--boards linkedin,greenhouse,lever,ashby` (default = all four). Drop a name to skip
+- `--companies "Vercel,Datadog,Weave"` — limit board scrapes to a subset; ignored for LinkedIn
+
+**5. `careerops/compensation.py`** — `filter_by_comp` now respects pre-populated `comp_min/comp_source` instead of overwriting them with `parse_comp_string(role['comp_raw'])` (LinkedIn-only field). Critical fix — without this, board scraper output collapsed to `unverified` on its way through `discover.py`
+
+**6. `careerops/pipeline.py` + migration `m006_comp_currency.py`:**
+- `roles.comp_currency TEXT DEFAULT 'USD'` column added; idempotent migration with rollback path (handles SQLite ≥3.35 DROP COLUMN and pre-3.35 rebuild)
+- `upsert_role` accepts/persists `comp_currency`; `init_db` schema updated for fresh DBs
+- `comp_source` enum (TEXT, no CHECK) accepts `explicit | parsed | imputed_levels | unverified` — no schema change needed; the four values flow through string storage
+
+**7. Tests (28 new):**
+- `tests/test_boards_greenhouse.py` (8) — fixture: `greenhouse_filevine.json`
+- `tests/test_boards_lever.py` (8) — fixture: `lever_lucidsoftware.json`
+- `tests/test_boards_ashby.py` (8) — fixture: `ashby_vercel.json`
+- `tests/test_boards_orchestrator.py` (4) — lane-score floor, LinkedIn↔board dedup, per-board failure isolation, `companies` flag scope
+
+**Live smoke (network):** `discover.py --boards greenhouse,lever,ashby --companies "Weave,Vercel,Airbyte,Spotify,Linear,Ramp,Writer"` → 237 roles (greenhouse 47, lever 92, ashby 98); top 10 all carry `comp_min`/`comp_max` with `comp_source` in {explicit, parsed}. Top: Ramp Senior Security PM ($160K-$259K, ashby explicit, 89.7 fit).
+
+**Unblocks:** COIN-LEVELS-CROSSREF (next), then COIN-SCORE-V2.
+
+---
+
 ## What Was Just Done (2026-04-27, Session 6 — COIN-DISQUALIFIERS)
 
 ### COIN-DISQUALIFIERS — JD-aware quarantine + soft-penalty layer ✅ COMPLETE

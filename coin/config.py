@@ -4,10 +4,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── Compensation floors ───────────────────────────────────────────────────────
-# Sean is at $99K; targeting a 60-100% jump to a real product company or SE seat.
-# $160K base / $200K TC is the realistic floor — anything below isn't worth a tailor pass.
-MIN_BASE_SALARY = int(os.getenv("COIN_MIN_BASE", "160000"))
-MIN_TOTAL_COMP = int(os.getenv("COIN_MIN_TC", "200000"))
+# Sean is at $99K; floor $130K base / $160K TC, top of range $230K total.
+# Below the floor isn't worth a tailor pass.
+MIN_BASE_SALARY = int(os.getenv("COIN_MIN_BASE", "130000"))
+MIN_TOTAL_COMP = int(os.getenv("COIN_MIN_TC", "160000"))
 
 # ── Scraper behavior ──────────────────────────────────────────────────────────
 REQUEST_DELAY_SECONDS = 2.0
@@ -252,3 +252,63 @@ DOMAIN_PENALTY_RULES: list[tuple[str, str, int]] = [
     (r"\b(Microsoft\s+stack|Azure|\.NET|C#|Power\s+Platform|Power\s+BI|Dynamics\s+365|D365)", "msft_stack_mismatch", -20),
     (r"\b(cybersecurity|infosec|SIEM|SOC|threat\s+intel|penetration|red\s+team|blue\s+team|zero\s+trust)\b", "narrow_security_domain", -20),
 ]
+
+
+# ── Public job-board registry (Greenhouse / Lever / Ashby) ────────────────────
+# Slugs verified against the live API on 2026-04-28. None means "not on this
+# board" or "slug not yet verified". A 404 from a wrong slug is logged but the
+# scrape continues — but better to leave entries as None than guess.
+#
+# To verify a slug:
+#   curl -s "https://boards-api.greenhouse.io/v1/boards/<slug>/jobs" | head -c 300
+#   curl -s "https://api.lever.co/v0/postings/<slug>?mode=json"      | head -c 300
+#   curl -s "https://api.ashbyhq.com/posting-api/job-board/<slug>?includeCompensation=true" | head -c 300
+#
+# A 200 + `{"jobs":[...]}` (or list for Lever) means valid. A 404 means wrong slug.
+TARGET_COMPANIES: dict[str, dict[str, str | None]] = {
+    # ── Utah core (verified slugs) ─────────────────────────────────────────
+    "Lucid Software": {"greenhouse": "lucidsoftware", "lever": None, "ashby": None},
+    "Weave":          {"greenhouse": "weave",         "lever": None, "ashby": None},
+    "Qualtrics":      {"greenhouse": "qualtrics",     "lever": None, "ashby": None},
+    "Awardco":        {"greenhouse": "awardco",       "lever": None, "ashby": None},
+    "MasterControl":  {"greenhouse": "mastercontrol", "lever": None, "ashby": None},
+    "Recursion":      {"greenhouse": "recursionpharmaceuticals", "lever": None, "ashby": None},
+    # ── Utah core (TODO: verify — none of the standard ATS slugs found) ───
+    "Filevine":       {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    "Pluralsight":    {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    "Podium":         {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    "Domo":           {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    "Vivint":         {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    "Spiff":          {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    # ── In-league outside Utah, remote-friendly (verified) ────────────────
+    "Vercel":         {"greenhouse": "vercel",        "lever": None, "ashby": None},
+    "Datadog":        {"greenhouse": "datadog",       "lever": None, "ashby": None},
+    "Cloudflare":     {"greenhouse": "cloudflare",    "lever": None, "ashby": None},
+    "Airbyte":        {"greenhouse": None, "lever": None, "ashby": "airbyte"},
+    "Hightouch":      {"greenhouse": None, "lever": None, "ashby": "hightouch"},
+    "Ramp":           {"greenhouse": None, "lever": None, "ashby": "ramp"},
+    "Writer":         {"greenhouse": None, "lever": None, "ashby": "writer"},
+    "Linear":         {"greenhouse": None, "lever": None, "ashby": "linear"},
+    "Spotify":        {"greenhouse": None, "lever": "spotify",   "ashby": None},
+    # ── In-league outside Utah, TODO verify ───────────────────────────────
+    "Notion":         {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    "RevenueCat":     {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    "Block":          {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    "Snowflake":      {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    "MongoDB":        {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    "Confluent":      {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    "HashiCorp":      {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify (not on stock GH slug)
+    "dbt Labs":       {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    "Census":         {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    "Retool":         {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    "Fivetran":       {"greenhouse": None, "lever": None, "ashby": None},  # TODO verify
+    # NOTE: Adobe / Stripe / Google / Meta / Apple / Anthropic / Perplexity
+    # intentionally OMITTED — FAANG-tier per the cox-style-tpm → out_of_band
+    # pedigree filter (see modes/_shared.md and tier4_pedigree_filter list).
+}
+
+# Title-score floor — board hits below this for the lane are dropped before
+# even reaching the dashboard. Boards are noisier than LinkedIn (we pull every
+# posting at a target company, not just lane-keyword search results), so a
+# floor is mandatory or you drown in PMM/marketing roles.
+LANE_BOARD_SCORE_FLOOR = int(os.getenv("COIN_BOARD_SCORE_FLOOR", "55"))

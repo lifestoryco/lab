@@ -1,0 +1,239 @@
+# Coin — Levels.fyi comp seed
+# Source: Levels.fyi (manual curation). Quarterly refresh required.
+# Run `/coin levels-refresh` to walk through stale entries.
+#
+# Bands are USD. base_p* are annual base salary at the level.
+# rsu_4yr_p50 is the median 4-year RSU grant total (NOT annualized).
+# Stored as stock_per_year_p50 × 4, since Levels.fyi exposes the
+# annualized stock value. impute_comp divides by 4 to recover that.
+# bonus_p50 is the target annual bonus.
+#
+# Levels keys: L4, L5, L6, staff, principal, director, vp.
+# Use whichever rungs the company's actual ladder publishes.
+#
+# Honesty note (2026-04-28): Levels.fyi free-tier pages only expose
+# component-level breakdowns for a subset of (company, role-family,
+# level) cells. p25 / p75 are not exposed. When Levels gives only the
+# median, this seed stores `base_p25 == base_p50 == base_p75`. That is
+# a deliberate "no-spread" point estimate, not a fabricated band. The
+# scoring layer collapses comp_min/comp_max accordingly and applies a
+# confidence haircut (see careerops/score.py::score_comp).
+#
+# Companies with `unknown: true` were checked and have no usable
+# Levels.fyi presence. They are seeded so the lookup function can
+# return `None` honestly instead of the auto-impute hook silently
+# skipping them.
+companies:
+
+  # ── Verified-with-Levels (component breakdown available) ───────────
+  Datadog:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/datadog/salaries
+    levels:
+      # Senior Software Engineer (L3) — Levels: $246K base, $189K stock/yr, $1.4K bonus
+      L5:
+        base_p25: 246000
+        base_p50: 246000
+        base_p75: 246000
+        rsu_4yr_p50: 756000
+        bonus_p50: 1400
+      # Staff SWE (L4) — Levels: $296K base, $280K stock/yr, $0 bonus
+      staff:
+        base_p25: 296000
+        base_p50: 296000
+        base_p75: 296000
+        rsu_4yr_p50: 1120000
+        bonus_p50: 0
+      # Senior TPM — Levels: $209K base, $68.3K stock/yr, $1.7K bonus
+      tpm_senior:
+        base_p25: 209000
+        base_p50: 209000
+        base_p75: 209000
+        rsu_4yr_p50: 273200
+        bonus_p50: 1700
+
+  Cloudflare:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/cloudflare/salaries
+    levels:
+      # L3 SWE — $162K base, $40K stock/yr, $0 bonus
+      L4:
+        base_p25: 162000
+        base_p50: 162000
+        base_p75: 162000
+        rsu_4yr_p50: 160000
+        bonus_p50: 0
+      # L4 SWE — $198K base, $51.3K stock/yr, $0 bonus
+      L5:
+        base_p25: 198000
+        base_p50: 198000
+        base_p75: 198000
+        rsu_4yr_p50: 205200
+        bonus_p50: 0
+
+  Vercel:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/vercel/salaries
+    levels:
+      # Entry SWE — $165K base, $30K stock/yr, $1.9K bonus
+      L4:
+        base_p25: 165000
+        base_p50: 165000
+        base_p75: 165000
+        rsu_4yr_p50: 120000
+        bonus_p50: 1900
+
+  Ramp:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/ramp/salaries
+    levels:
+      # Senior SWE — $234K base, $202K stock/yr, $4.6K bonus
+      L5:
+        base_p25: 234000
+        base_p50: 234000
+        base_p75: 234000
+        rsu_4yr_p50: 808000
+        bonus_p50: 4600
+      # Staff SWE — $288K base, $582K stock/yr, $0 bonus
+      staff:
+        base_p25: 288000
+        base_p50: 288000
+        base_p75: 288000
+        rsu_4yr_p50: 2328000
+        bonus_p50: 0
+
+  # ── Utah-anchored: no usable Levels.fyi presence ───────────────────
+  Filevine:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/
+    unknown: true
+  Awardco:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/
+    unknown: true
+  Weave:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/
+    unknown: true
+  MasterControl:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/
+    unknown: true
+  Pluralsight:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/
+    unknown: true
+  Lucid Software:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/
+    unknown: true
+  Podium:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/
+    unknown: true
+  Recursion:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/
+    unknown: true
+  Domo:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/
+    unknown: true
+  Qualtrics:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/qualtrics/salaries
+    unknown: true  # Levels presence exists but no component breakdown for Sean's lanes
+  Vivint:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/
+    unknown: true
+  Spiff:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/
+    unknown: true
+
+  # ── Remote-friendly targets: stubs for future levels-refresh runs ──
+  HashiCorp:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/hashicorp/salaries
+    unknown: true  # data exists; populate via /coin levels-refresh
+  MongoDB:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/mongodb/salaries
+    unknown: true
+  Confluent:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/confluent/salaries
+    unknown: true
+  Snowflake:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/snowflake/salaries
+    unknown: true
+  Block:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/block/salaries
+    unknown: true
+  Notion:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/notion/salaries
+    unknown: true
+  Linear:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/linear/salaries
+    unknown: true
+  Hightouch:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/hightouch/salaries
+    unknown: true
+  Census:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/census/salaries
+    unknown: true
+  Retool:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/retool/salaries
+    unknown: true
+  Airbyte:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/airbyte/salaries
+    unknown: true
+  Fivetran:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/fivetran/salaries
+    unknown: true
+  dbt Labs:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/dbt-labs/salaries
+    unknown: true
+  Sourcegraph:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/sourcegraph/salaries
+    unknown: true
+  RevenueCat:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/revenuecat/salaries
+    unknown: true
+  Webflow:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/webflow/salaries
+    unknown: true
+  Plaid:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/plaid/salaries
+    unknown: true
+  Brex:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/brex/salaries
+    unknown: true
+  Mercury:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/mercury/salaries
+    unknown: true
+  Writer:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/writer/salaries
+    unknown: true
+  Spotify:
+    last_refreshed: 2026-04-28
+    source_url: https://www.levels.fyi/companies/spotify/salaries
+    unknown: true

@@ -69,7 +69,7 @@ def _extract_posted_at(card) -> str | None:
 
 from config import (
     BOARDS, LANES, REQUEST_DELAY_SECONDS, REQUEST_TIMEOUT,
-    USER_AGENT, DEFAULT_LOCATION,
+    USER_AGENT, DEFAULT_LOCATION, TARGET_COMPANIES, LANE_BOARD_SCORE_FLOOR,
 )
 from careerops.compensation import parse_comp_string
 
@@ -274,19 +274,165 @@ def search(lane: str, limit: int = 25, location: str | None = None) -> list[dict
     return results[:limit]
 
 
-def search_all_lanes(limit_per_lane: int = 15, location: str | None = None) -> list[dict]:
+def _canonical_url(url: str | None) -> str:
+    """Strip query/fragment/trailing-slash so the same role on LinkedIn vs.
+    a board doesn't surface twice in dedup. Best-effort — unknown shapes
+    fall through unchanged."""
+    if not url:
+        return ""
+    try:
+        p = urlparse(url)
+    except Exception:
+        return url
+    path = (p.path or "").rstrip("/")
+    return f"{p.scheme}://{p.netloc}{path}".lower()
+
+
+def search_boards(
+    lane: str,
+    location: str | None = None,
+    boards: list[str] | None = None,
+    companies: list[str] | None = None,
+) -> list[dict]:
+    """Iterate TARGET_COMPANIES, fetch from each enabled board, filter by lane.
+
+    Args:
+      lane: archetype id (must be in LANES).
+      location: substring match against role.location; None = no location filter.
+      boards: subset of {"greenhouse","lever","ashby"}; default = all three.
+      companies: subset of TARGET_COMPANIES keys; default = all.
+
+    Returns role dicts with keys matching the LinkedIn scraper's shape (url,
+    title, company, location, remote, lane, comp_min, comp_max, comp_source,
+    source, posted_at, jd_raw, comp_currency).
+    """
+    # Local imports to avoid hard dependency loops at module import time.
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from careerops.boards import ALL_BOARDS
+    from careerops.score import score_title
+
+    if lane not in LANES:
+        raise ValueError(f"Unknown lane '{lane}'. Choose from: {list(LANES.keys())}")
+
+    enabled = set(boards) if boards else {"greenhouse", "lever", "ashby"}
+    target_companies = (
+        {k: v for k, v in TARGET_COMPANIES.items() if k in companies}
+        if companies
+        else dict(TARGET_COMPANIES)
+    )
+
+    # Instantiate one board scraper per enabled name (per-instance rate limit).
+    board_instances: dict[str, "object"] = {}
+    for cls in ALL_BOARDS:
+        if cls.name in enabled:
+            board_instances[cls.name] = cls()
+
+    tasks: list[tuple[str, "object", str]] = []
+    for company, slugs in target_companies.items():
+        for board_name, slug in slugs.items():
+            if slug and board_name in board_instances:
+                tasks.append((company, board_instances[board_name], slug))
+
+    results: list[dict] = []
+
+    def _matches_location(loc_str: str | None, target: str) -> bool:
+        if not target:
+            return True
+        if not loc_str:
+            return False
+        target_l = target.lower()
+        loc_l = loc_str.lower()
+        # crude substring match — "Utah" matches "Lehi, UT" via the "ut" fallback
+        if target_l in loc_l:
+            return True
+        # tokenize the target on commas; require any token to match
+        for tok in [t.strip() for t in target_l.split(",") if t.strip()]:
+            if tok in loc_l:
+                return True
+        return False
+
+    if not tasks:
+        return results
+
+    with ThreadPoolExecutor(max_workers=4) as ex:
+        futures = {
+            ex.submit(board.fetch_listings, slug, lane): (company, board.name)
+            for company, board, slug in tasks
+        }
+        for fut in as_completed(futures):
+            company, board_name = futures[fut]
+            try:
+                roles = fut.result() or []
+            except Exception as e:
+                print(f"[boards] {company}/{board_name} failed: {e}")
+                continue
+            for r in roles:
+                r["company"] = company  # canonical name from registry
+                r["lane"] = lane
+                title_score = score_title(r.get("title"), lane)
+                if title_score < LANE_BOARD_SCORE_FLOOR:
+                    continue
+                if location and not _matches_location(r.get("location"), location):
+                    # remote roles always pass — Sean is remote-friendly
+                    if not r.get("remote"):
+                        continue
+                results.append(r)
+    return results
+
+
+def search_all_lanes(
+    limit_per_lane: int = 15,
+    location: str | None = None,
+    boards: list[str] | None = None,
+    companies: list[str] | None = None,
+) -> list[dict]:
+    """Discover across all 4 lanes from LinkedIn + (optionally) public boards.
+
+    `boards` semantics:
+      - None or contains "linkedin" → LinkedIn pass runs (existing behavior)
+      - Contains any of {"greenhouse","lever","ashby"} → those boards run too
+      - To skip LinkedIn entirely, pass boards=["greenhouse","lever","ashby"]
+        (i.e. omit "linkedin")
+
+    Dedup is canonical-URL based across both sources.
+    """
+    enabled = set(boards) if boards else {"linkedin", "greenhouse", "lever", "ashby"}
     out: list[dict] = []
     seen: set[str] = set()
+
     for lane in LANES.keys():
-        try:
-            lane_results = search(lane, limit=limit_per_lane, location=location)
-        except Exception as exc:
-            print(f"[{lane}] search failed: {exc}")
-            continue
-        for r in lane_results:
-            if r["url"] not in seen:
-                seen.add(r["url"])
-                out.append(r)
+        # LinkedIn / Indeed pass (existing search() handles both)
+        if "linkedin" in enabled:
+            try:
+                lane_results = search(lane, limit=limit_per_lane, location=location)
+            except Exception as exc:
+                print(f"[{lane}] linkedin search failed: {exc}")
+                lane_results = []
+            for r in lane_results:
+                key = _canonical_url(r.get("url"))
+                if key and key not in seen:
+                    seen.add(key)
+                    out.append(r)
+
+        # Public boards pass
+        board_subset = [b for b in ("greenhouse", "lever", "ashby") if b in enabled]
+        if board_subset:
+            try:
+                board_results = search_boards(
+                    lane,
+                    location=location,
+                    boards=board_subset,
+                    companies=companies,
+                )
+            except Exception as exc:
+                print(f"[{lane}] boards search failed: {exc}")
+                board_results = []
+            for r in board_results:
+                key = _canonical_url(r.get("url"))
+                if key and key not in seen:
+                    seen.add(key)
+                    out.append(r)
+
     return out
 
 

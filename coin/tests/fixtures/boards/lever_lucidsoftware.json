@@ -1,0 +1,47 @@
+[
+  {
+    "id": "abc-123",
+    "text": "Staff Solutions Architect",
+    "hostedUrl": "https://jobs.lever.co/lucidsoftware/abc-123",
+    "applyUrl": "https://jobs.lever.co/lucidsoftware/abc-123/apply",
+    "createdAt": 1745000000000,
+    "categories": {
+      "location": "South Jordan, UT",
+      "team": "Solutions",
+      "commitment": "Full-time",
+      "workplaceType": "hybrid"
+    },
+    "descriptionPlain": "Lucid is hiring a Staff Solutions Architect.\nBase salary range: $140,000-$190,000 USD.",
+    "additionalPlain": "We offer equity and benefits.",
+    "salaryRange": {"min": 140000, "max": 190000, "currency": "USD"}
+  },
+  {
+    "id": "def-456",
+    "text": "Senior Technical Program Manager",
+    "hostedUrl": "https://jobs.lever.co/lucidsoftware/def-456",
+    "applyUrl": "https://jobs.lever.co/lucidsoftware/def-456/apply",
+    "createdAt": 1744500000000,
+    "categories": {
+      "location": "Remote - United States",
+      "team": "Engineering",
+      "commitment": "Full-time",
+      "workplaceType": "remote"
+    },
+    "descriptionPlain": "TPM remote role. Hiring band $130,000 to $170,000.",
+    "additionalPlain": ""
+  },
+  {
+    "id": "ghi-789",
+    "text": "Marketing Manager",
+    "hostedUrl": "https://jobs.lever.co/lucidsoftware/ghi-789",
+    "applyUrl": "https://jobs.lever.co/lucidsoftware/ghi-789/apply",
+    "createdAt": 1744000000000,
+    "categories": {
+      "location": "South Jordan, UT",
+      "team": "Marketing",
+      "commitment": "Full-time"
+    },
+    "descriptionPlain": "Marketing role with no comp band stated.",
+    "additionalPlain": ""
+  }
+]

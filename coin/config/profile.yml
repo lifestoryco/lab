@@ -13,8 +13,8 @@ identity:
   email: sean@lifestory.co
   domains: [wireless infrastructure, IoT systems, B2B SaaS, RF, industrial]
   target_comp:
-    min_base: 160000
-    min_total: 200000
+    min_base: 130000
+    min_total: 160000
     target_base: 180000
     target_total: 230000
   target_locations: [Remote, Salt Lake City, Utah, Lehi, Draper, Provo]

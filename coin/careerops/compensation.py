@@ -26,14 +26,22 @@ def parse_comp_string(raw: str | None) -> tuple[int | None, int | None]:
 
 
 def filter_by_comp(roles: list[dict], min_base: int = MIN_BASE_SALARY) -> list[dict]:
-    """Keep roles where comp_min >= min_base, or comp is unverified (don't exclude unknowns)."""
+    """Keep roles where comp_min >= min_base, or comp is unverified (don't exclude unknowns).
+
+    Source priority: roles that arrive with `comp_min`/`comp_source` already
+    populated (board scrapers set these explicitly) keep their values. Roles
+    with only a raw string (LinkedIn) get parsed in place.
+    """
     result = []
     for role in roles:
-        comp_min, comp_max = parse_comp_string(role.get("comp_raw"))
-        role["comp_min"] = comp_min
-        role["comp_max"] = comp_max
-        role["comp_source"] = "explicit" if comp_min else "unverified"
+        if role.get("comp_min") is None and role.get("comp_max") is None:
+            comp_min, comp_max = parse_comp_string(role.get("comp_raw"))
+            role["comp_min"] = comp_min
+            role["comp_max"] = comp_max
+            if not role.get("comp_source"):
+                role["comp_source"] = "explicit" if comp_min else "unverified"
 
+        comp_min = role.get("comp_min")
         if comp_min is None or comp_min >= min_base:
             result.append(role)
 

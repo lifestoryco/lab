@@ -35,12 +35,63 @@ def main() -> int:
         "--max-age-days", type=int, default=None,
         help="Drop roles older than N days (by posted_at). Roles with unknown posted_at pass."
     )
+    ap.add_argument(
+        "--boards", type=str, default="linkedin,greenhouse,lever,ashby",
+        help=(
+            "CSV of sources to query. Default: linkedin,greenhouse,lever,ashby. "
+            "Drop 'linkedin' to skip the LinkedIn pass; drop a board to skip it."
+        ),
+    )
+    ap.add_argument(
+        "--companies", type=str, default=None,
+        help=(
+            "CSV of company names from TARGET_COMPANIES to limit board scrapes to. "
+            "Ignored for LinkedIn. Example: --companies 'Vercel,Datadog'."
+        ),
+    )
     args = ap.parse_args()
 
+    boards_list = [b.strip() for b in (args.boards or "").split(",") if b.strip()]
+    companies_list = (
+        [c.strip() for c in args.companies.split(",") if c.strip()]
+        if args.companies else None
+    )
+
     if args.lane:
-        scraped = scraper.search(args.lane, limit=args.limit, location=args.location)
+        # Single-lane: stitch LinkedIn + boards manually so the --boards flag still applies.
+        scraped: list[dict] = []
+        seen: set[str] = set()
+        if "linkedin" in boards_list:
+            try:
+                for r in scraper.search(args.lane, limit=args.limit, location=args.location):
+                    key = scraper._canonical_url(r.get("url"))
+                    if key and key not in seen:
+                        seen.add(key)
+                        scraped.append(r)
+            except Exception as exc:
+                print(f"[linkedin] {args.lane} failed: {exc}", file=sys.stderr)
+        board_subset = [b for b in ("greenhouse", "lever", "ashby") if b in boards_list]
+        if board_subset:
+            try:
+                for r in scraper.search_boards(
+                    args.lane,
+                    location=args.location,
+                    boards=board_subset,
+                    companies=companies_list,
+                ):
+                    key = scraper._canonical_url(r.get("url"))
+                    if key and key not in seen:
+                        seen.add(key)
+                        scraped.append(r)
+            except Exception as exc:
+                print(f"[boards] {args.lane} failed: {exc}", file=sys.stderr)
     else:
-        scraped = scraper.search_all_lanes(limit_per_lane=args.limit, location=args.location)
+        scraped = scraper.search_all_lanes(
+            limit_per_lane=args.limit,
+            location=args.location,
+            boards=boards_list,
+            companies=companies_list,
+        )
 
     if not args.skip_filter:
         scraped = compensation.filter_by_comp(scraped)

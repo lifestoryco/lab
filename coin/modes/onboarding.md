@@ -191,15 +191,15 @@ options:
 Free-text capture (no AskUserQuestion — too constrained for $ ranges).
 Three sub-prompts:
 
-1. *"Base salary floor in USD? (Sean default: $160K — press Enter to accept, or type new value)"*
-2. *"Total comp floor (base + RSU + bonus) in USD? (Sean default: $200K)"*
+1. *"Base salary floor in USD? (Sean default: $130K — press Enter to accept, or type new value)"*
+2. *"Total comp floor (base + RSU + bonus) in USD? (Sean default: $160K)"*
 3. *"Equity expectation (% of company, $ value, or 'standard')?"*
 
 Validate: base ≤ total. Re-prompt if not. If Sean enters a base below
-$160K or total below $200K, surface a soft warning citing `_shared.md`'s
+$130K or total below $160K, surface a soft warning citing `_shared.md`'s
 Operating Principle: comp floor exists because Sean is at $99K and
-$160K/$200K is the realistic 60%+ jump; lowering it is allowed but should
-be a deliberate choice, not a fat-finger.
+$130K/$160K is the realistic floor (top of range $230K total); lowering it
+is allowed but should be a deliberate choice, not a fat-finger.
 
 ---
 

@@ -66,7 +66,7 @@ live in `config/profile.yml`.
 |---|---|
 | 1 | Never fabricate metrics — source of truth is `data/resumes/base.py` + `config/profile.yml` |
 | 2 | Never write a resume without a target archetype — output is always lane-specific |
-| 3 | Comp floor: **$160K base / $200K total** (refreshed 2026-04-25; Sean is at $99K and $160K is the realistic 60%+ jump). Lower roles hidden unless Sean overrides |
+| 3 | Comp floor: **$130K base / $160K total** · top of range **$230K total** (refreshed 2026-04-28; lowered from $160K/$200K to widen the funnel). Lower roles hidden unless Sean overrides |
 | 4 | Never auto-submit applications — `applied` transition requires explicit "yes" |
 | 5 | Never commit `data/db/pipeline.db`, `data/resumes/generated/`, or `.env` |
 | 6 | **No Anthropic API calls.** Coin runs inside Claude Code; LLM work is the host session |

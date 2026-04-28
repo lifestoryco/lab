@@ -104,6 +104,16 @@ For every quantitative claim in `top_bullets` and `executive_summary` (numeric, 
 - **Known-good metrics (verified 2026-04-25):** $1M Y1 (Cox), $27M Series A (TitanX), $6M→$13M ARR (Utah Broadband), $27M acquisition (Boston Omaha), 187 countries / 7 localizations / 1000+ pages (Safeguard — confirmed with Sean), 15+ network expansion deployments (Utah Broadband), 100+ internal stakeholders (LINX), 40%+ first-call resolution (LINX — flag for re-confirmation).
 - **Fix template:** Drop the unverifiable claim. Replace with a qualitative version ("delivered ahead of schedule" instead of "six weeks ahead"; "across multiple time zones" instead of "across three continents").
 
+- **Imputed comp must NEVER appear in resume copy.** Any role row whose
+  DB column `comp_source = 'imputed_levels'` carries a Levels.fyi-derived
+  band that is for Coin's INTERNAL scoring only. If the tailored resume's
+  `executive_summary`, `top_bullets`, or any prose reference a salary
+  range that originated from imputed comp, **flag CRITICAL**. Same rule
+  applies to comp ranges quoted in cover letters or recruiter outreach.
+  This protects against the same fabrication failure mode the 2026-04-24
+  code review caught with Cox/TitanX inflation: imputed comp is a
+  best-guess scoring signal, not a verified employer claim.
+
 **Trumps:** None — Check 5 is the deepest of the integrity checks. If Check 5 and Check 4 both fire (invented metric + vague flex), report both.
 
 ### Check 6 — Causation hedging (HIGH)
