@@ -1,5 +1,53 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-28, COIN-LEVELS-CROSSREF)
+
+### COIN-LEVELS-CROSSREF — Comp imputation from Levels.fyi seed ✅ COMPLETE (Option-1 scope)
+
+**Tests:** 293 → **310 passing** (+17; 0 regressions). Anthropic dep absent.
+
+**Why:** LinkedIn-only roles arrived with `comp_source='unverified'`, hard-capped at score 55. For ~50 known-paying companies the penalty is unfair noise that pushes real opportunities below LinkedIn junk.
+
+**Scope decision (with Sean, 2026-04-28):** ship the infrastructure with a small high-confidence seed (Datadog, Cloudflare, Vercel, Ramp — all sourced live from Levels.fyi component pages); mark the remaining 33 target companies `unknown: true` so the lookup function returns None honestly. Sean fills the rest quarterly via `/coin levels-refresh`. The acceptance criterion "≥30 of 40 Utah roles imputed" is deferred to that refresh — most Utah-anchored Filevine/Awardco/Weave/etc. have no usable Levels.fyi presence anyway.
+
+**1. New seed `data/levels_seed.yml`** — 37 companies. 4 with verified component breakdowns (base + stock/yr × 4 = rsu_4yr_p50 + bonus). 33 marked `unknown: true` (some have no Levels presence at all; some have totals but no component breakdown). YAML header documents the "no spread → p25=p50=p75 point estimate" convention used when Levels gives only the median.
+
+**2. New module `careerops/levels.py`:**
+- `load_levels_seed()` — module-level cache; `_reset_cache()` exposed for tests
+- `lookup_company(company)` — exact → suffix-stripped → one-direction substring (mirrors `score_company_tier`'s convention; `'Hash'` does NOT match `'HashiCorp'`). Returns None on miss or `unknown: true`
+- `impute_comp(company, role_title)` — picks level from title hints (staff/principal/director/vp → 0.7 confidence) or company default (L5-first → 0.5). Walks down the fallback ladder if exact level missing (-0.1 per step, floor 0.3). Returns `{comp_min, comp_max, comp_source='imputed_levels', level_matched, confidence}` rounded to nearest $1K
+- `get_seed_age(company)` and `flag_stale(threshold_days=90)` — for `/coin levels-refresh`
+
+**3. Migration `m007_comp_confidence.py`** — adds `roles.comp_confidence REAL`. Idempotent + rollback (3.35 DROP COLUMN, pre-3.35 rebuild).
+
+**4. `careerops/score.py::score_comp` extended:**
+- New signature: `score_comp(comp_min, comp_max, comp_source=None, comp_confidence=None)`
+- `imputed_levels` applies haircut `raw * (0.5 + 0.5 * confidence)`. Confidence 0.7 → 85% credit; 0.5 → 75%; 0.3 → 65%. Verified comp at the same band always scores higher than imputed
+- `unverified` still hard-caps at 55 (regression-guarded by test)
+
+**5. `careerops/pipeline.py::upsert_role` auto-impute hook** — after the row lands, if `comp_source='unverified'` AND the company is in the seed, an UPDATE patches `comp_min/comp_max/comp_source='imputed_levels'/comp_confidence` and appends `[imputed comp from Levels.fyi seed: <level> @ confidence <X>]` to `notes`. Idempotent on subsequent upserts (the row is no longer `unverified` so the hook skips). Verified live: a fake `unverified` Vercel SE role landed as `imputed_levels` with `$197K, 0.5 confidence`.
+
+**6. `modes/levels-refresh.md`** — quarterly walk-through. Calls `flag_stale(90)`, surfaces each entry's source URL, asks Sean for new bands per level via `AskUserQuestion`, atomically updates the YAML. Documents the v2.1 manual approach; never auto-scrapes Levels.fyi.
+
+**7. `modes/audit.md` Check 5** — added imputed-comp guard: any resume/cover-letter prose that references a comp range derived from `comp_source='imputed_levels'` flags CRITICAL. Same fabrication failure mode the 2026-04-24 review caught with Cox/TitanX inflation.
+
+**8. SKILL.md routing** — `/coin levels-refresh` → `modes/levels-refresh.md`. Discovery menu updated.
+
+**9. Tests in `tests/test_levels_crossref.py` (17 tests):**
+- YAML structure validation
+- `lookup_company` exact / lowercase / suffix-stripped / one-direction substring / unknown-flag / miss / malformed-entry edge cases
+- `impute_comp` title-matched-staff / default-L5-on-Senior / unknown-company-returns-None
+- `score_comp` haircut formula correctness, unverified hard-cap regression
+- `upsert_role` auto-impute integration test (fresh DB, asserts `comp_source='imputed_levels'`, populated bands, notes audit trail)
+- `get_seed_age` known/unknown
+- `flag_stale` threshold filter
+
+**Scope deferred to /coin levels-refresh:** populating component breakdowns for the remaining 33 stub companies. Sean owns this — it's a quarterly chore, not engineering work.
+
+**Unblocks:** COIN-SCORE-V2 (final pre-condition cleared).
+
+---
+
 ## What Was Just Done (2026-04-28, COIN-MULTI-BOARD)
 
 ### COIN-MULTI-BOARD — Greenhouse / Lever / Ashby scrapers ✅ COMPLETE

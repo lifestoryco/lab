@@ -52,6 +52,7 @@ Inspect `{{mode}}` (the user's input) and dispatch:
 | `patterns` or `rejection patterns` | `modes/patterns.md` (analyze rejection clusters) |
 | `interview-prep <id>` or `prep <id>` | `modes/interview-prep.md` |
 | `liveness` or `check liveness` | invoke `scripts/liveness_check.py` |
+| `levels-refresh` or `refresh levels` | `modes/levels-refresh.md` (quarterly comp seed refresh) |
 | `ofertas` or `offers` or `compare offers` | `modes/ofertas.md` (multi-offer math + negotiation brief) |
 | `setup` or `onboard` or `re-onboard` | `modes/onboarding.md` (executable 7-question profile setup) |
 | first-run with no DB | follow `Setup Checklist` below, then dispatch `modes/onboarding.md` |
@@ -108,6 +109,7 @@ Or pick a mode:
   /coin ofertas               Compare 2+ offers + draft counters
   /coin setup                 Re-run profile onboarding (7 questions)
   /coin track-outreach <id>   Mark a drafted DM as sent / replied
+  /coin levels-refresh        Walk through stale Levels.fyi seed entries
 
 Lanes (4):
   mid-market-tpm · enterprise-sales-engineer · iot-solutions-architect · revenue-ops-operator

@@ -69,11 +69,12 @@ def init_db() -> None:
                 location      TEXT,
                 remote        INTEGER DEFAULT 0,
                 lane          TEXT,
-                comp_min      INTEGER,
-                comp_max      INTEGER,
-                comp_source   TEXT,
-                comp_currency TEXT DEFAULT 'USD',
-                fit_score     REAL,
+                comp_min        INTEGER,
+                comp_max        INTEGER,
+                comp_source     TEXT,
+                comp_currency   TEXT DEFAULT 'USD',
+                comp_confidence REAL,
+                fit_score       REAL,
                 status        TEXT DEFAULT 'discovered',
                 source        TEXT,
                 jd_raw        TEXT,
@@ -102,6 +103,7 @@ def upsert_role(role: dict) -> int:
         "comp_max": role.get("comp_max"),
         "comp_source": role.get("comp_source"),
         "comp_currency": role.get("comp_currency") or "USD",
+        "comp_confidence": role.get("comp_confidence"),
         "fit_score": role.get("fit_score"),
         "source": role.get("source"),
         "jd_raw": role.get("jd_raw"),
@@ -112,20 +114,21 @@ def upsert_role(role: dict) -> int:
     with _conn() as conn:
         cur = conn.execute("""
             INSERT INTO roles (url, title, company, location, remote, lane,
-                               comp_min, comp_max, comp_source, comp_currency, fit_score,
+                               comp_min, comp_max, comp_source, comp_currency, comp_confidence, fit_score,
                                source, jd_raw, discovered_at, posted_at, updated_at)
             VALUES (:url, :title, :company, :location, :remote, :lane,
-                    :comp_min, :comp_max, :comp_source, :comp_currency, :fit_score,
+                    :comp_min, :comp_max, :comp_source, :comp_currency, :comp_confidence, :fit_score,
                     :source, :jd_raw, :discovered_at, :posted_at, :updated_at)
             ON CONFLICT(url) DO UPDATE SET
-                title         = COALESCE(excluded.title, roles.title),
-                company       = COALESCE(excluded.company, roles.company),
-                location      = COALESCE(excluded.location, roles.location),
-                remote        = excluded.remote,
-                comp_min      = COALESCE(excluded.comp_min, roles.comp_min),
-                comp_max      = COALESCE(excluded.comp_max, roles.comp_max),
-                comp_source   = COALESCE(excluded.comp_source, roles.comp_source),
-                comp_currency = COALESCE(excluded.comp_currency, roles.comp_currency),
+                title           = COALESCE(excluded.title, roles.title),
+                company         = COALESCE(excluded.company, roles.company),
+                location        = COALESCE(excluded.location, roles.location),
+                remote          = excluded.remote,
+                comp_min        = COALESCE(excluded.comp_min, roles.comp_min),
+                comp_max        = COALESCE(excluded.comp_max, roles.comp_max),
+                comp_source     = COALESCE(excluded.comp_source, roles.comp_source),
+                comp_currency   = COALESCE(excluded.comp_currency, roles.comp_currency),
+                comp_confidence = COALESCE(excluded.comp_confidence, roles.comp_confidence),
                 -- Preserve out_of_band quarantine sink: a 0 fit_score on a
                 -- quarantined row must NOT be overwritten by re-discovery.
                 fit_score   = CASE
@@ -138,7 +141,38 @@ def upsert_role(role: dict) -> int:
                 posted_at   = COALESCE(excluded.posted_at, roles.posted_at),
                 updated_at  = excluded.updated_at
         """, payload)
-        return cur.lastrowid or _role_id_by_url(conn, payload["url"])
+        role_id = cur.lastrowid or _role_id_by_url(conn, payload["url"])
+
+        # Auto-impute comp from the Levels.fyi seed when the source row
+        # arrived `unverified`. Idempotent: a subsequent upsert on the
+        # same URL sees comp_source='imputed_levels' and skips this block.
+        if role.get("comp_source") == "unverified" and role.get("company"):
+            try:
+                from careerops.levels import impute_comp
+                imputed = impute_comp(role.get("company"), role.get("title"))
+            except Exception as e:  # never let levels failure break ingest
+                imputed = None
+                print(f"[levels] impute_comp failed for {role.get('company')!r}: {e}")
+            if imputed:
+                note_suffix = (
+                    f"\n[imputed comp from Levels.fyi seed: "
+                    f"{imputed['level_matched']} @ confidence {imputed['confidence']}]"
+                )
+                conn.execute(
+                    "UPDATE roles SET comp_min = ?, comp_max = ?, comp_source = ?, "
+                    "comp_confidence = ?, notes = COALESCE(notes, '') || ?, "
+                    "updated_at = ? WHERE id = ?",
+                    (
+                        imputed["comp_min"],
+                        imputed["comp_max"],
+                        imputed["comp_source"],
+                        imputed["confidence"],
+                        note_suffix,
+                        now,
+                        role_id,
+                    ),
+                )
+        return role_id
 
 
 def _role_id_by_url(conn: sqlite3.Connection, url: str) -> int:

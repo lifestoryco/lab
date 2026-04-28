@@ -25,8 +25,7 @@ from config import (
 
 # ── Individual dimension scorers ──────────────────────────────────────────────
 
-def score_comp(comp_min: int | None, comp_max: int | None) -> float:
-    """0-100. Explicit comp at/above MIN_TC is 100; unverified is 55."""
+def _raw_comp_score(comp_min: int | None) -> float:
     if comp_min is None:
         return 55.0
     if comp_min >= MIN_TOTAL_COMP:
@@ -35,6 +34,30 @@ def score_comp(comp_min: int | None, comp_max: int | None) -> float:
         span = max(MIN_TOTAL_COMP - MIN_BASE_SALARY, 1)
         return 60.0 + 40.0 * (comp_min - MIN_BASE_SALARY) / span
     return max(0.0, 60.0 * comp_min / MIN_BASE_SALARY)
+
+
+def score_comp(
+    comp_min: int | None,
+    comp_max: int | None,
+    comp_source: str | None = None,
+    comp_confidence: float | None = None,
+) -> float:
+    """0-100. Explicit comp scores against the lane band; unverified is
+    a hard 55; imputed_levels gets a confidence haircut so it can never
+    beat verified comp at the same band.
+
+    Haircut formula: ``raw * (0.5 + 0.5 * confidence)``.
+    confidence=1.0 → full credit; 0.7 → 85%; 0.5 → 75%; 0.3 → 65%.
+    Confidence default 0.5 applies when the source claims `imputed_levels`
+    but no confidence was persisted (e.g. legacy rows).
+    """
+    if comp_source == "unverified":
+        return 55.0
+    raw = _raw_comp_score(comp_min)
+    if comp_source == "imputed_levels":
+        c = 0.5 if comp_confidence is None else max(0.0, min(1.0, comp_confidence))
+        return raw * (0.5 + 0.5 * c)
+    return raw
 
 
 def score_company_tier(company: str | None) -> float:
@@ -264,7 +287,12 @@ def score_breakdown(
     )
 
     raw = {
-        "comp":               score_comp(comp_min, comp_max),
+        "comp":               score_comp(
+            comp_min,
+            comp_max,
+            comp_source=role.get("comp_source"),
+            comp_confidence=role.get("comp_confidence"),
+        ),
         "company_tier":       score_company_tier(role.get("company")),
         "skill_match":        score_skills(jd, lane, profile),
         "title_match":        score_title(role.get("title"), lane),
