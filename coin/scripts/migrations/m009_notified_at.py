@@ -29,6 +29,13 @@ def _has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
     return any(r[1] == column for r in rows)
 
 
+def _table_exists(conn: sqlite3.Connection, table: str) -> bool:
+    row = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+    ).fetchone()
+    return row is not None
+
+
 def _ensure_schema_migrations(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
@@ -49,6 +56,16 @@ def apply(db_path: Path) -> None:
         ).fetchone()
         if already:
             return
+        # Defensive: if `roles` doesn't exist yet (rare — usually only true on
+        # a brand-new DB before init_db has run), there's nothing to alter.
+        # Mark the migration applied so init_db's bootstrap doesn't re-run us.
+        if not _table_exists(conn, "roles"):
+            conn.execute(
+                "INSERT OR IGNORE INTO schema_migrations(id) VALUES (?)",
+                (MIGRATION_ID,),
+            )
+            conn.commit()
+            return
         if not _has_column(conn, "roles", "notified_at"):
             conn.execute("ALTER TABLE roles ADD COLUMN notified_at TEXT")
         conn.execute(
@@ -64,9 +81,10 @@ def rollback(db_path: Path) -> None:
     conn = sqlite3.connect(db_path)
     try:
         _ensure_schema_migrations(conn)
-        # SQLite >= 3.35 supports DROP COLUMN; older versions need a table rebuild.
-        version_str = sqlite3.sqlite_version_info
-        if version_str >= (3, 35, 0):
+        # SQLite >= 3.35 supports DROP COLUMN; on older versions DROP is a
+        # no-op (column stays around, harmless and nullable).
+        version_info = sqlite3.sqlite_version_info
+        if version_info >= (3, 35, 0):
             if _has_column(conn, "roles", "notified_at"):
                 conn.execute("ALTER TABLE roles DROP COLUMN notified_at")
         conn.execute(

@@ -54,6 +54,17 @@ def _read_yaml() -> dict:
 
 
 def _atomic_write(data: dict) -> None:
+    """Write stories.yml atomically with crash-consistent durability.
+
+    Pattern: tempfile in same dir → write+fsync → os.replace → fsync parent.
+    Same-dir tempfile keeps the rename within one filesystem; the parent-dir
+    fsync ensures the directory entry is durable on power loss.
+
+    NOTE: this is single-writer-only. Concurrent add_story/update_story
+    callers can race the read-validate-write sequence and last-writer wins.
+    The CLI is the sole writer in practice; the web tier is read-only on
+    Vercel and gated through web_cli locally.
+    """
     STORIES_PATH.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_path = tempfile.mkstemp(prefix=".stories.", suffix=".yml.tmp", dir=str(STORIES_PATH.parent))
     try:
@@ -62,11 +73,22 @@ def _atomic_write(data: dict) -> None:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp_path, STORIES_PATH)
+        # Parent-dir fsync makes the rename durable on crash. Best-effort —
+        # not every filesystem supports it (e.g. tmpfs).
+        try:
+            dir_fd = os.open(str(STORIES_PATH.parent), os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
+        except OSError:
+            pass
     except Exception:
         try:
             os.unlink(tmp_path)
         except FileNotFoundError:
             pass
+        raise
         raise
 
 
@@ -239,7 +261,9 @@ def _recency_factor(last_validated: Any) -> float:
         except (TypeError, ValueError):
             return 0.5
     age_days = (_today() - d).days
-    return 1.0 if age_days < _RECENCY_DAYS_THRESHOLD else 0.5
+    # Inclusive at the boundary so a story validated exactly _RECENCY_DAYS_THRESHOLD
+    # days ago still counts as "recent" — matches the docstring "within 2 years".
+    return 1.0 if age_days <= _RECENCY_DAYS_THRESHOLD else 0.5
 
 
 def find_stories_for_lane(lane: str, min_grade: str = "B") -> list[dict]:

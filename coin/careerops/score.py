@@ -169,28 +169,30 @@ def score_seniority_fit(parsed_jd: dict | None) -> float:
     return 55.0
 
 
-def score_freshness(posted_at: str | None) -> int:
+def score_freshness(posted_at: str | None) -> float:
     """Score role freshness. Stale postings rarely convert.
 
-    Returns 100 if ≤7d, 80 if ≤14d, 60 if ≤30d, 30 if ≤90d, 10 if
-    >90d, 50 if unknown (don't penalize too hard for missing data).
+    Returns 100.0 if ≤7d, 80.0 if ≤14d, 60.0 if ≤30d, 30.0 if ≤90d,
+    10.0 if >90d, 50.0 if unknown (don't penalize too hard for missing data).
+    Returns float to match every other score_* helper in this module —
+    keeps the composite-score arithmetic uniform.
     """
     if posted_at is None:
-        return 50
+        return 50.0
     try:
         posted = datetime.date.fromisoformat(posted_at)
     except (ValueError, TypeError):
-        return 50
+        return 50.0
     age_days = (datetime.date.today() - posted).days
     if age_days <= 7:
-        return 100
+        return 100.0
     if age_days <= 14:
-        return 80
+        return 80.0
     if age_days <= 30:
-        return 60
+        return 60.0
     if age_days <= 90:
-        return 30
-    return 10
+        return 30.0
+    return 10.0
 
 
 def score_culture_fit(parsed_jd: dict | None) -> float:

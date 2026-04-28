@@ -55,6 +55,9 @@ def _conn() -> sqlite3.Connection:
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
+    # Make concurrent writers wait politely instead of immediately raising
+    # SQLITE_BUSY. Two web_cli invocations racing is unlikely but possible.
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
@@ -209,15 +212,24 @@ def get_role(role_id: int) -> dict | None:
 
 
 def list_roles(status: str | None = None, lane: str | None = None, limit: int = 50) -> list[dict]:
+    """Return roles ordered by the *authoritative* score.
+
+    Stage-2 score wins over stage-1, which wins over the legacy fit_score —
+    matches `get_role()`'s COALESCE preference so CLI views and the web
+    dashboard agree on row ordering even mid-migration.
+    """
     sql = "SELECT * FROM roles WHERE 1=1"
-    args: list = []
+    args: list[object] = []
     if status:
         sql += " AND status = ?"
         args.append(status)
     if lane:
         sql += " AND lane = ?"
         args.append(lane)
-    sql += " ORDER BY fit_score DESC NULLS LAST, updated_at DESC LIMIT ?"
+    sql += (
+        " ORDER BY COALESCE(score_stage2, score_stage1, fit_score) DESC NULLS LAST,"
+        " updated_at DESC LIMIT ?"
+    )
     args.append(limit)
     with _conn() as conn:
         return [dict(r) for r in conn.execute(sql, args).fetchall()]
@@ -603,7 +615,8 @@ def dashboard() -> None:
         active = conn.execute("""
             SELECT * FROM roles
             WHERE status NOT IN ('offer','rejected','withdrawn','no_apply','closed')
-            ORDER BY fit_score DESC NULLS LAST, updated_at DESC
+            ORDER BY COALESCE(score_stage2, score_stage1, fit_score) DESC NULLS LAST,
+                     updated_at DESC
             LIMIT 20
         """).fetchall()
 

@@ -45,19 +45,23 @@ function LoginForm() {
         <div className="text-white font-semibold">Career Ops — Private</div>
         <div className="text-zinc-500 text-xs mt-1">Enter the password to continue.</div>
       </div>
+      <label htmlFor="coin-password" className="sr-only">Password</label>
       <input
+        id="coin-password"
         type="password"
         autoFocus
+        autoComplete="current-password"
         value={password}
         onChange={e => setPassword(e.target.value)}
         placeholder="Password"
-        className="w-full bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-violet-500"
+        aria-label="Password"
+        className="w-full min-h-[44px] bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/30"
       />
       {error && <div className="text-xs text-red-400">{error}</div>}
       <button
         type="submit"
         disabled={submitting || !password}
-        className="w-full py-2 rounded-lg text-sm font-medium bg-violet-900/50 hover:bg-violet-900 text-violet-200 disabled:opacity-50 transition-colors"
+        className="w-full min-h-[44px] py-2 rounded-lg text-sm font-medium bg-violet-900/50 hover:bg-violet-900 text-violet-200 disabled:opacity-50 transition-colors"
       >
         {submitting ? 'Checking…' : 'Unlock'}
       </button>

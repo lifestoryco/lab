@@ -54,16 +54,23 @@ def _grade_at_least(grade: str, minimum: str) -> bool:
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
-def _humanize_age(discovered_at: str | None, now: _dt.datetime | None = None) -> str:
-    if not discovered_at:
+def _humanize_age(discovered_at: object, now: _dt.datetime | None = None) -> str:
+    """Render a humane age label like '3h ago' / '2d ago'.
+
+    `discovered_at` is whatever the DB hands us — usually an ISO-8601 string
+    with a UTC offset, but defensively we accept anything and degrade to '?'
+    on parse failure (including non-string values from a buggy migration).
+    """
+    if not discovered_at or not isinstance(discovered_at, str):
         return "?"
-    now = now or _dt.datetime.now()
+    # discovered_at is stored UTC by pipeline.upsert_role; compare in UTC so
+    # Sean (UTC-7) doesn't see ages that look 7h stale.
+    now = now or _dt.datetime.now(_dt.timezone.utc).replace(tzinfo=None)
     try:
         dt = _dt.datetime.fromisoformat(discovered_at.replace("Z", "+00:00"))
-        # Strip timezone for naive subtraction (DB stores naive UTC-ish strings)
         if dt.tzinfo is not None:
-            dt = dt.replace(tzinfo=None)
-    except ValueError:
+            dt = dt.astimezone(_dt.timezone.utc).replace(tzinfo=None)
+    except (ValueError, AttributeError, TypeError):
         return "?"
     delta = now - dt
     seconds = int(delta.total_seconds())
@@ -112,11 +119,18 @@ def _build_message(role: dict, now: _dt.datetime | None = None) -> str:
 
 
 def _send_imessage(message: str, phone: str, timeout: int = 15) -> tuple[int, str]:
-    """Returns (returncode, stderr). Never raises on osascript failure."""
+    """Returns (returncode, stderr). Never raises on osascript failure.
+
+    Both `message` and `phone` are escaped — phone today comes from
+    `COIN_NOTIFY_PHONE` env (operator-controlled) but defense in depth costs
+    nothing and protects against future code paths where phone might flow
+    from a less-trusted source.
+    """
     escaped = _applescript_escape(message)
+    safe_phone = _applescript_escape(phone)
     script = (
         f'tell application "Messages" to send "{escaped}" '
-        f'to buddy "{phone}" of service "iMessage"'
+        f'to buddy "{safe_phone}" of service "iMessage"'
     )
     try:
         result = subprocess.run(
@@ -146,24 +160,29 @@ def _log_error(stderr: str) -> None:
 def _select_fresh_roles(
     conn: sqlite3.Connection, since_hours: int
 ) -> list[dict]:
+    """Fresh, never-notified, non-terminal roles within the lookback window.
+
+    Status filter intentionally excludes terminal states only — if Sean tracks
+    a role into 'resume_generated' or 'applied' before notify runs, it should
+    still trigger an interrupt the first time. Once notified_at is set the
+    row is permanently filtered out.
+
+    discovered_at is normalized via `replace('T',' ')` so the lexicographic
+    comparison against `datetime('now', ?)` (which uses a space delimiter)
+    works regardless of how the timestamp was stored.
+    """
+    conn.row_factory = sqlite3.Row
     rows = conn.execute(
         """
-        SELECT id, url, title, company, location, lane,
-               comp_min, comp_max, fit_score, discovered_at
+        SELECT *
           FROM roles
-         WHERE discovered_at >= datetime('now', ?)
-           AND status = 'scored'
+         WHERE replace(discovered_at, 'T', ' ') >= datetime('now', ?)
+           AND status NOT IN ('offer','rejected','withdrawn','no_apply','closed')
            AND notified_at IS NULL
         """,
         (f"-{since_hours} hours",),
     ).fetchall()
-    cols = [d[0] for d in conn.execute("SELECT * FROM roles LIMIT 0").description]
-    out = []
-    for r in rows:
-        # Re-pull the full row by id to keep dict shape stable.
-        full = conn.execute("SELECT * FROM roles WHERE id = ?", (r[0],)).fetchone()
-        out.append(dict(zip(cols, full)))
-    return out
+    return [dict(r) for r in rows]
 
 
 def _handle_discover_failed_flag(args, phone: str) -> bool:

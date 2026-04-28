@@ -176,6 +176,20 @@ def test_dry_run_does_not_call_osascript(temp_db, capsys):
     assert _notified_at(db, rid) is None
 
 
+def test_dry_run_does_not_delete_failed_flag(temp_db, capsys):
+    """Regression guard: --dry-run must preserve .discover_failed.flag so the
+    next real notify run still surfaces the failure to Sean."""
+    notify, _, flag, _ = temp_db
+    flag.parent.mkdir(parents=True, exist_ok=True)
+    flag.write_text("2026-04-28T07:00:00\nValueError: boom\n")
+    with patch.object(subprocess, "run") as mock_run:
+        _run(notify, "--dry-run")
+    assert mock_run.call_count == 0  # no osascript in dry-run
+    assert flag.exists(), "flag must NOT be deleted by --dry-run"
+    out = capsys.readouterr().out
+    assert "discover failed" in out
+
+
 def test_osascript_failure_logged_does_not_crash(temp_db):
     notify, db, _, log_dir = temp_db
     rid = _add_role(db, fit_score=92.0)
