@@ -75,6 +75,10 @@ def init_db() -> None:
                 comp_currency   TEXT DEFAULT 'USD',
                 comp_confidence REAL,
                 fit_score       REAL,
+                score_stage1    REAL,
+                score_stage2    REAL,
+                score_stage     INTEGER DEFAULT 1,
+                jd_parsed_at    TEXT,
                 status        TEXT DEFAULT 'discovered',
                 source        TEXT,
                 jd_raw        TEXT,
@@ -88,6 +92,7 @@ def init_db() -> None:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_roles_status ON roles(status)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_roles_lane   ON roles(lane)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_roles_fit    ON roles(fit_score)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_roles_stage1 ON roles(score_stage1)")
 
 
 def upsert_role(role: dict) -> int:
@@ -187,7 +192,20 @@ def upsert_roles(roles: list[dict]) -> list[int]:
 def get_role(role_id: int) -> dict | None:
     with _conn() as conn:
         row = conn.execute("SELECT * FROM roles WHERE id = ?", (role_id,)).fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        d = dict(row)
+        s2 = d.get("score_stage2")
+        s1 = d.get("score_stage1")
+        if s2 is not None:
+            d["fit_score"] = s2
+            d["_stage"] = "S2"
+        elif s1 is not None:
+            d["fit_score"] = s1
+            d["_stage"] = "S1"
+        else:
+            d["_stage"] = "S1"
+        return d
 
 
 def list_roles(status: str | None = None, lane: str | None = None, limit: int = 50) -> list[dict]:
@@ -234,8 +252,8 @@ def update_jd_parsed(role_id: int, parsed: dict) -> None:
     now = datetime.now(timezone.utc).isoformat(timespec="seconds")
     with _conn() as conn:
         conn.execute(
-            "UPDATE roles SET jd_parsed = ?, updated_at = ? WHERE id = ?",
-            (json.dumps(parsed), now, role_id),
+            "UPDATE roles SET jd_parsed = ?, jd_parsed_at = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(parsed), now, now, role_id),
         )
         if parsed.get("comp_explicit") and parsed.get("comp_min"):
             conn.execute(
@@ -287,6 +305,74 @@ def update_jd_raw(role_id: int, jd: str) -> None:
             "UPDATE roles SET jd_raw = ?, updated_at = ? WHERE id = ?",
             (jd, datetime.now(timezone.utc).isoformat(timespec="seconds"), role_id),
         )
+
+
+def update_score_stage1(role_id: int, score: float) -> None:
+    """Persist stage-1 (JD-blind) score. Also sets fit_score and advances
+    status discovered→scored so existing callers see the same behavior."""
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with _conn() as conn:
+        conn.execute(
+            """UPDATE roles SET
+               score_stage1 = ?,
+               fit_score    = ?,
+               score_stage  = CASE WHEN score_stage2 IS NULL THEN 1 ELSE score_stage END,
+               status       = CASE WHEN status = 'discovered' THEN 'scored' ELSE status END,
+               updated_at   = ?
+               WHERE id = ?""",
+            (score, score, now, role_id),
+        )
+
+
+def update_score_stage2(
+    role_id: int,
+    score: float,
+    parsed_jd: dict,
+    jd_parsed_at: str,
+) -> None:
+    """Persist stage-2 (JD-aware) score + parsed JD + timestamp.
+    Sets score_stage=2 and overwrites fit_score with the stage-2 value."""
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    with _conn() as conn:
+        conn.execute(
+            """UPDATE roles SET
+               score_stage2 = ?,
+               fit_score    = ?,
+               jd_parsed    = ?,
+               jd_parsed_at = ?,
+               score_stage  = 2,
+               updated_at   = ?
+               WHERE id = ?""",
+            (score, score, json.dumps(parsed_jd), jd_parsed_at, now, role_id),
+        )
+
+
+def get_top_n_for_deep_score(
+    n: int = 15,
+    lane: str | None = None,
+    since_days: int = 7,
+) -> list[dict]:
+    """Top-N roles by score_stage1 that don't yet have score_stage2.
+
+    Filters: status in ('discovered', 'scored'), score_stage1 IS NOT NULL,
+    score_stage2 IS NULL, discovered_at >= now - since_days.
+    """
+    cutoff = (
+        datetime.now(timezone.utc) - timedelta(days=since_days)
+    ).isoformat(timespec="seconds")
+    sql = """SELECT * FROM roles
+             WHERE status IN ('discovered', 'scored')
+               AND score_stage1 IS NOT NULL
+               AND score_stage2 IS NULL
+               AND discovered_at >= ?"""
+    args: list = [cutoff]
+    if lane:
+        sql += " AND lane = ?"
+        args.append(lane)
+    sql += " ORDER BY score_stage1 DESC LIMIT ?"
+    args.append(n)
+    with _conn() as conn:
+        return [dict(r) for r in conn.execute(sql, args).fetchall()]
 
 
 def insert_offer(offer: dict) -> int:
@@ -546,6 +632,12 @@ def dashboard() -> None:
         else:
             comp = "—"
         fit_val = r["fit_score"]
+        try:
+            stage_badge = "[S2]" if r["score_stage2"] is not None else "[S1]"
+            stage_color = "cyan" if r["score_stage2"] is not None else "dim"
+        except (IndexError, KeyError):
+            stage_badge = ""
+            stage_color = "dim"
         fit = f"{fit_val:.0f}" if fit_val is not None else "—"
         grade = score_grade(fit_val) if fit_val is not None else "—"
         fit_color = "green" if fit_val and fit_val >= 70 else ("yellow" if fit_val and fit_val >= 55 else "red")
@@ -556,6 +648,9 @@ def dashboard() -> None:
             age_val = r["posted_at"]
         except (IndexError, KeyError):
             age_val = None
+        fit_cell = f"[{fit_color}]{fit}[/{fit_color}]"
+        if stage_badge:
+            fit_cell += f" [{stage_color}]{stage_badge}[/{stage_color}]"
         table.add_row(
             str(r["id"]),
             r["status"] or "",
@@ -564,7 +659,7 @@ def dashboard() -> None:
             (r["company"] or "")[:20],
             (r["title"] or "")[:34],
             comp,
-            f"[{fit_color}]{fit}[/{fit_color}]",
+            fit_cell,
             f"[{grade_color}]{grade}[/{grade_color}]",
         )
 

@@ -223,6 +223,26 @@ def score_fit(role: dict, lane: str, parsed_jd: dict | None = None, profile: dic
     return score_breakdown(role, lane, parsed_jd=parsed_jd, profile=profile)["composite"]
 
 
+def score_stage1(role: dict, lane: str) -> dict:
+    """JD-blind title + company-tier score (stage 1 of two-stage discovery).
+
+    Calls score_breakdown with no parsed_jd so the rubric runs on title
+    keywords and company tier only. Returns the same breakdown shape as
+    score_breakdown: {composite, grade, dimensions}.
+    """
+    return score_breakdown(role, lane, parsed_jd=None, dq_result=None)
+
+
+def score_stage2(role: dict, lane: str, parsed_jd: dict, dq_result: dict) -> dict:
+    """Full JD-aware + disqualifier-aware score (stage 2 of two-stage discovery).
+
+    Calls score_breakdown with the fully parsed JD dict and dq_result so
+    skills, seniority, culture, and comp signals are all JD-derived.
+    Returns the same breakdown shape as score_breakdown.
+    """
+    return score_breakdown(role, lane, parsed_jd=parsed_jd, dq_result=dq_result)
+
+
 def score_breakdown(
     role: dict,
     lane: str,

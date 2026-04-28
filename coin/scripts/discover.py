@@ -1,14 +1,20 @@
 #!/usr/bin/env python
 """Live discover + scoring pass. Pure Python — no LLM calls.
 
-Scrapes all (or one) lane, filters by comp floor, computes heuristic fit
-scores, and upserts into pipeline.db. Prints a JSON summary to stdout so
-the calling Claude Code session can read it.
+Stage 1 (always): scrape → cheap title/company score → store.
+Stage 2 (optional, --deep-score N): for top-N by score_stage1, fetch the
+full JD text and write data/.deep_score_pending.json so the host Claude
+Code session can parse them via modes/discover.md Step 4a.
+
+Per CLAUDE.md rule #6, the script never calls any LLM. JD parsing and
+re-scoring run inside the host Claude Code session that executes discover.md.
 
 Usage:
-  python scripts/discover.py                         # all lanes, default limits
-  python scripts/discover.py --lane cox-style-tpm    # one lane
+  python scripts/discover.py                              # all lanes, stage 1 only
+  python scripts/discover.py --deep-score 15             # stage 1 + queue 15 for stage 2
+  python scripts/discover.py --lane mid-market-tpm       # one lane
   python scripts/discover.py --limit 30 --location "San Francisco"
+  python scripts/discover.py --deep-score 0              # explicitly disable stage 2
 """
 
 from __future__ import annotations
@@ -19,10 +25,58 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 import argparse
 import datetime
 import json
+import uuid
+
 import sys
 
 from careerops import scraper, compensation, score
-from careerops.pipeline import init_db, upsert_role, update_fit_score
+from careerops.pipeline import (
+    init_db, upsert_role, update_fit_score, update_score_stage1,
+    update_jd_raw, get_top_n_for_deep_score,
+)
+
+_DATA_DIR = pathlib.Path(__file__).resolve().parent.parent / "data"
+
+
+def _run_deep_score_prep(
+    n: int,
+    lane: str | None,
+    data_dir: pathlib.Path = _DATA_DIR,
+) -> None:
+    """Fetch JDs for top-N stage-1 roles and write the pending file.
+
+    The pending file signals modes/discover.md Step 4a that JDs are ready
+    for LLM parsing. The script itself makes no LLM calls.
+    """
+    candidates = get_top_n_for_deep_score(n=n, lane=lane)
+    fetched = 0
+    for role in candidates:
+        try:
+            jd_text = scraper.fetch_jd(role["url"])
+            if jd_text:
+                update_jd_raw(role["id"], jd_text)
+                fetched += 1
+        except Exception as exc:
+            print(f"[fetch_jd] role {role.get('id')} failed: {exc}", file=sys.stderr)
+
+    pending = {
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+        "discover_run_id": str(uuid.uuid4()),
+        "role_ids": [r["id"] for r in candidates],
+    }
+    pending_file = data_dir / ".deep_score_pending.json"
+    pending_file.write_text(json.dumps(pending, indent=2))
+    count = len(candidates)
+    print(
+        f"### DEEP-SCORE-PENDING count={count} "
+        f"file={pending_file}",
+    )
+    print(
+        f"[deep-score] queued {count} roles ({fetched} JDs fetched). "
+        f"Run /coin discover to parse via modes/discover.md Step 4a.",
+        file=sys.stderr,
+    )
+
 
 def main() -> int:
     init_db()
@@ -49,6 +103,13 @@ def main() -> int:
             "Ignored for LinkedIn. Example: --companies 'Vercel,Datadog'."
         ),
     )
+    ap.add_argument(
+        "--deep-score", type=int, default=15, metavar="N",
+        help=(
+            "After stage-1 scoring, fetch JDs and queue top-N for stage-2 LLM parse. "
+            "Default: 15. Pass 0 to disable stage 2 entirely."
+        ),
+    )
     args = ap.parse_args()
 
     boards_list = [b.strip() for b in (args.boards or "").split(",") if b.strip()]
@@ -57,8 +118,9 @@ def main() -> int:
         if args.companies else None
     )
 
+    # ── Stage 1: scrape + title-score ────────────────────────────────────────
+
     if args.lane:
-        # Single-lane: stitch LinkedIn + boards manually so the --boards flag still applies.
         scraped: list[dict] = []
         seen: set[str] = set()
         if "linkedin" in boards_list:
@@ -122,7 +184,7 @@ def main() -> int:
     for role in scraped:
         role_id = upsert_role(role)
         fit = score.score_fit(role, role.get("lane"))
-        update_fit_score(role_id, fit)
+        update_score_stage1(role_id, fit)   # sets score_stage1 + fit_score + status
         saved.append({
             "id": role_id,
             "lane": role.get("lane"),
@@ -146,7 +208,14 @@ def main() -> int:
         "by_lane": _tally(saved, "lane"),
         "top": saved[:10],
     }, indent=2))
+
+    # ── Stage 2 prep: queue top-N for JD parsing by host Claude session ──────
+
+    if args.deep_score > 0:
+        _run_deep_score_prep(args.deep_score, args.lane)
+
     return 0
+
 
 def _tally(rows: list[dict], key: str) -> dict:
     out: dict[str, int] = {}
@@ -154,6 +223,7 @@ def _tally(rows: list[dict], key: str) -> dict:
         k = r.get(key) or "unknown"
         out[k] = out.get(k, 0) + 1
     return out
+
 
 if __name__ == "__main__":
     sys.exit(main())
