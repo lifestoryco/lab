@@ -15,6 +15,10 @@ const DIMENSION_LABELS: Record<string, string> = {
 
 export function ScoreChart({ breakdown }: { breakdown: ScoreBreakdown }) {
   const { composite, grade, dimensions } = breakdown
+  // Defense-in-depth: RoleDetail already shape-checks before passing in, but a
+  // bad row from the bundled DB snapshot could still have the wrong types.
+  // Render nothing rather than crash the whole role detail dialog.
+  if (typeof composite !== 'number' || typeof grade !== 'string' || !dimensions) return null
   const gradeColor = { A: '#22c55e', B: '#86efac', C: '#facc15', D: '#f97316', F: '#ef4444' }[grade] ?? '#888'
 
   return (
@@ -34,6 +38,7 @@ export function ScoreChart({ breakdown }: { breakdown: ScoreBreakdown }) {
 
       {Object.entries(dimensions).map(([key, dim]) => {
         if (key === 'domain_fit') return null
+        if (!dim || typeof dim.raw !== 'number') return null
         const label = DIMENSION_LABELS[key] ?? key
         const pct = Math.min(100, dim.raw)
         const color = pct >= 70 ? '#22c55e' : pct >= 40 ? '#facc15' : '#ef4444'

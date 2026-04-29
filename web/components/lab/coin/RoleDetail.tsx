@@ -28,10 +28,23 @@ export function RoleDetail({ role, onClose, onTrack, onTailor, onNote }: Props) 
 
   const url = safeUrl(role.url)
 
+  // role.jd_parsed is the JD content JSON (skills/requirements/etc.) written by
+  // the JD-parsing pipeline — it is NOT a ScoreBreakdown. We only render the
+  // ScoreChart when the parsed blob happens to match the breakdown shape, which
+  // is currently never (no score_breakdown field on Role). The shape guard below
+  // keeps the dashboard from crashing on click and lets a future migration that
+  // populates a real breakdown light up the chart for free.
   const parsed: ScoreBreakdown | null = (() => {
     if (!role.jd_parsed) return null
     if (role.jd_parsed.length > JD_PARSE_MAX) return null
-    try { return JSON.parse(role.jd_parsed) } catch { return null }
+    let raw: unknown
+    try { raw = JSON.parse(role.jd_parsed) } catch { return null }
+    if (!raw || typeof raw !== 'object') return null
+    const r = raw as { composite?: unknown; grade?: unknown; dimensions?: unknown }
+    if (typeof r.composite !== 'number') return null
+    if (typeof r.grade !== 'string') return null
+    if (!r.dimensions || typeof r.dimensions !== 'object') return null
+    return raw as ScoreBreakdown
   })()
 
   // Modal accessibility: focus close button on mount, close on Escape,
