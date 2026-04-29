@@ -1,5 +1,39 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-28, eloquent-lichterman session — final pass)
+
+### `www.handoffpack.com/lab/coin` is live, password-gated, end-to-end ✅ COMPLETE
+
+**What changed:**
+- Set `LAB_URL=https://lab-lifestoryco.vercel.app` on `handoffpack-www` Vercel production env (no repo file change for the env itself).
+- One-line `next.config.js` edit in **`lifestoryco/handoffpack-www`** (commit `ae49fde`): added `/api/coin/:path*` to the rewrite list alongside the existing `/lab/*` rewrite. Without this, login POSTs hit handoffpack-www's marketing 404 and the cookie never reached the user-facing domain.
+- Redeployed `handoffpack-www` to pick up the env var + new rewrite rule.
+
+**Verified end-to-end against `https://www.handoffpack.com/lab/coin`:**
+| Check | Result |
+|---|---|
+| Unauthed `/lab/coin` | 307 → `/lab/coin/login` |
+| Wrong password | 401 |
+| Correct password (`jobs`) | 200, `coin_auth` cookie set HttpOnly on `www.handoffpack.com` |
+| Authed dashboard | 95 roles served from bundled DB snapshot |
+| Authed page render | `<title>Coin — Career Ops</title>` |
+| Mutation attempt | 503 read-only (correct contract) |
+| `/lab/coy` sanity | unchanged, still served by handoffpack-www's static files |
+
+**Active Blockers (current):**
+- **The `coin_auth` cookie value IS the plaintext password.** Security review HIGH from earlier this session — brute-force on a 4-char `jobs` password is trivial. Rotate to a 16+ char random string before sharing the URL with anyone:
+  ```
+  cd web && vercel env rm COIN_WEB_PASSWORD production && vercel env add COIN_WEB_PASSWORD production
+  # paste the new password (echo won't display)
+  vercel --prod --yes
+  ```
+  Has to be done on `lab-lifestoryco` (the side that actually validates) — handoffpack-www does not check the password directly.
+- **`COIN_NOTIFY_PHONE` still unset** + launchd job not yet installed. Scheduler shipped but inert.
+
+**No new code in `lifestoryco/lab` this turn** — work was all in `handoffpack-www` plus Vercel env config.
+
+---
+
 ## What Was Just Done (2026-04-28, eloquent-lichterman session — extended)
 
 ### Lab repo split + COIN UX hardening + 4-agent code-review pass ✅ COMPLETE
