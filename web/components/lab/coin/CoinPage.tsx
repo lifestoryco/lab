@@ -8,7 +8,8 @@
 // read-only-deploy contract and how the constants module ties Python ↔ TS.
 
 import { useEffect, useRef, useState } from 'react'
-import { Briefcase, Target, FileText, Users, DollarSign, BookOpen, RefreshCw } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Briefcase, Target, FileText, Users, DollarSign, BookOpen, RefreshCw, LogOut } from 'lucide-react'
 import { useCoinStore } from './store'
 import { Kanban } from './Kanban'
 import { DiscoverFeed } from './DiscoverFeed'
@@ -17,6 +18,7 @@ import { OfertasView } from './OfertasView'
 import { StoriesView } from './StoriesView'
 import { RoleDetail } from './RoleDetail'
 import { RoleCard } from './RoleCard'
+import type { DismissalReason } from './DismissDialog'
 import {
   COMP_FLOOR_LABEL,
   TERMINAL_STATUSES,
@@ -40,11 +42,13 @@ const ERROR_TOAST_TTL_MS = 7000
 interface Props { initialData: DashboardData | null }
 
 export function CoinPage({ initialData }: Props) {
+  const router = useRouter()
   const { activeTab, setTab } = useCoinStore()
   const [dashboard, setDashboard] = useState<DashboardData | null>(initialData)
   const [allRoles, setAllRoles] = useState<Role[]>(
     (initialData?.top_roles ?? []).map(r => ({ ...r, fit_grade: gradeForScore(r.fit_score) }))
   )
+  const [reasons, setReasons] = useState<DismissalReason[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [mutateError, setMutateError] = useState<string | null>(null)
   const [selectedRole, setSelectedRole] = useState<Role | null>(null)
@@ -72,6 +76,15 @@ export function CoinPage({ initialData }: Props) {
       if (!ac.signal.aborted) setRefreshing(false)
     })
   }
+
+  // Pull the dismissal reason vocabulary once on mount. Cheap and we want it
+  // ready when the user drops something into "Not a Fit".
+  useEffect(() => {
+    fetch('/api/coin/dismissal-reasons')
+      .then(r => r.ok ? r.json() : [])
+      .then((rs: DismissalReason[]) => Array.isArray(rs) && setReasons(rs))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     // Skip the redundant fetch if SSR already supplied a dashboard. Otherwise
@@ -135,6 +148,19 @@ export function CoinPage({ initialData }: Props) {
     mutate(`/api/coin/role/${id}/tailor`)
   const onNote = (id: number, text: string) =>
     mutate(`/api/coin/role/${id}/notes`, { text })
+  const onDismiss = async (id: number, reasonCode: string, reasonText: string | null, customText: string | null) => {
+    await mutate(`/api/coin/role/${id}/dismiss`, {
+      reason_code: reasonCode,
+      reason_text: reasonText,
+      custom_text: customText,
+    })
+  }
+
+  const onLogout = async () => {
+    await fetch('/api/coin/logout', { method: 'POST' })
+    router.push('/lab/coin/login')
+    router.refresh()
+  }
 
   const counts = dashboard?.pipeline_counts ?? {}
   const active = Object.entries(counts)
@@ -176,6 +202,14 @@ export function CoinPage({ initialData }: Props) {
           >
             <RefreshCw size={16} aria-hidden="true" className={refreshing ? 'animate-spin' : ''} />
           </button>
+          <button
+            onClick={onLogout}
+            aria-label="Log out"
+            title="Log out"
+            className="text-zinc-400 hover:text-white transition-colors p-2 -m-2"
+          >
+            <LogOut size={16} aria-hidden="true" />
+          </button>
         </div>
 
         {/* Tab strip */}
@@ -201,7 +235,14 @@ export function CoinPage({ initialData }: Props) {
       {/* Content */}
       <div className="max-w-7xl mx-auto px-4 py-6">
         {activeTab === 'pipeline' && (
-          <Kanban roles={allRoles} onTrack={onTrack} onTailor={onTailor} onNote={onNote} />
+          <Kanban
+            roles={allRoles}
+            reasons={reasons}
+            onTrack={onTrack}
+            onTailor={onTailor}
+            onNote={onNote}
+            onDismiss={onDismiss}
+          />
         )}
         {activeTab === 'discover' && (
           <DiscoverFeed onTrack={onTrack} onTailor={onTailor} onNote={onNote} />

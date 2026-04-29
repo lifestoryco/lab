@@ -8,6 +8,7 @@ import { Reorder } from 'framer-motion'
 import type { Role, RoleStatus } from './types'
 import { RoleCard } from './RoleCard'
 import { RoleDetail } from './RoleDetail'
+import { DismissDialog, type DismissalReason } from './DismissDialog'
 import { gradeForScore } from './constants'
 
 interface Column {
@@ -38,13 +39,16 @@ const TOAST_TTL_MS = 2500
 
 interface Props {
   roles: Role[]
+  reasons: DismissalReason[]
   onTrack: (id: number, status: string, note?: string) => void
   onTailor: (id: number) => void
   onNote: (id: number, text: string) => void
+  onDismiss: (id: number, reasonCode: string, reasonText: string | null, customText: string | null) => Promise<void> | void
 }
 
-export function Kanban({ roles, onTrack, onTailor, onNote }: Props) {
+export function Kanban({ roles, reasons, onTrack, onTailor, onNote, onDismiss }: Props) {
   const [selected, setSelected] = useState<Role | null>(null)
+  const [dismissTarget, setDismissTarget] = useState<Role | null>(null)
 
   const enriched = useMemo(
     () => roles.map(r => ({ ...r, fit_grade: r.fit_grade ?? gradeForScore(r.fit_score) })),
@@ -107,8 +111,10 @@ export function Kanban({ roles, onTrack, onTailor, onNote }: Props) {
       return
     }
     if (col.action === 'reject_not_fit') {
-      onTrack(role.id, 'no_apply', '[user_dismissed:not_a_fit]')
-      flashToast(`Dismissed ${role.company}`)
+      // Open the reason picker; the dialog calls onDismiss on submit, which
+      // both updates status to no_apply and writes a structured role_event for
+      // the weekly improvement loop.
+      setDismissTarget(role)
       return
     }
     const targetStatus = col.statuses[0]
@@ -196,6 +202,18 @@ export function Kanban({ roles, onTrack, onTailor, onNote }: Props) {
           onTrack={(status, note) => { onTrack(selected.id, status, note); setSelected(null) }}
           onTailor={() => onTailor(selected.id)}
           onNote={(text) => onNote(selected.id, text)}
+        />
+      )}
+
+      {dismissTarget && (
+        <DismissDialog
+          role={dismissTarget}
+          reasons={reasons}
+          onClose={() => setDismissTarget(null)}
+          onSubmit={async (code, text, custom) => {
+            await onDismiss(dismissTarget.id, code, text, custom)
+            flashToast(`Dismissed ${dismissTarget.company}`)
+          }}
         />
       )}
 

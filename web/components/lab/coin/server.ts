@@ -1,54 +1,20 @@
 import 'server-only'
-import fs from 'node:fs'
-import path from 'node:path'
-import { spawn } from 'node:child_process'
+import { createSupabaseServerClient } from '@/lib/supabase/server'
 import type { DashboardData, Role, Offer } from './types'
+import type { Database } from './supabase-types'
 import { DASHBOARD_TOP_N, STALE_DAYS, TERMINAL_STATUSES } from './constants'
 
-// Hoisted top-level require: better-sqlite3 is a native .node module and is
-// in next.config.js::experimental.serverComponentsExternalPackages, which
-// keeps it out of the client bundle. Top-level require gets cached by Node so
-// each request reuses the same module handle (no per-call re-init cost).
-// Edge runtime will never load this file because of the server-only import.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const Database = require('better-sqlite3') as typeof import('better-sqlite3')
-type DBHandle = InstanceType<typeof Database>
+type RoleStatusEnum = Database['public']['Enums']['role_status']
+type RoleEventTypeEnum = Database['public']['Enums']['role_event_type']
 
-// DB resolution order:
-//   1. COIN_DB_PATH env var (explicit override)
-//   2. <cwd>/data/coin/pipeline.db — read-only snapshot bundled with the deploy
-//   3. <cwd>/../coin/data/db/pipeline.db — local-dev source where the CLI writes
-let _dbPath: string | null = null
-function resolveDbPath(): string {
-  if (_dbPath) return _dbPath
-  if (process.env.COIN_DB_PATH) {
-    _dbPath = process.env.COIN_DB_PATH
-    return _dbPath
-  }
-  const bundled = path.resolve(process.cwd(), 'data', 'coin', 'pipeline.db')
-  if (fs.existsSync(bundled)) {
-    _dbPath = bundled
-    return _dbPath
-  }
-  _dbPath = path.resolve(process.cwd(), '../coin/data/db/pipeline.db')
-  return _dbPath
-}
+// All reads are RLS-scoped to the current user. The Supabase server client
+// reads the auth cookie automatically — no user_id parameter needed and no
+// way for one user to leak data to another.
+//
+// The previous better-sqlite3 / committed pipeline.db snapshot has been
+// retired. SSR + API routes both go through this module.
 
-const PYTHON = process.env.COIN_PYTHON
-  || path.resolve(process.cwd(), '../coin/.venv/bin/python')
-
-const COIN_CWD = path.resolve(process.cwd(), '../coin')
-
-// Vercel sets process.env.VERCEL=1 in deployed environments. Mutations require
-// the local Python CLI + a writable DB, so they're disabled there.
-export const IS_READ_ONLY = !!process.env.VERCEL
-
-// Built once at module load — array of single-quoted SQL string literals,
-// joined for an IN-clause. The set is small and finite so this is safe even
-// though we're concatenating into SQL.
-const TERMINAL_STATUS_SQL = Array.from(TERMINAL_STATUSES)
-  .map(s => `'${s.replace(/'/g, "''")}'`)
-  .join(',')
+const TERMINAL_STATUS_LIST = Array.from(TERMINAL_STATUSES) as string[]
 
 function emptyDashboard(): DashboardData {
   return {
@@ -59,154 +25,297 @@ function emptyDashboard(): DashboardData {
   }
 }
 
-function openDb(): DBHandle | null {
-  const dbPath = resolveDbPath()
-  if (!fs.existsSync(dbPath)) return null
-  try {
-    const db = new Database(dbPath, { readonly: true })
-    // Match Python's get_role() preference: stage-2 score wins over stage-1,
-    // and either wins over the legacy fit_score. Compute once via a SQL view
-    // alias so callers can ORDER BY this without recomputing.
-    return db
-  } catch (err) {
-    // Path stripped from prod logs to avoid leaking deploy layout.
-    if (process.env.NODE_ENV === 'development') {
-      console.error('[coin/server] failed to open DB at', dbPath, err)
-    } else {
-      console.error('[coin/server] failed to open DB:', (err as Error).message)
-    }
-    return null
+// Mirror Python's pipeline.get_role() COALESCE order: stage-2 first, then
+// stage-1, then the legacy fit_score column. Postgres has no .order() option
+// for COALESCE expressions in the supabase-js builder, so we sort client-side
+// after fetch. Result sets are always small (<= 500 rows) so this is fine.
+function rankScore(r: { score_stage2: number | null; score_stage1: number | null; fit_score: number | null }): number {
+  return r.score_stage2 ?? r.score_stage1 ?? r.fit_score ?? -Infinity
+}
+
+// Map Supabase row → app Role type. The app's Role uses jd_parsed: string;
+// DB stores jsonb. We re-stringify so existing client code that JSON.parses
+// keeps working unchanged.
+type DbRole = {
+  id: number; user_id: string; url: string; title: string | null; company: string | null
+  location: string | null; remote: boolean | null; lane: string | null
+  comp_min: number | null; comp_max: number | null; comp_source: string | null
+  comp_currency: string | null; comp_confidence: number | null
+  fit_score: number | null; score_stage1: number | null; score_stage2: number | null
+  score_stage: number | null; jd_parsed_at: string | null
+  status: string; source: string | null; jd_raw: string | null
+  jd_parsed: unknown; notes: string | null
+  posted_at: string | null; discovered_at: string; updated_at: string
+}
+
+function rowToRole(r: DbRole): Role {
+  return {
+    id: r.id,
+    company: r.company ?? '',
+    title: r.title ?? '',
+    location: r.location,
+    url: r.url,
+    source: r.source,
+    lane: r.lane ?? '',
+    status: r.status as Role['status'],
+    fit_score: r.fit_score,
+    fit_grade: null,                                  // computed client-side via gradeForScore
+    score_stage1: r.score_stage1,
+    score_stage2: r.score_stage2,
+    comp_min: r.comp_min,
+    comp_max: r.comp_max,
+    comp_source: r.comp_source,
+    posted_at: r.posted_at,
+    discovered_at: r.discovered_at,
+    jd_raw: r.jd_raw,
+    jd_parsed: r.jd_parsed == null ? null : JSON.stringify(r.jd_parsed),
+    notes: r.notes,
   }
 }
 
-/** Mirror Python's pipeline.get_role() COALESCE order: stage-2 first, then
- *  stage-1, then the legacy fit_score column. Used for ORDER BY across the
- *  read endpoints so the dashboard ranks roles the same way the CLI does. */
-const AUTHORITATIVE_SCORE = 'COALESCE(score_stage2, score_stage1, fit_score)'
-
 export async function fetchDashboard(): Promise<DashboardData> {
-  const db = openDb()
-  if (!db) return emptyDashboard()
-  try {
-    const counts: Record<string, number> = {}
-    const rows = db.prepare(
-      'SELECT status, COUNT(*) as n FROM roles GROUP BY status'
-    ).all() as { status: string; n: number }[]
-    for (const r of rows) counts[r.status] = r.n
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return emptyDashboard()
 
-    const top_roles = db.prepare(`
-      SELECT * FROM roles
-      WHERE status NOT IN (${TERMINAL_STATUS_SQL})
-      ORDER BY ${AUTHORITATIVE_SCORE} DESC
-      LIMIT ?
-    `).all(DASHBOARD_TOP_N) as Role[]
+  // Counts: cheap server-side aggregation via the pipeline_counts view.
+  const { data: countsRows, error: countsErr } = await supabase
+    .from('pipeline_counts')
+    .select('status, n')
+  if (countsErr) {
+    console.error('[coin/server] pipeline_counts:', countsErr.message)
+    return emptyDashboard()
+  }
+  const pipeline_counts: Record<string, number> = {}
+  for (const row of countsRows ?? []) {
+    if (row.status) pipeline_counts[row.status] = row.n ?? 0
+  }
 
-    const stale_applications = db.prepare(`
-      SELECT * FROM roles
-      WHERE status = 'applied'
-        AND updated_at < datetime('now', ?)
-      ORDER BY updated_at ASC
-      LIMIT 10
-    `).all(`-${STALE_DAYS} days`) as Role[]
+  // Top roles (active, ranked by authoritative score). Fetch with a generous
+  // top-N then sort/slice client-side because Postgres can't ORDER BY COALESCE
+  // through supabase-js's builder.
+  const { data: activeRows, error: activeErr } = await supabase
+    .from('roles')
+    .select('*')
+    .not('status', 'in', `(${TERMINAL_STATUS_LIST.map(s => `"${s}"`).join(',')})`)
+    .limit(DASHBOARD_TOP_N * 4)
+  if (activeErr) {
+    console.error('[coin/server] active roles:', activeErr.message)
+    return emptyDashboard()
+  }
+  const top_roles = (activeRows ?? [])
+    .sort((a, b) => rankScore(b as DbRole) - rankScore(a as DbRole))
+    .slice(0, DASHBOARD_TOP_N)
+    .map(r => rowToRole(r as DbRole))
 
-    return {
-      pipeline_counts: counts,
-      top_roles,
-      stale_applications,
-      updated_at: new Date().toISOString(),
-    }
-  } finally {
-    db.close()
+  // Stale applications: applied > STALE_DAYS ago.
+  const stale_cutoff = new Date(Date.now() - STALE_DAYS * 86400_000).toISOString()
+  const { data: staleRows } = await supabase
+    .from('roles')
+    .select('*')
+    .eq('status', 'applied')
+    .lt('updated_at', stale_cutoff)
+    .order('updated_at', { ascending: true })
+    .limit(10)
+  const stale_applications = (staleRows ?? []).map(r => rowToRole(r as DbRole))
+
+  return {
+    pipeline_counts,
+    top_roles,
+    stale_applications,
+    updated_at: new Date().toISOString(),
   }
 }
 
 export async function fetchRoles(filters: {
   status?: string; lane?: string; limit?: number
 } = {}): Promise<Role[]> {
-  const db = openDb()
-  if (!db) return []
-  try {
-    let sql = 'SELECT * FROM roles WHERE 1=1'
-    const params: unknown[] = []
-    if (filters.status) { sql += ' AND status = ?'; params.push(filters.status) }
-    if (filters.lane)   { sql += ' AND lane = ?';   params.push(filters.lane) }
-    sql += ` ORDER BY ${AUTHORITATIVE_SCORE} DESC LIMIT ?`
-    params.push(filters.limit ?? 100)
-    return db.prepare(sql).all(...params) as Role[]
-  } finally {
-    db.close()
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  let q = supabase.from('roles').select('*')
+  if (filters.status) q = q.eq('status', filters.status as RoleStatusEnum)
+  if (filters.lane)   q = q.eq('lane',   filters.lane)
+  // Fetch a buffer above limit because we sort client-side on COALESCE.
+  const limit = filters.limit ?? 100
+  q = q.limit(Math.min(limit * 2, 500))
+
+  const { data, error } = await q
+  if (error) {
+    console.error('[coin/server] fetchRoles:', error.message)
+    return []
   }
+  return (data ?? [])
+    .sort((a, b) => rankScore(b as DbRole) - rankScore(a as DbRole))
+    .slice(0, limit)
+    .map(r => rowToRole(r as DbRole))
 }
 
 export async function fetchRole(id: number): Promise<Role | null> {
-  const db = openDb()
-  if (!db) return null
-  try {
-    return (db.prepare('SELECT * FROM roles WHERE id = ?').get(id) as Role | undefined) ?? null
-  } finally {
-    db.close()
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('roles')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle()
+  if (error) {
+    console.error('[coin/server] fetchRole:', error.message)
+    return null
   }
+  return data ? rowToRole(data as DbRole) : null
 }
 
 export async function fetchOffers(): Promise<Offer[]> {
-  const db = openDb()
-  if (!db) return []
-  try {
-    const tables = db.prepare(
-      "SELECT name FROM sqlite_master WHERE type='table' AND name='offers'"
-    ).get()
-    if (!tables) return []
-    return db.prepare(
-      'SELECT * FROM offers ORDER BY received_at DESC'
-    ).all() as Offer[]
-  } finally {
-    db.close()
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return []
+
+  const { data, error } = await supabase
+    .from('offers')
+    .select('*')
+    .order('received_at', { ascending: false })
+  if (error) {
+    console.error('[coin/server] fetchOffers:', error.message)
+    return []
   }
+  return (data ?? []) as unknown as Offer[]
 }
 
-export async function runWebCli(args: string[]): Promise<unknown> {
-  if (IS_READ_ONLY) {
-    throw Object.assign(new Error(
-      'Mutations are disabled on the deployed dashboard. Use the local Coin CLI instead.'
-    ), { code: 'READ_ONLY_DEPLOYMENT', exitCode: 503 })
+// Mutations are no longer 503'd — they go straight to Supabase via the
+// per-request authed client. RLS enforces ownership.
+
+export async function trackRoleStatus(
+  roleId: number,
+  newStatus: string,
+  note?: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Unauthorized' }
+
+  // Read current status so we can record the from→to transition in the audit log.
+  const { data: prev, error: prevErr } = await supabase
+    .from('roles')
+    .select('status, notes')
+    .eq('id', roleId)
+    .maybeSingle()
+  if (prevErr || !prev) return { ok: false, error: 'Role not found' }
+
+  const status = newStatus as RoleStatusEnum
+  let nextNotes: string | null = null
+  if (note) {
+    const stamp = new Date().toISOString().slice(0, 10)
+    const tag = `[${stamp} ${newStatus}]`
+    const appended = `${tag} ${note}`
+    nextNotes = prev.notes ? `${prev.notes}\n${appended}` : appended
   }
-  if (!fs.existsSync(PYTHON)) {
-    throw Object.assign(new Error(
-      `Python interpreter not found at ${PYTHON}. Set COIN_PYTHON or run from a checkout with coin/.venv installed.`
-    ), { code: 'PYTHON_NOT_FOUND', exitCode: 503 })
-  }
-  return new Promise((resolve, reject) => {
-    // Pass an explicit minimal env so unrelated secrets in the Next process
-    // env (e.g. analytics tokens, COIN_WEB_PASSWORD) don't leak into the
-    // Python subprocess.
-    const minimalEnv: NodeJS.ProcessEnv = {
-      PATH: process.env.PATH ?? '',
-      HOME: process.env.HOME ?? '',
-      NODE_ENV: process.env.NODE_ENV,
-      ...(process.env.COIN_DB_PATH ? { COIN_DB_PATH: process.env.COIN_DB_PATH } : {}),
-      ...(process.env.COIN_RESUMES_DIR ? { COIN_RESUMES_DIR: process.env.COIN_RESUMES_DIR } : {}),
-      ...(process.env.COIN_STORIES_PATH ? { COIN_STORIES_PATH: process.env.COIN_STORIES_PATH } : {}),
-    }
-    const child = spawn(PYTHON, ['-m', 'careerops.web_cli', ...args], {
-      cwd: COIN_CWD,
-      timeout: 15_000,
-      env: minimalEnv,
-    })
-    let stdout = ''
-    let stderr = ''
-    child.stdout.on('data', (d: Buffer) => { stdout += d.toString() })
-    child.stderr.on('data', (d: Buffer) => { stderr += d.toString() })
-    child.on('close', (code) => {
-      try {
-        const parsed = JSON.parse(stdout.trim()) as { ok?: boolean; error?: string; code?: string }
-        if (!parsed.ok) {
-          reject(Object.assign(new Error(parsed.error ?? 'web_cli error'), { code: parsed.code, exitCode: code }))
-        } else {
-          resolve(parsed)
-        }
-      } catch {
-        reject(new Error(`web_cli parse error (exit ${code}): ${stderr.slice(0, 200)}`))
-      }
-    })
+  const { error: updErr } = await supabase
+    .from('roles')
+    .update(nextNotes !== null ? { status, notes: nextNotes } : { status })
+    .eq('id', roleId)
+  if (updErr) return { ok: false, error: updErr.message }
+
+  await supabase.from('role_events').insert({
+    role_id: roleId,
+    user_id: user.id,
+    event_type: 'status_change' as RoleEventTypeEnum,
+    payload: { from: prev.status, to: newStatus, note: note ?? null },
   })
+
+  return { ok: true }
+}
+
+export async function dismissRole(
+  roleId: number,
+  reasonCode: string,
+  reasonText?: string,
+  customText?: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Unauthorized' }
+
+  const { data: prev } = await supabase
+    .from('roles')
+    .select('status, notes')
+    .eq('id', roleId)
+    .maybeSingle()
+
+  const stamp = new Date().toISOString().slice(0, 10)
+  const noteFragments = [
+    `[${stamp} no_apply]`,
+    `[user_dismissed:${reasonCode}]`,
+    customText ? customText : reasonText,
+  ].filter(Boolean)
+  const appended = noteFragments.join(' ')
+  const newNotes = prev?.notes ? `${prev.notes}\n${appended}` : appended
+
+  const { error: updErr } = await supabase
+    .from('roles')
+    .update({ status: 'no_apply' as RoleStatusEnum, notes: newNotes })
+    .eq('id', roleId)
+  if (updErr) return { ok: false, error: updErr.message }
+
+  await supabase.from('role_events').insert({
+    role_id: roleId,
+    user_id: user.id,
+    event_type: 'dismissed' as RoleEventTypeEnum,
+    payload: {
+      reason_code: reasonCode,
+      reason_text: reasonText ?? null,
+      custom_text: customText ?? null,
+      from: prev?.status ?? null,
+    },
+  })
+
+  return { ok: true }
+}
+
+export async function appendNote(
+  roleId: number,
+  text: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!text.trim()) return { ok: false, error: 'Empty note' }
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false, error: 'Unauthorized' }
+
+  const { data: prev } = await supabase
+    .from('roles')
+    .select('notes')
+    .eq('id', roleId)
+    .maybeSingle()
+
+  const stamp = new Date().toISOString().slice(0, 10)
+  const appended = `[${stamp} note] ${text.trim()}`
+  const newNotes = prev?.notes ? `${prev.notes}\n${appended}` : appended
+
+  const { error: updErr } = await supabase
+    .from('roles')
+    .update({ notes: newNotes })
+    .eq('id', roleId)
+  if (updErr) return { ok: false, error: updErr.message }
+
+  await supabase.from('role_events').insert({
+    role_id: roleId,
+    user_id: user.id,
+    event_type: 'note_added' as RoleEventTypeEnum,
+    payload: { text: text.trim() },
+  })
+
+  return { ok: true }
+}
+
+export async function fetchDismissalReasons() {
+  const supabase = await createSupabaseServerClient()
+  const { data, error } = await supabase
+    .from('dismissal_reasons')
+    .select('code, label, description, sort_order')
+    .order('sort_order', { ascending: true })
+  if (error) {
+    console.error('[coin/server] dismissal_reasons:', error.message)
+    return []
+  }
+  return data ?? []
 }
