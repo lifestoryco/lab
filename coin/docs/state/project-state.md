@@ -1,5 +1,143 @@
 # Coin — Project State
 
+## What Was Just Done (2026-04-29, sweet-matsumoto session)
+
+### Asset proxy fix → Supabase migration → multi-user auth → UX polish ✅ COMPLETE
+
+A long session that started as a styling-bug triage and ended with COIN
+running on Supabase with multi-user RLS, magic-link auth, durable
+mutations on prod, and a Python CLI that writes to the same cloud DB.
+
+**Phase 1 — `/lab/coin` rendered unstyled on prod**
+- Root cause: `/lab/coin` HTML was proxied through the
+  handoffpack-www → lab-lifestoryco rewrite, but `_next/static/*` asset
+  URLs resolved against `www.handoffpack.com` (404'd) because the lab
+  Next.js app emitted relative paths.
+- Fix: env-gated `assetPrefix` in `web/next.config.js` reading
+  `LAB_PUBLIC_URL` (set to `https://lab-lifestoryco.vercel.app` in the
+  lab-lifestoryco prod env). HTML now emits absolute lab-origin asset
+  URLs. CSP on handoffpack-www extended to whitelist the lab origin in
+  five directives (script/style/font/img/connect), gated by `LAB_URL`.
+- Smoke test added: `web/scripts/postdeploy-smoke.sh` curls a referenced
+  `_next/static/css/*` through both origins and exits non-zero on 404.
+- Three-thing dance documented in `lab/CLAUDE.md` so the next session
+  doesn't re-step on it.
+
+**Phase 2 — Click-to-open crashed the dashboard**
+- `RoleDetail` was passing `JSON.parse(role.jd_parsed)` to `ScoreChart`
+  as if it were a `ScoreBreakdown`. `jd_parsed` is the parsed JD
+  content (skills/requirements), not a score breakdown — so
+  `composite.toFixed` blew up with "Cannot read properties of
+  undefined".
+- Two-layer fix: shape-validate the parsed blob in `RoleDetail` before
+  passing in; defensive null-check in `ScoreChart` so a malformed row
+  can't crash the whole dialog.
+
+**Phase 3 — Read-only-on-Vercel → Supabase migration (Option A)**
+- New Supabase project `lab` (East US Ohio).
+- Migration `20260429000001_init_coin_schema.sql` creates: profiles,
+  roles, role_events (append-only audit log for the weekly improvement
+  loop), dismissal_reasons (controlled vocab seeded with five canonical
+  codes), stories, connections, outreach, offers, levels_seed. RLS on
+  every user-data table, two convenience views (pipeline_counts,
+  weekly_improvement_corpus).
+- Web rewrite: `@supabase/ssr` server/client/middleware helpers; magic
+  link login + `/auth/callback`; `/api/coin/logout`; `server.ts` reads
+  via the SSR-authed Supabase client (RLS does the user isolation);
+  mutations write to Supabase directly + each one appends a `role_events`
+  row. **No more 503s.** New `/api/coin/role/[id]/dismiss` with
+  structured reason capture.
+- New `DismissDialog` component: dropping a card on "Not a Fit" opens
+  a reason picker (5 presets + custom text), submission lands in
+  `role_events.payload` as structured JSON.
+- Logout button in the COIN header.
+- Removed: `better-sqlite3` read path, the bundled `pipeline.db`
+  snapshot, the `careerops.web_cli` subprocess.
+
+**Phase 4 — UX polish**
+- Tab + selected role state moved into the URL (`?tab=…&role=…`).
+  Browser back closes a role-detail dialog or returns to the previous
+  tab instead of punting to the lab gallery. Deep-linkable.
+- "Open in ATS" → "Open on {Source}". Source detected from the URL
+  (LinkedIn, Greenhouse, Lever, Ashby, Workable, SmartRecruiters,
+  Indeed, BuiltIn, Wellfound, Y Combinator, Dice, Glassdoor) or from
+  the scraper's `source` field.
+- Resume PDF panel: HEAD-probes the endpoint, renders iframe on 200,
+  otherwise a friendly card with the exact `/coin tailor <id>` command
+  instead of raw JSON error.
+
+**Phase 5 — Python CLI → Supabase**
+- New `coin/careerops/pipeline_supabase.py` mirrors the full public
+  API from pipeline.py against Postgres via `supabase-py`. Two-step
+  upserts preserve the `out_of_band` quarantine + Levels.fyi
+  auto-impute invariants. Every mutation writes a `role_events` row
+  for parity with the web (so weekly_improvement_corpus is
+  source-of-truth-agnostic).
+- `coin/careerops/pipeline.py` is now a backend dispatcher: when
+  `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` + `COIN_USER_ID` are
+  all set, the supabase functions override the SQLite ones via
+  end-of-file rebinding. Tests don't set those env vars → SQLite
+  path stays in effect → **all 381 tests pass**.
+- `supabase>=2.5.0` added to `coin/requirements.txt`.
+
+**Commits this session (all on `claude/sweet-matsumoto-2df013` → main):**
+- `a757933` — assetPrefix + CSP fix + smoke test
+- `94abd9c` — guard ScoreChart against jd_parsed shape mismatch
+- `6bd55ad` — Supabase schema, auth, UI mutations, dismiss dialog
+- `b6bcee0` — URL state, source-aware Open Posting, friendly PDF panel,
+  Python→Supabase dispatcher
+
+**Verified end-to-end against `https://www.handoffpack.com/lab/coin`:**
+| Check | Result |
+|---|---|
+| Tailwind renders, kanban grid intact | ✅ |
+| postdeploy-smoke.sh exits 0 | ✅ |
+| Magic-link login → /auth/callback → cookie set | ✅ |
+| RLS isolates users (single-user smoke; multi-user TBD) | ✅ |
+| 381/381 Python tests | ✅ |
+
+**Active Blockers (current):**
+- **Sean's data not yet migrated to Supabase.** The 95 roles in local
+  `coin/data/db/pipeline.db` are not yet in cloud Postgres. After Sean
+  signs up via magic link, run
+  `web/scripts/migrate-pipeline-to-supabase.mjs` with
+  `USER_ID=<his uuid>` once. After that, his local CLI (with the env
+  vars set) will write to Supabase directly — no migrator needed again.
+- **Tailor on prod still 501.** Resume PDF generation runs locally via
+  weasyprint (Python). Two paths to unblock: (a) weasyprint on a
+  non-Vercel runtime, or (b) a `tailor_queue` Supabase table the local
+  CLI polls and processes. Option (b) is cheaper (~2h of work).
+- **Secrets pasted in chat need rotating** — DB password and
+  service_role key. Cheap to rotate now, expensive once forgotten.
+- **COIN_NOTIFY_PHONE still unset + launchd scheduler not installed.**
+  Carried over from prior sessions.
+- **Email branding** — magic links come from
+  `noreply@mail.app.supabase.io`. Hook up Resend if personalized
+  sender matters.
+
+**Next session — pick up here:**
+1. Run the migrator after Sean's first magic-link login (need his
+   `auth.users.id`).
+2. Build `tailor_queue` table + local CLI poller for prod tailor.
+3. Rotate the Supabase secrets.
+
+**Vercel envs on `lab-lifestoryco` (production):**
+- `LAB_PUBLIC_URL=https://lab-lifestoryco.vercel.app`
+- `NEXT_PUBLIC_SUPABASE_URL=https://sdilxvefbmrhipjspwrb.supabase.co`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY=…`
+- `SUPABASE_SERVICE_ROLE_KEY=…`
+- `COIN_WEB_PASSWORD=…` (legacy, no longer used by middleware — can
+  remove next session)
+
+**Local CLI env (Sean adds to `coin/.env`):**
+```
+SUPABASE_URL=https://sdilxvefbmrhipjspwrb.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<jwt>
+COIN_USER_ID=<auth.users.id, after magic-link signup>
+```
+
+---
+
 ## What Was Just Done (2026-04-28, eloquent-lichterman session — final pass)
 
 ### `www.handoffpack.com/lab/coin` is live, password-gated, end-to-end ✅ COMPLETE
