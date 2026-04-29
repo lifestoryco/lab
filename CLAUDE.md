@@ -39,6 +39,18 @@ async rewrites() {
 }
 ```
 
+### Three things must agree, or the lab pages render broken
+
+This is non-obvious and bit us once already (2026-04-28: /lab/coin shipped looking like a bulleted text dump because Tailwind/JS chunks 404'd). The rewrite proxies HTML fine, but Next.js asset URLs (`/_next/static/css/<hash>.css`, JS chunks) live in a per-app namespace. www has its own `/_next` and won't have lab's hashes.
+
+Fix requires three coordinated settings:
+
+1. **Lab side — `assetPrefix`:** `web/next.config.js` reads `LAB_PUBLIC_URL` and emits absolute asset URLs pointing back at the canonical lab origin. Set `LAB_PUBLIC_URL=https://lab-lifestoryco.vercel.app` on the lab-lifestoryco Vercel **production** env. Local dev leaves it unset → relative paths still work.
+2. **www side — CSP whitelist:** `handoffpack-www/next.config.js` CSP must allow `https://lab-lifestoryco.vercel.app` in `script-src`, `style-src`, `font-src`, `img-src`, and `connect-src`. Without this, the browser blocks the cross-origin assets (CSP error in console).
+3. **Smoke test:** `web/scripts/postdeploy-smoke.sh` curls a known `/_next/static/css/...` reference through both origins and exits non-zero on 404. Run after every lab deploy that could rotate hashes; CI-friendly.
+
+If `/lab/coin` (or any `/lab/*`) renders unstyled in the future, check (1) and (2) first.
+
 ### Hard rules for Claude sessions in this repo
 
 1. **NEVER `vercel link` or `vercel deploy` `lab/web/` to the `handoffpack-www` Vercel project.** It will overwrite the live marketing site. The `web/.vercel/project.json` MUST point to `lab-lifestoryco`. The `web/scripts/predeploy-check.sh` script enforces this — do not delete it.
