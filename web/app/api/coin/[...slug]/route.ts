@@ -94,6 +94,18 @@ export async function GET(
       return jsonOk(role)
     }
 
+    // GET /api/coin/role/[id]/pdf — currently always 404 on prod. PDF
+    // generation runs locally via weasyprint (Python). When the Python
+    // migration uploads tailored PDFs to Supabase Storage, this route
+    // will start returning the file. Until then a clean 404 keeps the
+    // RoleDetail PDF panel showing the friendly "run /coin tailor"
+    // explanation instead of an iframe rendering JSON error text.
+    if (head === 'role' && slug.length === 3 && slug[2] === 'pdf') {
+      const id = parseRoleId(slug[1])
+      if (id == null) return badRequest('invalid role id')
+      return notFound('no PDF generated for this role yet')
+    }
+
     return notFound()
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)

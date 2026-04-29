@@ -1,9 +1,98 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
-import { X, ExternalLink, FileText, ChevronDown, ChevronUp } from 'lucide-react'
+import { X, ExternalLink, FileText, ChevronDown, ChevronUp, Terminal } from 'lucide-react'
 import type { Role, ScoreBreakdown } from './types'
 import { ScoreChart } from './ScoreChart'
 import { safeUrl } from './constants'
+
+// Resume PDF panel. Probes the endpoint with a HEAD; if 200, renders the iframe;
+// otherwise shows a clear explanation and the exact CLI command. The previous
+// behavior was an iframe that loaded raw JSON ({"error":"no PDF generated…"})
+// which looked like a broken page.
+function ResumePdfPanel({ roleId, title }: { roleId: number; title: string }) {
+  const [available, setAvailable] = useState<'unknown' | 'yes' | 'no'>('unknown')
+  useEffect(() => {
+    let cancelled = false
+    fetch(`/api/coin/role/${roleId}/pdf`, { method: 'HEAD' })
+      .then(r => { if (!cancelled) setAvailable(r.ok ? 'yes' : 'no') })
+      .catch(() => { if (!cancelled) setAvailable('no') })
+    return () => { cancelled = true }
+  }, [roleId])
+
+  return (
+    <section>
+      <div className="text-xs text-zinc-400 uppercase tracking-wider mb-2">Resume PDF</div>
+      {available === 'yes' && (
+        <iframe
+          src={`/api/coin/role/${roleId}/pdf`}
+          className="w-full h-64 rounded border border-zinc-800 bg-zinc-900"
+          title={`Tailored resume PDF for ${title}`}
+          loading="lazy"
+          sandbox="allow-same-origin"
+          referrerPolicy="no-referrer"
+        />
+      )}
+      {available === 'no' && (
+        <div className="rounded-lg border border-dashed border-zinc-800 bg-zinc-950 p-4 space-y-3">
+          <div className="text-sm text-zinc-200 leading-snug">
+            No tailored PDF for this role yet.
+          </div>
+          <div className="text-xs text-zinc-400 leading-relaxed">
+            PDF generation runs locally via weasyprint — the cloud dashboard can&apos;t
+            spawn it (yet). Run this in your terminal where COIN is checked out:
+          </div>
+          <pre className="bg-zinc-900 border border-zinc-800 rounded px-3 py-2 text-[11px] text-emerald-300 overflow-x-auto">
+            <code>{`/coin tailor ${roleId}`}</code>
+          </pre>
+          <div className="flex items-start gap-2 text-[11px] text-zinc-500 leading-relaxed">
+            <Terminal size={12} aria-hidden="true" className="mt-0.5 shrink-0" />
+            <span>
+              The tailor mode writes JSON + PDF under <code className="text-zinc-400">data/resumes/generated/</code>.
+              Once the Python pipeline migration ships, this panel will fill in
+              automatically — no manual sync needed.
+            </span>
+          </div>
+        </div>
+      )}
+      {available === 'unknown' && (
+        <div className="rounded-lg border border-zinc-800 bg-zinc-950 p-3 text-xs text-zinc-500">
+          Checking for a tailored PDF…
+        </div>
+      )}
+    </section>
+  )
+}
+
+// Map a job posting URL to a friendly source name for the "Open Posting" CTA.
+// The label tells Sean exactly where the click is going so a job-board
+// hostname doesn't surprise him after a long browsing session.
+function detectSource(url: string | null, sourceField: string | null): string {
+  if (sourceField && sourceField.trim()) {
+    // The Python scraper sets `source` to e.g. 'linkedin', 'greenhouse', 'lever',
+    // 'ashby', 'indeed'. Title-case it for the button label.
+    const s = sourceField.trim()
+    return s.charAt(0).toUpperCase() + s.slice(1)
+  }
+  if (!url) return 'posting'
+  try {
+    const host = new URL(url).hostname.toLowerCase()
+    if (host.includes('linkedin'))             return 'LinkedIn'
+    if (host.includes('greenhouse'))           return 'Greenhouse'
+    if (host.includes('lever.co'))             return 'Lever'
+    if (host.includes('ashbyhq') || host.includes('jobs.ashby')) return 'Ashby'
+    if (host.includes('workable'))             return 'Workable'
+    if (host.includes('smartrecruiters'))      return 'SmartRecruiters'
+    if (host.includes('indeed'))               return 'Indeed'
+    if (host.includes('builtin'))              return 'BuiltIn'
+    if (host.includes('wellfound') || host.includes('angel.co')) return 'Wellfound'
+    if (host.includes('ycombinator'))          return 'Y Combinator'
+    if (host.includes('dice'))                 return 'Dice'
+    if (host.includes('glassdoor'))            return 'Glassdoor'
+    return host.replace(/^www\./, '')
+  } catch {
+    return 'posting'
+  }
+}
 
 interface Props {
   role: Role
@@ -181,18 +270,12 @@ export function RoleDetail({ role, onClose, onTrack, onTailor, onNote }: Props) 
             </section>
           )}
 
-          {/* PDF preview */}
-          <section>
-            <div className="text-xs text-zinc-400 uppercase tracking-wider mb-2">Resume PDF</div>
-            <iframe
-              src={`/api/coin/role/${role.id}/pdf`}
-              className="w-full h-64 rounded border border-zinc-800 bg-zinc-900"
-              title={`Tailored resume PDF for ${role.title}`}
-              loading="lazy"
-              sandbox="allow-same-origin"
-              referrerPolicy="no-referrer"
-            />
-          </section>
+          {/* PDF preview — currently always 404 on prod (PDF gen is local-only
+              via weasyprint). Show a friendly explanation + the exact CLI
+              command instead of the iframe rendering raw JSON error. When the
+              Python migration ships PDF gen on prod, this can revert to an
+              iframe gated on a HEAD-200 probe. */}
+          <ResumePdfPanel roleId={role.id} title={role.title} />
 
           {/* Notes */}
           <section>
@@ -231,16 +314,21 @@ export function RoleDetail({ role, onClose, onTrack, onTailor, onNote }: Props) 
           >
             {tailorQueued ? 'Queued ✓' : 'Tailor'}
           </button>
-          {url && (
-            <a
-              href={url}
-              target="_blank"
-              rel="noreferrer"
-              className="flex-1 min-h-[44px] flex items-center justify-center py-2 rounded-lg text-sm font-medium bg-zinc-800 hover:bg-zinc-700 text-white text-center transition-colors"
-            >
-              Open in ATS
-            </a>
-          )}
+          {url && (() => {
+            const sourceLabel = detectSource(url, role.source)
+            return (
+              <a
+                href={url}
+                target="_blank"
+                rel="noreferrer"
+                title={`Open this posting on ${sourceLabel}`}
+                className="flex-1 min-h-[44px] flex items-center justify-center gap-1.5 py-2 rounded-lg text-sm font-medium bg-zinc-800 hover:bg-zinc-700 text-white text-center transition-colors"
+              >
+                <ExternalLink size={14} aria-hidden="true" />
+                <span>Open on {sourceLabel}</span>
+              </a>
+            )
+          })()}
           <button
             onClick={handleApply}
             aria-pressed={applyConfirm}

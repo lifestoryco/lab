@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Briefcase, Target, FileText, Users, DollarSign, BookOpen, RefreshCw, LogOut } from 'lucide-react'
-import { useCoinStore } from './store'
+import { useCoinUrlState } from './store'
 import { Kanban } from './Kanban'
 import { DiscoverFeed } from './DiscoverFeed'
 import { NetworkView } from './NetworkView'
@@ -43,7 +43,7 @@ interface Props { initialData: DashboardData | null }
 
 export function CoinPage({ initialData }: Props) {
   const router = useRouter()
-  const { activeTab, setTab } = useCoinStore()
+  const { tab: activeTab, setTab, roleId: urlRoleId, setRoleId } = useCoinUrlState()
   const [dashboard, setDashboard] = useState<DashboardData | null>(initialData)
   const [allRoles, setAllRoles] = useState<Role[]>(
     (initialData?.top_roles ?? []).map(r => ({ ...r, fit_grade: gradeForScore(r.fit_score) }))
@@ -51,7 +51,13 @@ export function CoinPage({ initialData }: Props) {
   const [reasons, setReasons] = useState<DismissalReason[]>([])
   const [refreshing, setRefreshing] = useState(false)
   const [mutateError, setMutateError] = useState<string | null>(null)
-  const [selectedRole, setSelectedRole] = useState<Role | null>(null)
+  // selectedRole is derived from the URL (?role=ID). Pop the matching Role
+  // from allRoles when ID changes; this keeps back/forward = open/close
+  // without storing duplicate state.
+  const selectedRole: Role | null = urlRoleId
+    ? allRoles.find(r => r.id === urlRoleId) ?? null
+    : null
+  const setSelectedRole = (r: Role | null) => setRoleId(r?.id ?? null)
 
   const abortRef = useRef<AbortController | null>(null)
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

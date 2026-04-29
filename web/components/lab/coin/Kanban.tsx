@@ -9,6 +9,7 @@ import type { Role, RoleStatus } from './types'
 import { RoleCard } from './RoleCard'
 import { RoleDetail } from './RoleDetail'
 import { DismissDialog, type DismissalReason } from './DismissDialog'
+import { useCoinUrlState } from './store'
 import { gradeForScore } from './constants'
 
 interface Column {
@@ -47,7 +48,10 @@ interface Props {
 }
 
 export function Kanban({ roles, reasons, onTrack, onTailor, onNote, onDismiss }: Props) {
-  const [selected, setSelected] = useState<Role | null>(null)
+  // Selected-role lives in the URL (?role=ID) so the browser back button
+  // closes the detail dialog instead of jumping back to the lab gallery.
+  // Same hook is used by CoinPage.tsx — both tabs and Kanban share state.
+  const { roleId: selectedId, setRoleId } = useCoinUrlState()
   const [dismissTarget, setDismissTarget] = useState<Role | null>(null)
 
   const enriched = useMemo(
@@ -153,7 +157,7 @@ export function Kanban({ roles, reasons, onTrack, onTailor, onNote, onDismiss }:
                     value={role}
                     onDragEnd={() => handleDrop(col.id, role)}
                   >
-                    <RoleCard role={role} onClick={() => setSelected(role)} />
+                    <RoleCard role={role} onClick={() => setRoleId(role.id)} />
                   </Reorder.Item>
                 ))}
                 {isActionCol && colRoles.length === 0 && col.hint && (
@@ -190,20 +194,24 @@ export function Kanban({ roles, reasons, onTrack, onTailor, onNote, onDismiss }:
         </div>
         <div className="space-y-2">
           {rolesByStatus(COLUMNS[activeColumnIndex].statuses).map(role => (
-            <RoleCard key={role.id} role={role} onClick={() => setSelected(role)} />
+            <RoleCard key={role.id} role={role} onClick={() => setRoleId(role.id)} />
           ))}
         </div>
       </div>
 
-      {selected && (
-        <RoleDetail
-          role={selected}
-          onClose={() => setSelected(null)}
-          onTrack={(status, note) => { onTrack(selected.id, status, note); setSelected(null) }}
-          onTailor={() => onTailor(selected.id)}
-          onNote={(text) => onNote(selected.id, text)}
-        />
-      )}
+      {(() => {
+        const selected = selectedId ? enriched.find(r => r.id === selectedId) ?? null : null
+        if (!selected) return null
+        return (
+          <RoleDetail
+            role={selected}
+            onClose={() => setRoleId(null)}
+            onTrack={(status, note) => { onTrack(selected.id, status, note); setRoleId(null) }}
+            onTailor={() => onTailor(selected.id)}
+            onNote={(text) => onNote(selected.id, text)}
+          />
+        )
+      })()}
 
       {dismissTarget && (
         <DismissDialog

@@ -1,9 +1,19 @@
-"""SQLite pipeline — application tracking CRUD and Rich dashboard.
+"""COIN pipeline — application tracking CRUD.
+
+Backend dispatcher: this file defines the legacy SQLite implementation in
+full, then at the *bottom* (see "BACKEND DISPATCHER" block) re-imports the
+Supabase implementation when SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY +
+COIN_USER_ID are all set. Module-level rebinding means callers using
+`from careerops.pipeline import upsert_role` get the Supabase function
+on Sean's CLI without changing any imports. The test suite runs without
+those env vars set → SQLite path stays in effect and tests stay green.
 
 State machine adapted from santifer/career-ops (translated to English):
   discovered → scored → resume_generated → applied → responded →
   contact → interviewing → offer | rejected | withdrawn | no_apply | closed
 """
+
+import os as _os
 
 import datetime as _dt_module
 import sqlite3
@@ -677,3 +687,27 @@ def dashboard() -> None:
         )
 
     console.print(table)
+
+
+# ─── BACKEND DISPATCHER ──────────────────────────────────────────────────────
+# When the Supabase env is configured, override the public API above with the
+# Supabase-backed implementation. The legacy SQLite definitions remain in this
+# module's namespace (some private helpers may still be imported by tests),
+# but the public surface resolves to Supabase.
+
+_USE_SUPABASE = bool(
+    _os.environ.get("SUPABASE_URL")
+    and _os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    and _os.environ.get("COIN_USER_ID")
+)
+
+if _USE_SUPABASE:
+    from .pipeline_supabase import (  # noqa: F401, E402
+        init_db, upsert_role, upsert_roles, get_role, list_roles,
+        update_status, update_fit_score, update_jd_parsed, update_lane,
+        update_role_notes, update_jd_raw,
+        update_score_stage1, update_score_stage2, get_top_n_for_deep_score,
+        insert_offer, list_offers, insert_market_anchor, list_market_anchors,
+        tag_outreach_role, find_hiring_manager_for_role,
+        summary, dashboard,
+    )
